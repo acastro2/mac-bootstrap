@@ -45,6 +45,15 @@ section(){ printf "\n\033[1;37m━━━ %s ━━━\033[0m\n" "$*"; }
 # ── Sanity checks ────────────────────────────────────────────────────
 [[ "$(uname)" == "Darwin" ]] || die "This bootstrap targets macOS only."
 
+# ── sudo: prompt once, keep alive ────────────────────────────────────
+log "This script needs sudo for a few system tweaks. You'll be prompted once."
+sudo -v || die "sudo authentication failed"
+
+( while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done ) &
+SUDO_KEEP_ALIVE_PID=$!
+
+trap 'kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true' EXIT INT TERM
+
 # =========================================================================
 # PHASE 0: Prerequisites
 # =========================================================================
@@ -159,12 +168,9 @@ if ! grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
   echo "$FISH_PATH" | sudo tee -a /etc/shells > /dev/null
 fi
 if [[ "$SHELL" != "$FISH_PATH" ]]; then
-  log "Setting fish as default shell"
-  if [[ -t 0 ]] || [[ -e "$TTY" ]]; then
-    chsh -s "$FISH_PATH" < "$TTY" 2>/dev/null || warn "chsh failed — run 'chsh -s $FISH_PATH' manually"
-  else
-    warn "No tty available — run 'chsh -s $FISH_PATH' manually to switch to fish"
-  fi
+  log "Setting fish as default shell (via dscl)"
+  sudo dscl . -create "/Users/$USER" UserShell "$FISH_PATH" \
+    || warn "Failed to set default shell — run 'sudo dscl . -create /Users/$USER UserShell $FISH_PATH' manually"
 fi
 log "Default shell: $FISH_PATH"
 fi
