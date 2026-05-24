@@ -415,7 +415,7 @@ fi
 echo ""
 if [[ -x "$HOME/.opencode/bin/opencode" ]]; then
   log "Configuring opencode providers"
-  "$HOME/.opencode/bin/opencode" providers login --provider openai < "$TTY" 2>&1 || warn "OpenAI provider login skipped — run 'opencode providers login --provider openai' manually"
+  "$HOME/.opencode/bin/opencode" auth login --provider openai --method "ChatGPT Pro/Plus (browser)" 2>&1 || warn "OpenAI provider login skipped — run 'opencode auth login --provider openai' manually"
 else
   warn "opencode not found — skipped provider setup"
 fi
