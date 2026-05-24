@@ -318,27 +318,27 @@ log "Writing API key functions to fish conf.d"
 mkdir -p "$HOME/.config/fish/conf.d"
 cat > "$HOME/.config/fish/conf.d/secrets.fish" << ENDFISH
 # Managed by bootstrap.sh — do not edit by hand.
-# Lazy-loaded: call the function to read the key from 1Password.
+# Lazy-loaded: reads from macOS Keychain (populated once from 1Password at bootstrap).
 function opencode-key
-  op read "op://${OP_VAULT}/opencode-api-key/password"
+  security find-generic-password -w -s "opencode-api-key" -a "$USER"
 end
 function anthropic-key
-  op read "op://${OP_VAULT}/anthropic-api-key/password"
+  security find-generic-password -w -s "anthropic-api-key" -a "$USER"
 end
 function openai-key
-  op read "op://${OP_VAULT}/openai-api-key/password"
+  security find-generic-password -w -s "openai-api-key" -a "$USER"
 end
 function context7-key
-  op read "op://${OP_VAULT}/context7-api-key/password"
+  security find-generic-password -w -s "context7-api-key" -a "$USER"
 end
 function devto-key
-  op read "op://${OP_VAULT}/devto-api-key/password"
+  security find-generic-password -w -s "devto-api-key" -a "$USER"
 end
 function oreilly-key
-  op read "op://${OP_VAULT}/oreilly-api-token/password"
+  security find-generic-password -w -s "oreilly-api-token" -a "$USER"
 end
 function google-key
-  op read "op://${OP_VAULT}/google-api-key/password"
+  security find-generic-password -w -s "google-api-key" -a "$USER"
 end
 
 # Export all keys into the current shell's environment.
@@ -382,6 +382,23 @@ fi
 
 log "Signing in to 1Password CLI"
 eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
+
+# ── Migrate API keys to macOS Keychain ──────────────────────────────
+if op account list 2>/dev/null | grep -q .; then
+  log "Pulling API keys from 1Password → macOS Keychain"
+  keychain_store() {
+    local name="$1"
+    security add-generic-password -a "$USER" -s "$name" \
+      -w "$(op read "op://${OP_VAULT}/$name/password")" -U 2>/dev/null || warn "Failed to store $name in Keychain"
+  }
+  keychain_store "opencode-api-key"
+  keychain_store "anthropic-api-key"
+  keychain_store "openai-api-key"
+  keychain_store "context7-api-key"
+  keychain_store "devto-api-key"
+  keychain_store "oreilly-api-token"
+  keychain_store "google-api-key"
+fi
 
 # ── GitHub CLI ────────────────────────────────────────────────────────
 echo ""
