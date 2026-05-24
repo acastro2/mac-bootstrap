@@ -1,5 +1,8 @@
 # ~/.config/fish/config.fish — managed by chezmoi
 
+# ── Quiet startup ─────────────────────────────────────────────────────
+set -g fish_greeting
+
 # ── Homebrew ─────────────────────────────────────────────────────────
 if test -x /opt/homebrew/bin/brew
   eval (/opt/homebrew/bin/brew shellenv)

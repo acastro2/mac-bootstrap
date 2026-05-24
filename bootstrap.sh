@@ -116,6 +116,12 @@ defaults write com.apple.dock autohide-time-modifier -float 0.3
 log "Disable .DS_Store on network volumes"
 defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
 
+log "Appearance: dark"
+defaults write NSGlobalDomain AppleInterfaceStyle -string Dark
+
+log "Accent color: orange"
+defaults write NSGlobalDomain AppleAccentColor -int 1
+
 log "Some changes require logout/login to take full effect."
 fi
 
@@ -172,8 +178,7 @@ if should_run fisher; then
 section "Fish plugins (Fisher + Tide)"
 log "Installing Tide prompt"
 fish -c "fisher install IlanCosman/tide@v6" || warn "Tide install failed"
-log "Configuring Tide (skip interactive wizard)"
-fish -c "set -U _tide_configured true" || true
+log "Run 'tide configure' interactively to set up the prompt."
 log "Installing Sponge (clean history)"
 fish -c "fisher install meaningful-ooo/sponge" || warn "Sponge install failed"
 fi
@@ -415,7 +420,7 @@ section "Doctor"
 pass=0; fail=0
 check() {
   local cmd="$1"
-  if fish -c "command -v $cmd" &>/dev/null 2>&1; then
+  if fish -c "command -v $cmd" &>/dev/null; then
     printf "  \033[1;32m✓\033[0m %s\n" "$cmd"
     pass=$((pass + 1))
   else
