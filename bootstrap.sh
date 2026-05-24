@@ -177,10 +177,10 @@ log "Installing fzf key bindings"
 if should_run fisher; then
 section "Fish plugins (Fisher + Tide)"
 log "Installing Tide prompt"
-fish -c "fisher install IlanCosman/tide@v6" || warn "Tide install failed"
+fish -c "fisher install IlanCosman/tide@v6" < /dev/null || warn "Tide install failed"
 log "Run 'tide configure' interactively to set up the prompt."
 log "Installing Sponge (clean history)"
-fish -c "fisher install meaningful-ooo/sponge" || warn "Sponge install failed"
+fish -c "fisher install meaningful-ooo/sponge" < /dev/null || warn "Sponge install failed"
 fi
 
 # ── Git globals ───────────────────────────────────────────────────────
@@ -420,7 +420,7 @@ section "Doctor"
 pass=0; fail=0
 check() {
   local cmd="$1"
-  if fish -c "command -v $cmd" &>/dev/null; then
+  if fish -c "command -v $cmd" < /dev/null &>/dev/null; then
     printf "  \033[1;32m✓\033[0m %s\n" "$cmd"
     pass=$((pass + 1))
   else
