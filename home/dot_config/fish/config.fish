@@ -1,0 +1,50 @@
+# ~/.config/fish/config.fish — managed by chezmoi
+
+# ── Homebrew ─────────────────────────────────────────────────────────
+if test -x /opt/homebrew/bin/brew
+  eval (/opt/homebrew/bin/brew shellenv)
+else if test -x /usr/local/bin/brew
+  eval (/usr/local/bin/brew shellenv)
+end
+
+# ── History ──────────────────────────────────────────────────────────
+set -g fish_history_size 50000
+
+# ── Toolchain managers ───────────────────────────────────────────────
+mise activate fish | source
+zoxide init fish | source
+direnv hook fish | source
+
+# Tide prompt — installed by fisher (bootstrap.sh)
+# Tide auto-loads from ~/.config/fish/conf.d/tide.fish
+
+# tenv (Terraform/OpenTofu version manager)
+fish_add_path $HOME/.tenv/bin
+
+# ── fzf ──────────────────────────────────────────────────────────────
+test -f (brew --prefix)/opt/fzf/shell/key-bindings.fish && source (brew --prefix)/opt/fzf/shell/key-bindings.fish
+
+# ── Aliases ──────────────────────────────────────────────────────────
+alias ls='eza --icons --group-directories-first'
+alias ll='eza -lh --icons --git --group-directories-first'
+alias la='eza -la --icons --git --group-directories-first'
+alias cat='bat --paging=never'
+alias k='kubectl'
+alias tf='terraform'
+alias g='git'
+alias gst='git status'
+
+# ── opencode ──────────────────────────────────────────────────────────
+fish_add_path $HOME/.opencode/bin
+# Enables in-development features (e.g. newer model support, beta UI flags).
+set -gx OPENCODE_EXPERIMENTAL true
+
+# ── AWS helper ───────────────────────────────────────────────────────
+function awssso --argument profile
+  set -q profile[1]; or set profile default
+  aws sso login --profile $profile
+  set -gx AWS_PROFILE $profile
+end
+
+# ── Local overrides (not version controlled) ─────────────────────────
+test -f $HOME/.config/fish/config.local.fish && source $HOME/.config/fish/config.local.fish
