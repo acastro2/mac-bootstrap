@@ -397,16 +397,11 @@ fi
 # ── opencode config (private repo — needs auth) ──────────────────────
 echo ""
 if [[ -n "$OPENCODE_CONFIG_REPO" ]]; then
-  log "Cloning opencode config repo"
-  if [[ ! -d "$HOME/.local/share/opencode-config" ]]; then
-    gh repo clone "$OPENCODE_CONFIG_REPO" "$HOME/.local/share/opencode-config" 2>&1 || warn "Config repo clone failed (check gh auth)."
+  log "Cloning opencode config repo into ~/.config/opencode"
+  if [[ ! -d "$HOME/.config/opencode/.git" ]]; then
+    gh repo clone "$OPENCODE_CONFIG_REPO" "$HOME/.config/opencode" 2>&1 || warn "Config repo clone failed (check gh auth)."
   else
-    git -C "$HOME/.local/share/opencode-config" pull --ff-only || true
-  fi
-  if [[ -f "$HOME/.local/share/opencode-config/config.json" ]]; then
-    log "Linking opencode config.json"
-    mkdir -p "$HOME/.config/opencode"
-    ln -sf "$HOME/.local/share/opencode-config/config.json" "$HOME/.config/opencode/config.json"
+    git -C "$HOME/.config/opencode" pull --ff-only || true
   fi
 fi
 
