@@ -1,7 +1,5 @@
 # Brewfile — declarative package list
 # Apply with: brew bundle --file=Brewfile
-tap "homebrew/bundle"
-tap "ghostty-org/ghostty"
 
 # ── Shell & Toolchains ────────────────────────────────────────────────
 brew "git"
@@ -10,6 +8,8 @@ brew "fish"
 brew "fisher"          # fish plugin manager
 brew "mise"            # toolchain manager (Go, Node, Python, etc.)
 brew "chezmoi"         # dotfiles
+brew "zoxide"          # smarter cd
+brew "direnv"
 brew "uv"              # fast Python package manager + uvx
 brew "fzf"
 
@@ -26,7 +26,6 @@ brew "doggo"           # DNS client (dig alternative)
 brew "mas"             # Mac App Store CLI
 
 # ── Platform / Infra ───────────────────────────────────────────────────
-brew "tflint"
 brew "kubectl"
 brew "k9s"
 brew "helm"
@@ -34,16 +33,15 @@ brew "awscli"
 brew "colima"          # Docker runtime (no Docker Desktop)
 brew "ffmpeg"          # Playwright video recording / trace viewer media
 brew "snowflake-cli"
-brew "cortex-cli"
 brew "pgcli"
 brew "postgresql@16", restart_service: false
 brew "redis", restart_service: false
 
 # ── Apps ───────────────────────────────────────────────────────────────
 cask "1password"
-brew "1password-cli"
-brew "ghostty"
-cask "visual-studio-code-insiders"
+cask "1password-cli"
+cask "ghostty"
+cask "visual-studio-code@insiders"
 cask "zed"
 cask "jumpcut"
 cask "beyond-compare"

@@ -30,8 +30,8 @@ curl -fsSL https://raw.githubusercontent.com/acastro2/mac-bootstrap/main/bootstr
 Or inspect first:
 
 ```bash
-git clone https://github.com/acastro2/mac-bootstrap.git ~/mac-bootstrap
-cd ~/mac-bootstrap
+git clone https://github.com/acastro2/mac-bootstrap.git ~/Developer/github/acastro2/mac-bootstrap
+cd ~/Developer/github/acastro2/mac-bootstrap
 ./bootstrap.sh
 ```
 
