@@ -91,6 +91,7 @@ mkdir -p "$HOME/Developer" "$HOME/.config" "$HOME/.local/bin" "$HOME/.local/shar
 log "Created ~/Developer, ~/.config, ~/.local/bin, ~/.local/share"
 
 # ── macOS defaults ─────────────────────────────────────────────────────
+if should_run "macos"; then
 section "macOS defaults"
 log "Key repeat: fast, no press-and-hold"
 defaults write -g KeyRepeat -int 2
@@ -114,12 +115,14 @@ log "Disable .DS_Store on network volumes"
 defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
 
 log "Some changes require logout/login to take full effect."
+fi
 
 # =========================================================================
 # PHASE 1: Install everything (non-interactive except sudo for chsh)
 # =========================================================================
 
 # ── Brewfile ──────────────────────────────────────────────────────────
+if should_run "brew"; then
 section "Packages (Brewfile)"
 log "Installing packages (this takes a while on a fresh machine)..."
 brew bundle --file=Brewfile
@@ -133,6 +136,7 @@ fi
 if [[ -d "/Applications/Zed.app" ]]; then
   ln -sf "/Applications/Zed.app/Contents/MacOS/cli" /opt/homebrew/bin/zed
   log "zed → PATH"
+fi
 fi
 
 # ── Fish shell ────────────────────────────────────────────────────────
@@ -381,14 +385,15 @@ fi
 
 # ── Doctor ──────────────────────────────────────────────────────────────
 section "Doctor"
-local pass=0 fail=0
+pass=0; fail=0
 check() {
-  if command -v "$1" &>/dev/null; then
-    printf "  \033[1;32m✓\033[0m %s\n" "$1"
-    ((pass++)) || true
+  local cmd="$1"
+  if fish -c "command -v $cmd" &>/dev/null 2>&1; then
+    printf "  \033[1;32m✓\033[0m %s\n" "$cmd"
+    pass=$((pass + 1))
   else
-    printf "  \033[1;31m✗\033[0m %-24s (not on PATH)\n" "$1"
-    ((fail++)) || true
+    printf "  \033[1;31m✗\033[0m %-24s (not found)\n" "$cmd"
+    fail=$((fail + 1))
   fi
 }
 check fish;   check mise;   check op;     check gh

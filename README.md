@@ -80,7 +80,44 @@ cd ~/mac-bootstrap && git add home/ && git commit -m "update dotfiles" && git pu
 
 ## Selective runs
 
-The bootstrap is idempotent — re-run `./bootstrap.sh` anytime. Specific sections are skipped if already configured.
+The bootstrap is idempotent — re-run `./bootstrap.sh` anytime. Gated sections are skipped if already configured.
+
+```bash
+./bootstrap.sh --only=brew,fish          # install only Brewfile packages + fish
+./bootstrap.sh --skip=macos,mise,auth   # skip defaults, toolchains, and auth prompts
+```
+
+Gatable sections: `brew`, `fish`, `macos`, `mise`, `dotfiles`, `secrets`, `auth`, `doctor`.
+
+## macOS defaults
+
+The `macos` section sets opinionated defaults (opt-out with `--skip=macos`):
+
+| Setting | Effect |
+|---|---|
+| Key repeat | Fast (2/15), no press-and-hold diacritics |
+| Finder | Show extensions, hidden files |
+| Screenshots | Saved to `~/Screenshots` |
+| Dock | Auto-hide, no animation delay |
+| .DS_Store | Disabled on network volumes |
+
+Changes take full effect after logout/login.
+
+## Doctor
+
+The `doctor` section at the end verifies critical binaries are on PATH (via fish):
+
+```
+=== Doctor ===
+✓ fish    ✓ mise    ✓ op      ✓ gh
+✓ chezmoi ✓ herdr   ✓ opencode
+✓ aws     ✓ kubectl ✓ helm
+✓ playwright ✓ uv   ✓ colima
+```
+
+Non-zero exit on failure — use in CI or to smoke-test a fresh bootstrap.
+
+## Updating dotfiles
 
 ## Browser automation
 
