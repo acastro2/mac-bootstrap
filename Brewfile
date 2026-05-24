@@ -4,6 +4,7 @@
 # ── Shell & Toolchains ────────────────────────────────────────────────
 brew "git"
 brew "gh"
+brew "copilot-cli"     # GitHub Copilot CLI
 brew "fish"
 brew "fisher"          # fish plugin manager
 brew "mise"            # toolchain manager (Go, Node, Python, etc.)
