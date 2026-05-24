@@ -8,8 +8,6 @@ brew "fish"
 brew "fisher"          # fish plugin manager
 brew "mise"            # toolchain manager (Go, Node, Python, etc.)
 brew "chezmoi"         # dotfiles
-brew "zoxide"          # smarter cd
-brew "direnv"
 brew "uv"              # fast Python package manager + uvx
 brew "fzf"
 

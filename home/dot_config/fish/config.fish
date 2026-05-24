@@ -12,8 +12,6 @@ set -g fish_history_size 50000
 
 # ── Toolchain managers ───────────────────────────────────────────────
 mise activate fish | source
-zoxide init fish | source
-direnv hook fish | source
 
 # Tide prompt — installed by fisher (bootstrap.sh)
 
@@ -26,7 +24,6 @@ alias ll='eza -lh --icons --git --group-directories-first'
 alias la='eza -la --icons --git --group-directories-first'
 alias cat='bat --paging=never'
 alias k='kubectl'
-alias tf='terraform'
 alias g='git'
 alias gst='git status'
 alias code='code-insiders'

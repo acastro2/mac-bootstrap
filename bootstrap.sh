@@ -246,7 +246,6 @@ pnpm       = "10"
 python     = "3.12"
 dotnet     = "9"
 opentofu   = "latest"
-terraform  = "latest"
 "npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
 "npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
 "aqua:terraform-linters/tflint" = "latest"
