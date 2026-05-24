@@ -19,6 +19,7 @@ brew "bat"
 brew "eza"             # modern ls
 brew "zoxide"          # smarter cd
 brew "direnv"
+brew "uv"              # fast Python package manager + uvx
 brew "tmux"
 brew "repomix"        # pack a repo into a single file for LLM context
 brew "neovim"
