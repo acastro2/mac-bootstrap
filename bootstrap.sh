@@ -72,6 +72,11 @@ else
 fi
 cd "$REPO_DIR"
 
+# ── Workspace directories ──────────────────────────────────────────────
+section "Workspace"
+mkdir -p "$HOME/Developer" "$HOME/.config" "$HOME/.local/bin" "$HOME/.local/share"
+log "Created ~/Developer, ~/.config, ~/.local/bin, ~/.local/share"
+
 # =========================================================================
 # PHASE 1: Install everything (non-interactive except sudo for chsh)
 # =========================================================================
