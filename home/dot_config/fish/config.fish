@@ -33,6 +33,9 @@ alias k='kubectl'
 alias tf='terraform'
 alias g='git'
 alias gst='git status'
+alias code='code-insiders'
+function cd-dev;  cd ~/Developer; end
+function cd-down; cd ~/Downloads; end
 
 # ── opencode ──────────────────────────────────────────────────────────
 fish_add_path $HOME/.opencode/bin

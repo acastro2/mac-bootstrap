@@ -9,6 +9,7 @@ set -euo pipefail
 # ── Configuration ────────────────────────────────────────────────────
 REPO_URL="https://github.com/acastro2/mac-bootstrap.git"
 REPO_DIR="${HOME}/mac-bootstrap"
+TTY="/dev/tty"
 OP_VAULT="Private"
 GIT_NAME="Alexandre Castro"
 GIT_EMAIL="alexandre.castro@outlook.com"
@@ -23,16 +24,6 @@ section(){ printf "\n\033[1;37m━━━ %s ━━━\033[0m\n" "$*"; }
 
 # ── Sanity checks ────────────────────────────────────────────────────
 [[ "$(uname)" == "Darwin" ]] || die "This bootstrap targets macOS only."
-
-# When piped from curl, stdin is the script itself — re-open from the tty so
-# interactive prompts (read, sudo, chsh, op signin, gh auth) work in Phase 2.
-if [[ ! -t 0 ]]; then
-  if [[ -e /dev/tty ]]; then
-    exec < /dev/tty
-  else
-    die "No tty available — run the script from a cloned checkout instead of piping curl."
-  fi
-fi
 
 # =========================================================================
 # PHASE 0: Prerequisites
@@ -86,6 +77,17 @@ section "Packages (Brewfile)"
 log "Installing packages (this takes a while on a fresh machine)..."
 brew bundle --file=Brewfile
 
+# ── App CLIs (symlink into PATH) ───────────────────────────────────────
+section "App CLI commands"
+if [[ -d "/Applications/Visual Studio Code - Insiders.app" ]]; then
+  ln -sf "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code" /opt/homebrew/bin/code-insiders
+  log "code-insiders → PATH"
+fi
+if [[ -d "/Applications/Zed.app" ]]; then
+  ln -sf "/Applications/Zed.app/Contents/MacOS/cli" /opt/homebrew/bin/zed
+  log "zed → PATH"
+fi
+
 # ── Fish shell ────────────────────────────────────────────────────────
 section "Shell: fish"
 FISH_PATH="$(brew --prefix)/bin/fish"
@@ -95,7 +97,11 @@ if ! grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
 fi
 if [[ "$SHELL" != "$FISH_PATH" ]]; then
   log "Setting fish as default shell"
-  chsh -s "$FISH_PATH"
+  if [[ -t 0 ]] || [[ -e "$TTY" ]]; then
+    chsh -s "$FISH_PATH" < "$TTY" 2>/dev/null || warn "chsh failed — run 'chsh -s $FISH_PATH' manually"
+  else
+    warn "No tty available — run 'chsh -s $FISH_PATH' manually to switch to fish"
+  fi
 fi
 log "Default shell: $FISH_PATH"
 
@@ -108,6 +114,8 @@ log "Installing fzf key bindings"
 section "Fish plugins (Fisher + Tide)"
 log "Installing Tide prompt"
 fish -c "fisher install IlanCosman/tide@v6" || warn "Tide install failed"
+log "Installing Sponge (clean history)"
+fish -c "fisher install meaningful-ooo/sponge" || warn "Sponge install failed"
 
 # ── Git globals ───────────────────────────────────────────────────────
 section "Git config"
@@ -264,7 +272,7 @@ else
   log "  3. Then run: eval \"\$(op signin)\""
   echo ""
   prompt "Press Enter after you've completed the steps above..."
-  read -r
+  read -r < "$TTY"
 fi
 
 log "Signing in to 1Password CLI"
@@ -277,7 +285,7 @@ if gh auth status &>/dev/null; then
 else
   prompt "GitHub CLI: a browser will open for SSO login."
   prompt "Press Enter to continue..."
-  read -r
+  read -r < "$TTY"
   gh auth login --web || warn "gh auth login failed; run it manually with 'gh auth login --web'."
 fi
 
