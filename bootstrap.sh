@@ -113,8 +113,7 @@ defaults write com.apple.dock autohide-time-modifier -float 0.3
 log "Disable .DS_Store on network volumes"
 defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
 
-killall Finder 2>/dev/null || true
-killall Dock 2>/dev/null || true
+log "Some changes require logout/login to take full effect."
 
 # =========================================================================
 # PHASE 1: Install everything (non-interactive except sudo for chsh)
