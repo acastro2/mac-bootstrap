@@ -33,7 +33,7 @@ brew "kubectl"
 brew "k9s"
 brew "helm"
 brew "awscli"
-brew "aws-vault"
+brew "colima"          # Docker runtime (no Docker Desktop)
 brew "snowflake-cli"
 brew "cortex-cli"
 brew "pgcli"
@@ -44,16 +44,11 @@ brew "redis", restart_service: false
 cask "1password"
 brew "1password-cli"
 brew "ghostty"
-cask "raycast"
 cask "visual-studio-code-insiders"
 cask "zed"
-cask "cursor"
-cask "orbstack"        # lighter Docker Desktop
-cask "rectangle"
 cask "jumpcut"
 cask "beyond-compare"
 cask "keepingyouawake" # Amphetamine alternative
-cask "slack"
 
 # ── Fonts ────────────────────────────────────────────────────────────
 cask "font-jetbrains-mono-nerd-font"
