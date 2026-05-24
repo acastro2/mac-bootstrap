@@ -415,9 +415,7 @@ fi
 echo ""
 if [[ -x "$HOME/.opencode/bin/opencode" ]]; then
   log "Configuring opencode providers"
-  prompt "OpenAI requires a browser OAuth login (free tier). Press Enter to continue..."
-  read -r < "$TTY"
-  "$HOME/.opencode/bin/opencode" providers login --provider openai 2>&1 || warn "OpenAI provider login skipped — run 'opencode providers login --provider openai' manually"
+  "$HOME/.opencode/bin/opencode" providers login --provider openai < "$TTY" 2>&1 || warn "OpenAI provider login skipped — run 'opencode providers login --provider openai' manually"
 else
   warn "opencode not found — skipped provider setup"
 fi
