@@ -7,9 +7,12 @@ brew "gh"
 brew "fish"
 brew "fisher"          # fish plugin manager
 brew "mise"            # toolchain manager (Go, Node, Python, etc.)
+brew "llhttp"          # mise Node dep — prevent brew cleanup from breaking node
 brew "chezmoi"         # dotfiles
 brew "uv"              # fast Python package manager + uvx
 brew "fzf"
+brew "pre-commit"
+brew "gitleaks"
 
 # ── CLI Utilities ──────────────────────────────────────────────────────
 brew "jq"
