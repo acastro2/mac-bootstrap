@@ -411,6 +411,17 @@ else
   gh auth login --web || warn "gh auth login failed; run it manually with 'gh auth login --web'."
 fi
 
+# ── opencode providers ──────────────────────────────────────────────
+echo ""
+if command -v opencode &>/dev/null; then
+  log "Configuring opencode providers"
+  prompt "OpenAI requires a browser OAuth login (free tier). Press Enter to continue..."
+  read -r < "$TTY"
+  opencode providers login --provider openai 2>&1 || warn "OpenAI provider login skipped — run 'opencode providers login --provider openai' manually"
+else
+  warn "opencode not found — skipped provider setup"
+fi
+
 # ── opencode config (private repo — needs auth) ──────────────────────
 echo ""
 if [[ -n "$OPENCODE_CONFIG_REPO" ]]; then
