@@ -13,7 +13,7 @@ TTY="/dev/tty"
 OP_VAULT="Private"
 GIT_NAME="Alexandre Castro"
 GIT_EMAIL="alexandre.castro@outlook.com"
-OPENCODE_CONFIG_REPO="git@github.com:acastro2/opencode_config.git"
+OPENCODE_CONFIG_REPO="acastro2/opencode_config"
 OPENCODE_SKILLS_REPO="https://github.com/acastro2/alex-skills.git"
 
 # ── Selective re-run flags ──────────────────────────────────────────
@@ -205,6 +205,7 @@ if should_run ssh; then
 section "SSH config"
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
+ssh-keyscan github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
 if ! grep -qF "1Password" "$HOME/.ssh/config" 2>/dev/null; then
   log "Configuring SSH to use 1Password agent"
   cat >> "$HOME/.ssh/config" << 'EOF'
@@ -398,7 +399,7 @@ echo ""
 if [[ -n "$OPENCODE_CONFIG_REPO" ]]; then
   log "Cloning opencode config repo"
   if [[ ! -d "$HOME/.local/share/opencode-config" ]]; then
-    git clone "$OPENCODE_CONFIG_REPO" "$HOME/.local/share/opencode-config" 2>&1 || warn "Config repo clone failed (check SSH key and repo access)."
+    gh repo clone "$OPENCODE_CONFIG_REPO" "$HOME/.local/share/opencode-config" 2>&1 || warn "Config repo clone failed (check gh auth)."
   else
     git -C "$HOME/.local/share/opencode-config" pull --ff-only || true
   fi

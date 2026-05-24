@@ -24,6 +24,8 @@ brew "doggo"           # DNS client (dig alternative)
 brew "mas"             # Mac App Store CLI
 
 # ── Platform / Infra ───────────────────────────────────────────────────
+tap "terraform-linters/tap"
+brew "tflint"
 brew "kubectl"
 brew "k9s"
 brew "helm"
