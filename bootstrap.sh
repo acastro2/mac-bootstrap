@@ -393,7 +393,6 @@ if op account list 2>/dev/null | grep -q .; then
   }
   keychain_store "opencode-api-key"
   keychain_store "anthropic-api-key"
-  keychain_store "openai-api-key"
   keychain_store "context7-api-key"
   keychain_store "devto-api-key"
   keychain_store "oreilly-api-token"
@@ -415,7 +414,7 @@ fi
 echo ""
 if [[ -x "$HOME/.opencode/bin/opencode" ]]; then
   log "Configuring opencode providers"
-  printf '\n' | "$HOME/.opencode/bin/opencode" auth login --provider openai --method "ChatGPT Pro/Plus (browser)" 2>&1 || warn "OpenAI provider login skipped — run 'opencode auth login --provider openai' manually"
+  log "opencode providers login skipped — configure manually later"
 else
   warn "opencode not found — skipped provider setup"
 fi

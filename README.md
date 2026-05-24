@@ -63,7 +63,7 @@ Before the bootstrap can pull secrets, set up the 1Password desktop app:
 | `op://Private/opencode-api-key`  | `password` | Opencode API key            |
 | `op://Private/anthropic-api-key` | `password` | Anthropic API key           |
 | `op://Private/openai-api-key`    | `password` | OpenAI API key              |
-| `op://Private/context7-api-key`  | `password` | Context7 API key            |
+| `op://Private/context7-api-key`   | `password` | Context7 API key            |
 | `op://Private/devto-api-key`     | `password` | dev.to API key              |
 | `op://Private/oreilly-api-token` | `password` | O'Reilly API token          |
 | `op://Private/google-api-key`    | `password` | Google API key (for Stitch) |
