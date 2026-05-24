@@ -25,7 +25,6 @@ brew "mas"             # Mac App Store CLI
 
 # ── Platform / Infra ───────────────────────────────────────────────────
 tap "terraform-linters/tap"
-brew "tflint"
 brew "kubectl"
 brew "k9s"
 brew "helm"
@@ -43,6 +42,7 @@ cask "1password-cli"
 cask "ghostty"
 cask "visual-studio-code@insiders"
 cask "zed"
+cask "tflint"
 cask "copilot-cli"     # GitHub Copilot CLI
 cask "jumpcut"
 cask "beyond-compare"
