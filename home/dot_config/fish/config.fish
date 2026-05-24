@@ -16,10 +16,6 @@ zoxide init fish | source
 direnv hook fish | source
 
 # Tide prompt — installed by fisher (bootstrap.sh)
-# Tide auto-loads from ~/.config/fish/conf.d/tide.fish
-
-# tenv (Terraform/OpenTofu version manager)
-fish_add_path $HOME/.tenv/bin
 
 # ── fzf ──────────────────────────────────────────────────────────────
 test -f (brew --prefix)/opt/fzf/shell/key-bindings.fish && source (brew --prefix)/opt/fzf/shell/key-bindings.fish

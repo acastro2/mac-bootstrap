@@ -3,31 +3,29 @@
 tap "homebrew/bundle"
 tap "ghostty-org/ghostty"
 
-# ── Core CLI ─────────────────────────────────────────────────────────
+# ── Shell & Toolchains ────────────────────────────────────────────────
 brew "git"
 brew "gh"
 brew "fish"
 brew "fisher"          # fish plugin manager
 brew "mise"            # toolchain manager (Go, Node, Python, etc.)
 brew "chezmoi"         # dotfiles
+brew "uv"              # fast Python package manager + uvx
+brew "fzf"
+
+# ── CLI Utilities ──────────────────────────────────────────────────────
 brew "jq"
 brew "yq"
 brew "ripgrep"
 brew "fd"
-brew "fzf"
 brew "bat"
 brew "eza"             # modern ls
-brew "zoxide"          # smarter cd
-brew "direnv"
-brew "uv"              # fast Python package manager + uvx
-brew "tmux"
 brew "repomix"        # pack a repo into a single file for LLM context
 brew "neovim"
 brew "doggo"           # DNS client (dig alternative)
 brew "mas"             # Mac App Store CLI
 
-# ── Platform / Infra ─────────────────────────────────────────────────
-brew "tenv"            # Terraform/OpenTofu version manager (replaces tfenv/tofuenv)
+# ── Platform / Infra ───────────────────────────────────────────────────
 brew "tflint"
 brew "kubectl"
 brew "k9s"
@@ -41,7 +39,7 @@ brew "pgcli"
 brew "postgresql@16", restart_service: false
 brew "redis", restart_service: false
 
-# ── Apps ─────────────────────────────────────────────────────────────
+# ── Apps ───────────────────────────────────────────────────────────────
 cask "1password"
 brew "1password-cli"
 brew "ghostty"
@@ -51,6 +49,6 @@ cask "jumpcut"
 cask "beyond-compare"
 cask "keepingyouawake" # Amphetamine alternative
 
-# ── Fonts ────────────────────────────────────────────────────────────
+# ── Fonts ──────────────────────────────────────────────────────────────
 cask "font-jetbrains-mono-nerd-font"
 cask "font-geist-mono"

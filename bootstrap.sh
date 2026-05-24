@@ -10,6 +10,28 @@ set -euo pipefail
 REPO_URL="https://github.com/acastro2/mac-bootstrap.git"
 REPO_DIR="${HOME}/mac-bootstrap"
 TTY="/dev/tty"
+
+# ── Selective re-run flags ──────────────────────────────────────────
+#   ./bootstrap.sh --skip apps,fonts    ← skip named sections
+#   ./bootstrap.sh --only mise,chezmoi  ← run only named sections
+SKIP=""
+ONLY=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip=*) SKIP="${1#*=}"; shift ;;
+    --only=*) ONLY="${1#*=}"; shift ;;
+    -s|--skip) SKIP="$2"; shift 2 ;;
+    -o|--only) ONLY="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+should_run() {
+  local name="$1"
+  [[ -n "$ONLY" ]] && [[ ",$ONLY," != *",$name,"* ]] && return 1
+  [[ -n "$SKIP" ]] && [[ ",$SKIP," == *",$name,"* ]] && return 1
+  return 0
+}
 OP_VAULT="Private"
 GIT_NAME="Alexandre Castro"
 GIT_EMAIL="alexandre.castro@outlook.com"
@@ -67,6 +89,32 @@ cd "$REPO_DIR"
 section "Workspace"
 mkdir -p "$HOME/Developer" "$HOME/.config" "$HOME/.local/bin" "$HOME/.local/share"
 log "Created ~/Developer, ~/.config, ~/.local/bin, ~/.local/share"
+
+# ── macOS defaults ─────────────────────────────────────────────────────
+section "macOS defaults"
+log "Key repeat: fast, no press-and-hold"
+defaults write -g KeyRepeat -int 2
+defaults write -g InitialKeyRepeat -int 15
+defaults write -g ApplePressAndHoldEnabled -bool false
+
+log "Finder: show extensions, hidden files"
+defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+defaults write com.apple.finder AppleShowAllFiles -bool true
+
+log "Screenshots → ~/Screenshots"
+mkdir -p "$HOME/Screenshots"
+defaults write com.apple.screencapture location -string "$HOME/Screenshots"
+
+log "Dock: auto-hide, no delay"
+defaults write com.apple.dock autohide -bool true
+defaults write com.apple.dock autohide-delay -float 0
+defaults write com.apple.dock autohide-time-modifier -float 0.3
+
+log "Disable .DS_Store on network volumes"
+defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
+
+killall Finder 2>/dev/null || true
+killall Dock 2>/dev/null || true
 
 # =========================================================================
 # PHASE 1: Install everything (non-interactive except sudo for chsh)
@@ -161,20 +209,6 @@ if [[ ! -x "$HOME/.opencode/bin/opencode" ]]; then
   curl -fsSL https://opencode.ai/install | bash
 else
   log "Already installed."
-fi
-
-# ── agent skills (→ ~/.agents/skills/) ────────────────────────────────
-# Uses SSH if OPENCODE_SKILLS_REPO is a git@ URL — requires the 1Password SSH
-# agent (Phase 2) to already be enabled in the desktop app, or this clone
-# fails. Failure is non-fatal: rerun the script after enabling the agent.
-if [[ -n "$OPENCODE_SKILLS_REPO" ]]; then
-  log "Cloning skills repo into ~/.agents/skills"
-  if [[ ! -d "$HOME/.agents/skills" ]]; then
-    git clone "$OPENCODE_SKILLS_REPO" "$HOME/.agents/skills" \
-      || warn "Skills clone failed — enable the 1Password SSH agent and rerun the bootstrap."
-  else
-    git -C "$HOME/.agents/skills" pull --ff-only || true
-  fi
 fi
 
 # ── mise ──────────────────────────────────────────────────────────────
@@ -333,6 +367,41 @@ if [[ -n "$OPENCODE_CONFIG_REPO" ]]; then
     mkdir -p "$HOME/.config/opencode"
     ln -sf "$HOME/.local/share/opencode-config/config.json" "$HOME/.config/opencode/config.json"
   fi
+fi
+
+# ── agent skills (→ ~/.agents/skills/) ──────────────────────────────
+echo ""
+if [[ -n "$OPENCODE_SKILLS_REPO" ]]; then
+  log "Cloning skills repo into ~/.agents/skills"
+  if [[ ! -d "$HOME/.agents/skills" ]]; then
+    git clone "$OPENCODE_SKILLS_REPO" "$HOME/.agents/skills" 2>&1 || warn "Skills clone failed (check SSH key)."
+  else
+    git -C "$HOME/.agents/skills" pull --ff-only || true
+  fi
+fi
+
+# ── Doctor ──────────────────────────────────────────────────────────────
+section "Doctor"
+local pass=0 fail=0
+check() {
+  if command -v "$1" &>/dev/null; then
+    printf "  \033[1;32m✓\033[0m %s\n" "$1"
+    ((pass++)) || true
+  else
+    printf "  \033[1;31m✗\033[0m %-24s (not on PATH)\n" "$1"
+    ((fail++)) || true
+  fi
+}
+check fish;   check mise;   check op;     check gh
+check chezmoi; check herdr; check opencode
+check aws;    check kubectl; check helm
+check playwright; check uv; check colima
+
+echo ""
+if [[ $fail -eq 0 ]]; then
+  log "All $pass checks passed."
+else
+  warn "$pass passed, $fail missing — review the output above."
 fi
 
 # =========================================================================
