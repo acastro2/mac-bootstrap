@@ -1,2 +1,4 @@
 .DS_Store
 dotfiles.tar.gz
+test-results/
+playwright-report/

@@ -191,12 +191,42 @@ python     = "3.12"
 dotnet     = "9"
 opentofu   = "latest"
 terraform  = "latest"
+"npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
+"npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
 
 [settings]
 experimental = true
 EOF
 log "Installing mise toolchains"
 mise install || warn "Some mise tools may have failed; run 'mise install' manually later."
+
+# ── Browser automation (Playwright + browser-use) ────────────────────
+section "Browser automation"
+
+# Python Playwright + browser-use, isolated via uv tool
+if command -v uv &>/dev/null; then
+  log "Installing Python Playwright via uv tool"
+  uv tool install --upgrade playwright || warn "Python Playwright install failed"
+
+  log "Installing browser-use (LLM-driven browser agent)"
+  uv tool install --upgrade browser-use || warn "browser-use install failed"
+else
+  warn "uv not on PATH — skipping Python browser tools"
+fi
+
+# Warm browser binary cache (shared between Node and Python Playwright at
+# ~/Library/Caches/ms-playwright/). Installing via either CLI covers both.
+if command -v playwright &>/dev/null; then
+  log "Installing Playwright browsers (chromium, firefox, webkit)"
+  playwright install chromium firefox webkit || warn "Browser install failed"
+else
+  warn "playwright CLI not on PATH yet — run 'mise install' then 'playwright install' manually"
+fi
+
+log "Opening System Settings for browser permissions"
+log "Grant Accessibility + Screen Recording to: Ghostty, Chromium, Firefox, WebKit"
+open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
+open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
 
 # ── chezmoi ───────────────────────────────────────────────────────────
 section "Dotfiles (chezmoi)"

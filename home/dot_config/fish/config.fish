@@ -39,6 +39,8 @@ function cd-down; cd ~/Downloads; end
 
 # ── opencode ──────────────────────────────────────────────────────────
 fish_add_path $HOME/.opencode/bin
+# uv tool-installed binaries land here
+fish_add_path $HOME/.local/bin
 # Enables in-development features (e.g. newer model support, beta UI flags).
 set -gx OPENCODE_EXPERIMENTAL true
 
