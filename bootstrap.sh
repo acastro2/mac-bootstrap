@@ -259,12 +259,13 @@ dotnet     = "9"
 opentofu   = "latest"
 "npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
 "npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
-"aqua:terraform-linters/tflint" = "latest"
 
 [settings]
 experimental = true
+python.github_attestations = false
 EOF
 log "Installing mise toolchains"
+export GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || echo '')}"
 mise install || warn "Some mise tools may have failed; run 'mise install' manually later."
 fi
 
@@ -285,14 +286,14 @@ fi
 
 # Warm browser binary cache
 if command -v playwright &>/dev/null; then
-  log "Installing Playwright browsers (chromium, firefox, webkit)"
-  playwright install chromium firefox webkit || warn "Browser install failed"
+  log "Installing Playwright browser (chromium)"
+  playwright install chromium || warn "Browser install failed"
 else
   warn "playwright CLI not on PATH yet — run 'mise install' then 'playwright install' manually"
 fi
 
 log "Opening System Settings for browser permissions"
-log "Grant Accessibility + Screen Recording to: Ghostty, Chromium, Firefox, WebKit"
+log "Grant Accessibility + Screen Recording to: Ghostty, Chromium"
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
 fi
