@@ -27,8 +27,6 @@ alias ll='eza -lh --icons --git --group-directories-first'
 alias la='eza -la --icons --git --group-directories-first'
 alias cat='bat --paging=never'
 alias k='kubectl'
-alias g='git'
-alias gst='git status'
 alias code='code-insiders'
 function cd-dev;      cd ~/Developer; end
 function cd-down;     cd ~/Downloads; end

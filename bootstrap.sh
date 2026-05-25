@@ -7,14 +7,22 @@
 set -euo pipefail
 
 # ── Configuration ────────────────────────────────────────────────────
+# Defaults — override by creating config.env next to this script.
+OP_VAULT=""
+GIT_NAME=""
+GIT_EMAIL=""
 REPO_URL="https://github.com/acastro2/mac-bootstrap.git"
 REPO_DIR="${HOME}/Developer/github/acastro2/mac-bootstrap"
+OPENCODE_CONFIG_REPO=""
+OPENCODE_SKILLS_REPO=""
+
+# Source personal config if present (gitignored, not committed).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/config.env" ]]; then
+  source "$SCRIPT_DIR/config.env"
+fi
+
 TTY="/dev/tty"
-OP_VAULT="Private"
-GIT_NAME="Alexandre Castro"
-GIT_EMAIL="alexandre.castro@outlook.com"
-OPENCODE_CONFIG_REPO="acastro2/opencode_config"
-OPENCODE_SKILLS_REPO="https://github.com/acastro2/alex-skills.git"
 
 # ── Selective re-run flags ──────────────────────────────────────────
 SKIP=""
@@ -316,9 +324,10 @@ fi
 # ── API keys → fish conf.d ───────────────────────────────────────────
 if should_run secrets; then
 section "Secrets"
-log "Writing API key functions to fish conf.d"
-mkdir -p "$HOME/.config/fish/conf.d"
-cat > "$HOME/.config/fish/conf.d/secrets.fish" << ENDFISH
+if [[ -n "$OP_VAULT" ]]; then
+  log "Writing API key functions to fish conf.d"
+  mkdir -p "$HOME/.config/fish/conf.d"
+  cat > "$HOME/.config/fish/conf.d/secrets.fish" << ENDFISH
 # Managed by bootstrap.sh — do not edit by hand.
 # Lazy-loaded: reads from macOS Keychain (populated once from 1Password at bootstrap).
 function opencode-key
@@ -355,6 +364,9 @@ function export-keys
 end
 ENDFISH
 chmod 600 "$HOME/.config/fish/conf.d/secrets.fish"
+else
+  log "OP_VAULT not set — skipping API key setup"
+fi
 fi
 
 # =========================================================================
@@ -366,39 +378,43 @@ section "Authentication"
 
 # ── 1Password ─────────────────────────────────────────────────────────
 echo ""
-if op account list 2>/dev/null | grep -q .; then
-  log "1Password CLI already configured."
+if [[ -n "$OP_VAULT" ]]; then
+  if op account list 2>/dev/null | grep -q .; then
+    log "1Password CLI already configured."
+  else
+    prompt "1Password CLI is not configured."
+    log "One-time setup in the 1Password desktop app:"
+    log "  1. Open 1Password and sign into your account (my.1password.com)"
+    log "  2. Settings → Developer → enable:"
+    log "       • Integrate with 1Password CLI"
+    log "       • Use the SSH agent"
+    log "       • Biometric unlock for 1Password CLI"
+    log "  3. Then run: eval \"\$(op signin)\""
+    echo ""
+    prompt "Press Enter after you've completed the steps above..."
+    read -r < "$TTY"
+  fi
+
+  log "Signing in to 1Password CLI"
+  eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
+
+  # ── Migrate API keys to macOS Keychain ──────────────────────────────
+  if op account list 2>/dev/null | grep -q .; then
+    log "Pulling API keys from 1Password → macOS Keychain"
+    keychain_store() {
+      local name="$1"
+      security add-generic-password -a "$USER" -s "$name" \
+        -w "$(op read "op://${OP_VAULT}/$name/password")" -U 2>/dev/null || warn "Failed to store $name in Keychain"
+    }
+    keychain_store "opencode-api-key"
+    keychain_store "anthropic-api-key"
+    keychain_store "context7-api-key"
+    keychain_store "devto-api-key"
+    keychain_store "oreilly-api-token"
+    keychain_store "google-api-key"
+  fi
 else
-  prompt "1Password CLI is not configured."
-  log "One-time setup in the 1Password desktop app:"
-  log "  1. Open 1Password and sign into your account (my.1password.com)"
-  log "  2. Settings → Developer → enable:"
-  log "       • Integrate with 1Password CLI"
-  log "       • Use the SSH agent"
-  log "       • Biometric unlock for 1Password CLI"
-  log "  3. Then run: eval \"\$(op signin)\""
-  echo ""
-  prompt "Press Enter after you've completed the steps above..."
-  read -r < "$TTY"
-fi
-
-log "Signing in to 1Password CLI"
-eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
-
-# ── Migrate API keys to macOS Keychain ──────────────────────────────
-if op account list 2>/dev/null | grep -q .; then
-  log "Pulling API keys from 1Password → macOS Keychain"
-  keychain_store() {
-    local name="$1"
-    security add-generic-password -a "$USER" -s "$name" \
-      -w "$(op read "op://${OP_VAULT}/$name/password")" -U 2>/dev/null || warn "Failed to store $name in Keychain"
-  }
-  keychain_store "opencode-api-key"
-  keychain_store "anthropic-api-key"
-  keychain_store "context7-api-key"
-  keychain_store "devto-api-key"
-  keychain_store "oreilly-api-token"
-  keychain_store "google-api-key"
+  log "OP_VAULT not set — skipping 1Password setup"
 fi
 
 # ── GitHub CLI ────────────────────────────────────────────────────────
@@ -449,7 +465,7 @@ check() {
     fail=$((fail + 1))
   fi
 }
-check fish;   check mise;   check op;     check gh
+check fish;   check mise;   [[ -n "$OP_VAULT" ]] && check op;     check gh
 check chezmoi; check herdr; check opencode
 check aws;    check kubectl; check helm
 check playwright; check uv; check colima

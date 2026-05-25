@@ -8,17 +8,45 @@ If you're the kind of engineer who treats their machine like a cattle, not a pet
 
 ## Before you run this
 
-You'll need:
-
-- **1Password** — credentials for the machine and an account on my.1password.com with a vault containing your API keys
 - **Apple ID** — signed into the App Store (for `mas` to pull apps)
 - **A functioning brain** — the script's interactive. It'll ask you things. It won't hold your hand for `sudo`.
 
-The 1Password setup is non-negotiable. The bootstrap pulls every API key from your vault into the macOS Keychain at the end. If you don't have 1Password configured, you'll get prompted to fix it mid-run.
+**1Password is optional.** If you set your vault name in `config.env`, the bootstrap pulls API keys into the macOS Keychain. If you don't, everything else still works — you'll just need to configure API keys yourself.
+
+---
+
+## Make It Yours
+
+Fork the repo, edit `config.env` with your values, then run:
+
+```bash
+git clone https://github.com/YOU/mac-bootstrap.git ~/Developer/github/YOU/mac-bootstrap
+cd ~/Developer/github/YOU/mac-bootstrap
+# edit config.env with your values
+./bootstrap.sh
+```
+
+| Variable               | What it does                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `OP_VAULT`             | 1Password vault name (leave empty to skip API key setup)                       |
+| `GIT_NAME`             | Your name for `git config --global user.name`                                  |
+| `GIT_EMAIL`            | Your email for `git config --global user.email`                                |
+| `REPO_URL`             | URL of your fork                                                               |
+| `REPO_DIR`             | Where to clone your fork                                                       |
+| `OPENCODE_CONFIG_REPO` | Private opencode config repo, e.g. `you/opencode_config` (leave empty to skip) |
+| `OPENCODE_SKILLS_REPO` | Public agent skills repo (leave empty to skip)                                 |
+
+Then run:
+
+```bash
+./bootstrap.sh
+```
 
 ---
 
 ## Run it
+
+The quick and dirty way (runs with defaults, no 1Password):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/acastro2/mac-bootstrap/main/bootstrap.sh | bash
@@ -75,9 +103,11 @@ You'll get `gs`, `gss`, `gst`, `ga`, `gc`, `gp`, `gco`, `gb`, and about 30 other
 
 **mise.** Not asdf. Not nvm + pyenv + tfenv. mise is faster, supports piped installs (`npm:@playwright/test`), and doesn't require shims. It pins Go (latest), Node (LTS), pnpm 10, Python 3.12, .NET 9, OpenTofu, and the Playwright CLI — globally. Per-project overrides go in `.mise.toml` or `.tool-versions`.
 
-### The secret sauce
+### The secret sauce (optional)
 
-**1Password CLI → macOS Keychain.** Every API key lives in a 1Password vault. The bootstrap pulls them at the end of the run and stuffs them into the Keychain. Fish functions in `conf.d/` read them back and export them as environment variables. No plaintext `.env` files. No "export OPENAI_API_KEY=sk-..." in your shell config. The Keychain is encrypted at rest. If your laptop gets stolen, the keys die with the Secure Enclave.
+**1Password CLI → macOS Keychain.** If you set `OP_VAULT` in `config.env`, every API key gets pulled from your 1Password vault into the macOS Keychain. Fish functions in `conf.d/` read them back and export them as environment variables. No plaintext `.env` files. No "export OPENAI_API_KEY=sk-..." in your shell config. The Keychain is encrypted at rest. If your laptop gets stolen, the keys die with the Secure Enclave.
+
+Skip it if you want — you'll just set up API keys yourself.
 
 Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, google.
 
@@ -117,9 +147,9 @@ If that's you — welcome. Run the command. Break things. Send PRs.
 
 The script runs in two phases:
 
-**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, fish as default shell, Fisher plugins, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, dotfiles via chezmoi, and API key functions written to fish `conf.d/`.
+**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, fish as default shell, Fisher plugins, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, dotfiles via chezmoi, and API key functions written to fish `conf.d/` (if `OP_VAULT` is set).
 
-**Phase 2 — interactive auth.** 1Password sign-in, Keychain import of all API keys, GitHub CLI SSO login, and a doctor check that verifies 13 critical binaries are alive.
+**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in, Keychain import of all API keys. Always: GitHub CLI SSO login, opencode config clone (if repo is set), agent skills clone (if repo is set), and a doctor check that verifies critical binaries are alive.
 
 If anything fails, it tells you what and keeps going. Re-run anytime.
 
