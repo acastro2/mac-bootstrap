@@ -1,33 +1,32 @@
 # mac-bootstrap
 
-One-shot macOS workstation bootstrap. Takes a fresh Mac from zero to fully set up in one command.
+One command. Zero to a fully armed and operational macOS workstation. Shell, toolchains, dotfiles, auth, browser automation, LLM coding agents — all of it.
 
-## What it does
+If you're the kind of engineer who treats their machine like a cattle, not a pet, this is your herd script.
 
-`bootstrap.sh` runs everything in two phases:
+---
 
-**Phase 1 — non-interactive install:**
-- Xcode Command Line Tools
-- Homebrew
-- All packages via `Brewfile` (fish, ghostty, 1Password, opencode, terraform, kubectl, zed, cursor, ...)
-- Sets fish as default shell
-- Configures git globals, SSH via 1Password agent
-- Installs opencode (optionally clones a private config repo + a public skills repo if their URLs are set)
-- Sets up mise toolchains (Go, Node, Python, Terraform, OpenTofu)
-- Installs Playwright (Node + Python), Playwright MCP server, browser-use, and warms browser cache
-- Applies dotfiles via chezmoi (fish config + Tide prompt, ghostty terminal)
+## Before you run this
 
-**Phase 2 — interactive auth (one prompt at a time):**
-- 1Password CLI setup + sign-in
-- GitHub CLI SSO login (`gh auth login --web`)
+You'll need:
 
-## Run on a new machine
+- **1Password** — credentials for the machine and an account on my.1password.com with a vault containing your API keys
+- **Apple ID** — signed into the App Store (for `mas` to pull apps)
+- **A functioning brain** — the script's interactive. It'll ask you things. It won't hold your hand for `sudo`.
+
+The 1Password setup is non-negotiable. The bootstrap pulls every API key from your vault into the macOS Keychain at the end. If you don't have 1Password configured, you'll get prompted to fix it mid-run.
+
+---
+
+## Run it
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/acastro2/mac-bootstrap/main/bootstrap.sh | bash
 ```
 
-Or inspect first:
+That's it. Copy. Paste. Hit enter. Walk away for 10 minutes.
+
+If you'd rather inspect before you yeet:
 
 ```bash
 git clone https://github.com/acastro2/mac-bootstrap.git ~/Developer/github/acastro2/mac-bootstrap
@@ -35,116 +34,103 @@ cd ~/Developer/github/acastro2/mac-bootstrap
 ./bootstrap.sh
 ```
 
-## Configuration
-
-Edit these vars at the top of `bootstrap.sh`:
-
-| Variable                 | What                                                                       |
-| ------------------------ | -------------------------------------------------------------------------- |
-| `OP_VAULT`               | 1Password vault name for secrets                                           |
-| `GIT_NAME` / `GIT_EMAIL` | Git identity                                                               |
-| `OPENCODE_CONFIG_REPO`   | Optional — private git repo with `config.json` (skipped if empty)          |
-| `OPENCODE_SKILLS_REPO`   | Optional — public git repo cloned to `~/.agents/skills` (skipped if empty) |
-
-## 1Password setup (one-time)
-
-Before the bootstrap can pull secrets, set up the 1Password desktop app:
-
-1. **Settings → Developer**, enable:
-   - "Integrate with 1Password CLI"
-   - "Use the SSH agent"
-   - "Biometric unlock for 1Password CLI"
-2. `eval "$(op signin)"`
-
-## 1Password vault items
-
-| Item path                        | Field      | What                        |
-| -------------------------------- | ---------- | --------------------------- |
-| `op://Private/opencode-api-key`  | `password` | Opencode API key            |
-| `op://Private/anthropic-api-key` | `password` | Anthropic API key           |
-| `op://Private/openai-api-key`    | `password` | OpenAI API key              |
-| `op://Private/context7-api-key`   | `password` | Context7 API key            |
-| `op://Private/devto-api-key`     | `password` | dev.to API key              |
-| `op://Private/oreilly-api-token` | `password` | O'Reilly API token          |
-| `op://Private/google-api-key`    | `password` | Google API key (for Stitch) |
-
-## Updating dotfiles
-
-The bootstrap writes `~/.config/chezmoi/chezmoi.toml` pointing chezmoi's source at `~/mac-bootstrap/home`, so bare commands work:
+Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be surgical:
 
 ```bash
-chezmoi diff             # preview changes
-chezmoi apply            # apply to $HOME
-cd ~/mac-bootstrap && git add home/ && git commit -m "update dotfiles" && git push
-```
-
-## Selective runs
-
-The bootstrap is idempotent — re-run `./bootstrap.sh` anytime. Gated sections are skipped if already configured.
-
-```bash
-./bootstrap.sh --only=brew,fish          # install only Brewfile packages + fish
-./bootstrap.sh --skip=macos,mise,auth   # skip defaults, toolchains, and auth prompts
+./bootstrap.sh --only=brew,fish        # just packages + shell
+./bootstrap.sh --skip=macos,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
 Gatable sections: `brew`, `fish`, `macos`, `mise`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
-## macOS defaults
+---
 
-The `macos` section sets opinionated defaults (opt-out with `--skip=macos`):
+## Step into the Madness
 
-| Setting | Effect |
-|---|---|
-| Key repeat | Fast (2/15), no press-and-hold diacritics |
-| Finder | Show extensions, hidden files |
-| Screenshots | Saved to `~/Screenshots` |
-| Dock | Auto-hide, no animation delay |
-| .DS_Store | Disabled on network volumes |
+Here's the deal: this isn't a generic dotfiles repo. It's the exact setup of a platform engineer who spends their days knee-deep in Terraform, Kubernetes, AWS, and LLM-powered coding agents. Every choice here has a body count behind it.
 
-Changes take full effect after logout/login.
+### The OS
 
-## Doctor
+**macOS.** I've run Linux on the desktop. I've tried WSL2. For platform work that involves talking to every cloud, running containers locally, and needing a terminal that doesn't fight you — macOS is the least-worst option. The `macos` section sets key repeat to fast, hides the Dock, disables `.DS_Store` on network volumes, and goes dark mode with an orange accent. Fight me.
 
-The `doctor` section at the end verifies critical binaries are on PATH (via fish):
+### The shell
 
-```
-=== Doctor ===
-✓ fish    ✓ mise    ✓ op      ✓ gh
-✓ chezmoi ✓ herdr   ✓ opencode
-✓ aws     ✓ kubectl ✓ helm
-✓ playwright ✓ uv   ✓ colima
-```
+**fish** via Homebrew. Not zsh with oh-my-zsh. Not bash with a thousand plugins. Fish because tab completions work out of the box, the syntax doesn't make me want to throw my laptop, and I don't have to maintain a 300-line `.zshrc` that breaks every six months. Tide for the prompt (minimal, fast, shows what branch you're on). Fisher for plugins — currently Tide, Sponge (clean history), and `jhillyerd/plugin-git` for oh-my-zsh-style git aliases.
 
-Non-zero exit on failure — use in CI or to smoke-test a fresh bootstrap.
+You'll get `gs`, `gss`, `gst`, `ga`, `gc`, `gp`, `gco`, `gb`, and about 30 other aliases that your muscle memory already knows.
 
-## Updating dotfiles
+### The terminal
 
-## Browser automation
+**Ghostty.** Native, GPU-accelerated, zero config to look good. It replaced iTerm2, Kitty, and WezTerm for me. The dotfiles include a Ghostty config that just works.
 
-Both Node and Python Playwright are installed. They share `~/Library/Caches/ms-playwright/`, so warming once via either CLI covers both. Tools available after bootstrap:
+### The editor(s)
 
-| Tool                  | Source                        | Use case                                      |
-| --------------------- | ----------------------------- | --------------------------------------------- |
-| `playwright` (Node)   | mise → `npm:@playwright/test` | codegen, trace viewer, ad-hoc scripts         |
-| `playwright` (Python) | `uv tool install playwright`  | the `playwright-cli`, `webapp-testing` skills |
-| `@playwright/mcp`     | mise → `npm:@playwright/mcp`  | agentic browser control via MCP               |
-| `browser-use`         | `uv tool install browser-use` | LLM-driven browser agent (Python)             |
+**VS Code Insiders** and **Zed**. I live in VS Code for heavy platform work (Terraform, Go, Kubernetes manifests). Zed for quick edits, markdown, and when I want something that opens before I finish blinking. Both get CLI launchers — `code` and `zed` from anywhere.
 
-### macOS permissions required (one-time)
+### The package manager
 
-For headed-mode tests and video recording to work, grant the following in **System Settings → Privacy & Security**:
+**Homebrew** with a `Brewfile`. 44 packages: git, fish, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, postgresql, redis, 1password, ghostty, VS Code, Zed, JetBrains Mono Nerd Font, Geist Mono, and more. Declarative. Boring. Works.
 
-| Permission       | Apps to grant                      |
-| ---------------- | ---------------------------------- |
-| Accessibility    | Ghostty, Chromium, Firefox, WebKit |
-| Screen Recording | Ghostty, Chromium                  |
+### The toolchain manager
 
-Without these: key presses silently no-op, `--video=on` records black frames. macOS sandbox won't let bootstrap grant these — first run is interactive.
+**mise.** Not asdf. Not nvm + pyenv + tfenv. mise is faster, supports piped installs (`npm:@playwright/test`), and doesn't require shims. It pins Go (latest), Node (LTS), pnpm 10, Python 3.12, .NET 9, OpenTofu, and the Playwright CLI — globally. Per-project overrides go in `.mise.toml` or `.tool-versions`.
 
-## Next steps after bootstrap
+### The secret sauce
+
+**1Password CLI → macOS Keychain.** Every API key lives in a 1Password vault. The bootstrap pulls them at the end of the run and stuffs them into the Keychain. Fish functions in `conf.d/` read them back and export them as environment variables. No plaintext `.env` files. No "export OPENAI_API_KEY=sk-..." in your shell config. The Keychain is encrypted at rest. If your laptop gets stolen, the keys die with the Secure Enclave.
+
+Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, google.
+
+### The dotfiles
+
+**chezmoi** with the source directory inside this repo (`home/`). Your fish config, Ghostty config, git aliases, and editor settings all live here. `chezmoi diff` to preview, `chezmoi apply` to deploy. Templates, if you need them, use chezmoi's built-in templating.
+
+### The LLM coding agent
+
+**OpenCode.** Installed via the official install script. An optional private config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
+
+### The browser automation stack
+
+Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent). This is how OpenCode's `webapp-testing` and `playwright-cli` skills drive a real Chromium to test web apps, take screenshots, and fill forms. The bootstrap also opens System Settings so you can grant Accessibility and Screen Recording permissions — no, it can't grant them for you. macOS is a prison.
+
+### The infra tooling
+
+**colima** for containers (Docker Desktop is a resource hog and the licensing got weird). **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad.
+
+### The profile
+
+Who runs this? Someone who:
+
+- Spends more time in a terminal than Finder
+- Thinks workstations should be disposable and reproducible
+- Doesn't want to remember 12 `brew install` commands on a fresh machine
+- Ships infrastructure for a living (platform, SRE, DevOps, cloud)
+- Uses AI coding agents and wants them wired into their tools, not bolted on
+- Has strong opinions about prompt rendering speed and won't tolerate lag
+- Wants their API keys encrypted at rest, not in a `.zshrc`
+
+If that's you — welcome. Run the command. Break things. Send PRs.
+
+---
+
+## What happens when you run it
+
+The script runs in two phases:
+
+**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, fish as default shell, Fisher plugins, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, dotfiles via chezmoi, and API key functions written to fish `conf.d/`.
+
+**Phase 2 — interactive auth.** 1Password sign-in, Keychain import of all API keys, GitHub CLI SSO login, and a doctor check that verifies 13 critical binaries are alive.
+
+If anything fails, it tells you what and keeps going. Re-run anytime.
+
+---
+
+## After bootstrap
 
 ```bash
 aws sso login --profile <your-profile>
-mise install   # if any tools need (re)installing
+mise install      # if any tools need (re)installing
 # Sign in to desktop apps (Slack, VS Code, etc.)
 ```
+
+Open a new terminal. You're in fish. You're home.
