@@ -4,6 +4,9 @@ One command. Zero to a fully armed and operational macOS workstation. Shell, too
 
 If you're the kind of engineer who treats their machine like a cattle, not a pet, this is your herd script.
 
+!!! tip
+    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks, no Keychain. Everything else (Homebrew, fish, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
+
 ---
 
 ## Before you run this
@@ -65,11 +68,11 @@ cd ~/Developer/github/acastro2/mac-bootstrap
 Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be surgical:
 
 ```bash
-./bootstrap.sh --only=brew,fish        # just packages + shell
-./bootstrap.sh --skip=macos,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
+./bootstrap.sh --only=packages,fish        # just packages + shell
+./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
-Gatable sections: `brew`, `fish`, `macos`, `mise`, `dotfiles`, `secrets`, `auth`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `fish`, `fisher`, `git`, `ssh`, `herdr`, `opencode`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
 ---
 
@@ -79,7 +82,7 @@ Here's the deal: this isn't a generic dotfiles repo. It's the exact setup of a p
 
 ### The OS
 
-**macOS.** I've run Linux on the desktop. I've tried WSL2. For platform work that involves talking to every cloud, running containers locally, and needing a terminal that doesn't fight you — macOS is the least-worst option. The `macos` section sets key repeat to fast, hides the Dock, disables `.DS_Store` on network volumes, and goes dark mode with an orange accent. Fight me.
+**macOS.** I've run Linux on the desktop. I've tried WSL2. For platform work that involves talking to every cloud, running containers locally, and needing a terminal that doesn't fight you — macOS is the least-worst option. The `macos-defaults` section sets key repeat to fast, hides the Dock, disables `.DS_Store` on network volumes, and goes dark mode with an orange accent. Fight me.
 
 ### The shell
 
@@ -125,7 +128,7 @@ Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent
 
 ### The infra tooling
 
-**colima** for containers (Docker Desktop is a resource hog and the licensing got weird). **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad.
+**colima** for containers (Docker Desktop is a resource hog and the licensing got weird). **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
 
 ### The profile
 

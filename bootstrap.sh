@@ -24,19 +24,6 @@ fi
 
 TTY="/dev/tty"
 
-# ── Selective re-run flags ──────────────────────────────────────────
-SKIP=""
-ONLY=""
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --skip=*) SKIP="${1#*=}"; shift ;;
-    --only=*) ONLY="${1#*=}"; shift ;;
-    -s|--skip) SKIP="$2"; shift 2 ;;
-    -o|--only) ONLY="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-
 should_run() {
   local name="$1"
   [[ -n "$ONLY" ]] && [[ ",$ONLY," != *",$name,"* ]] && return 1
@@ -50,24 +37,41 @@ prompt(){ printf "\n\033[1;35m??\033[0m %s\n" "$*"; }
 die()   { printf "\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 section(){ printf "\n\033[1;37m━━━ %s ━━━\033[0m\n" "$*"; }
 
+# ── Selective re-run flags ──────────────────────────────────────────
+SKIP=""
+ONLY=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip=*) SKIP="${1#*=}"; shift ;;
+    --only=*) ONLY="${1#*=}"; shift ;;
+    -s|--skip) SKIP="$2"; shift 2 ;;
+    -o|--only) ONLY="$2"; shift 2 ;;
+    *) warn "Unknown argument: $1"; shift ;;
+  esac
+done
+
 # ── Sanity checks ────────────────────────────────────────────────────
-[[ "$(uname)" == "Darwin" ]] || die "This bootstrap targets macOS only."
+IS_MACOS=false
+[[ "$(uname)" == "Darwin" ]] && IS_MACOS=true
+if ! $IS_MACOS; then
+  log "Running on non-macOS ($(uname)). macOS-specific sections will be skipped."
+fi
 
 # ── sudo: prompt once, keep alive ────────────────────────────────────
-log "This script needs sudo for a few system tweaks. You'll be prompted once."
-sudo -v || die "sudo authentication failed"
-
-( while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done ) &
-SUDO_KEEP_ALIVE_PID=$!
-
-trap 'kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true' EXIT INT TERM
+if $IS_MACOS; then
+  log "This script needs sudo for a few system tweaks. You'll be prompted once."
+  sudo -v || die "sudo authentication failed"
+  ( while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done ) &
+  SUDO_KEEP_ALIVE_PID=$!
+  trap 'kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true' EXIT INT TERM
+fi
 
 # =========================================================================
 # PHASE 0: Prerequisites
 # =========================================================================
 
 # ── Xcode Command Line Tools ──────────────────────────────────────────
-if should_run xcode; then
+if should_run xcode && $IS_MACOS; then
 section "Xcode Command Line Tools"
 if ! xcode-select -p &>/dev/null; then
   log "Installing Xcode Command Line Tools (a dialog will pop up)"
@@ -84,7 +88,11 @@ section "Homebrew"
 if ! command -v brew &>/dev/null; then
   log "Installing Homebrew"
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  eval "$(/opt/homebrew/bin/brew shellenv)"
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+  fi
 fi
 log "Homebrew ready: $(brew --version | head -1)"
 fi
@@ -100,7 +108,10 @@ else
   git -C "$REPO_DIR" pull --ff-only || warn "Could not fast-forward; continuing with local state."
 fi
 fi
-cd "$REPO_DIR"
+
+if [[ -d "$REPO_DIR" ]]; then
+  cd "$REPO_DIR"
+fi
 
 # ── Workspace directories ──────────────────────────────────────────────
 if should_run workspace; then
@@ -110,7 +121,7 @@ log "Created ~/Developer/github/acastro2, ~/.config, ~/.local/bin, ~/.local/shar
 fi
 
 # ── macOS defaults ─────────────────────────────────────────────────────
-if should_run macos-defaults; then
+if should_run macos-defaults && $IS_MACOS; then
 section "macOS defaults"
 log "Key repeat: fast, no press-and-hold"
 defaults write -g KeyRepeat -int 2
@@ -150,11 +161,17 @@ fi
 if should_run packages; then
 section "Packages (Brewfile)"
 log "Installing packages (this takes a while on a fresh machine)..."
-brew bundle --file=Brewfile
+if $IS_MACOS; then
+  log "Using Brewfile (macOS)"
+  brew bundle --file=Brewfile
+else
+  log "Using Brewfile.linux"
+  brew bundle --file=Brewfile.linux
+fi
 fi
 
 # ── App CLIs (symlink into PATH) ───────────────────────────────────────
-if should_run app-clis; then
+if should_run app-clis && $IS_MACOS; then
 section "App CLI commands"
 mkdir -p "$HOME/.local/bin"
 if [[ -d "/Applications/Visual Studio Code - Insiders.app" ]]; then
@@ -171,24 +188,32 @@ fi
 if should_run fish; then
 section "Shell: fish"
 FISH_PATH="$(brew --prefix)/bin/fish"
-if ! grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
-  log "Adding fish to /etc/shells"
-  echo "$FISH_PATH" | sudo tee -a /etc/shells > /dev/null
-fi
-if [[ "$SHELL" != "$FISH_PATH" ]]; then
-  log "Setting fish as default shell (via dscl)"
-  sudo dscl . -create "/Users/$USER" UserShell "$FISH_PATH" \
-    || warn "Failed to set default shell — run 'sudo dscl . -create /Users/$USER UserShell $FISH_PATH' manually"
+if $IS_MACOS; then
+  if ! grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
+    log "Adding fish to /etc/shells"
+    echo "$FISH_PATH" | sudo tee -a /etc/shells > /dev/null
+  fi
+  if [[ "$SHELL" != "$FISH_PATH" ]]; then
+    log "Setting fish as default shell (via dscl)"
+    sudo dscl . -create "/Users/$USER" UserShell "$FISH_PATH" \
+      || warn "Failed to set default shell — run 'sudo dscl . -create /Users/$USER UserShell $FISH_PATH' manually"
+  fi
+else
+  if [[ "$SHELL" != "$FISH_PATH" ]]; then
+    log "Setting fish as default shell (via chsh)"
+    sudo chsh -s "$FISH_PATH" "$USER" \
+      || warn "Failed to set default shell — run 'chsh -s $FISH_PATH' manually"
+  fi
 fi
 log "Default shell: $FISH_PATH"
 fi
 
 # ── fzf key bindings ──────────────────────────────────────────────────
+if should_run fisher; then
 log "Installing fzf key bindings"
 "$(brew --prefix)/opt/fzf/install" --key-bindings --completion --no-update-rc 2>/dev/null || true
 
 # ── Fisher + Tide ──────────────────────────────────────────────────────
-if should_run fisher; then
 section "Fish plugins (Fisher + Tide)"
 log "Installing Tide prompt"
 fish -c "fisher install IlanCosman/tide@v6" < /dev/null || warn "Tide install failed"
@@ -212,25 +237,23 @@ fi
 
 # ── SSH → 1Password agent ─────────────────────────────────────────────
 if should_run ssh; then
-section "SSH config"
-mkdir -p "$HOME/.ssh"
-chmod 700 "$HOME/.ssh"
-ssh-keyscan github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
-if ! grep -qF "1Password" "$HOME/.ssh/config" 2>/dev/null; then
-  log "Configuring SSH to use 1Password agent"
-  cat >> "$HOME/.ssh/config" << 'EOF'
+  section "SSH config"
+  mkdir -p "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+  { ssh-keyscan github.com 2>/dev/null; [[ -f "$HOME/.ssh/known_hosts" ]] && cat "$HOME/.ssh/known_hosts"; } | sort -u > "$HOME/.ssh/known_hosts.tmp" && mv "$HOME/.ssh/known_hosts.tmp" "$HOME/.ssh/known_hosts"
+  if $IS_MACOS; then
+    if ! grep -qF "1Password" "$HOME/.ssh/config" 2>/dev/null; then
+      log "Configuring SSH to use 1Password agent"
+      cat >> "$HOME/.ssh/config" << 'EOF'
 
 # 1Password SSH agent
 Host *
   IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 EOF
+    fi
+  fi
+  [[ -f "$HOME/.ssh/config" ]] && chmod 600 "$HOME/.ssh/config"
 fi
-chmod 600 "$HOME/.ssh/config"
-fi
-
-# ── GitHub CLI settings ───────────────────────────────────────────────
-log "Setting gh to use SSH"
-gh config set git_protocol ssh 2>/dev/null || true
 
 # ── herdr ─────────────────────────────────────────────────────────────
 if should_run herdr; then
@@ -303,10 +326,12 @@ else
   warn "playwright CLI not on PATH yet — run 'mise install' then 'playwright install' manually"
 fi
 
-log "Opening System Settings for browser permissions"
-log "Grant Accessibility + Screen Recording to: Ghostty, Chromium"
-open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
-open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
+if $IS_MACOS; then
+  log "Opening System Settings for browser permissions"
+  log "Grant Accessibility + Screen Recording to: Ghostty, Chromium"
+  open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
+  open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
+fi
 fi
 
 # ── chezmoi ───────────────────────────────────────────────────────────
@@ -323,11 +348,12 @@ fi
 
 # ── API keys → fish conf.d ───────────────────────────────────────────
 if should_run secrets; then
-section "Secrets"
-if [[ -n "$OP_VAULT" ]]; then
+  section "Secrets"
+  if [[ -n "$OP_VAULT" ]]; then
   log "Writing API key functions to fish conf.d"
   mkdir -p "$HOME/.config/fish/conf.d"
-  cat > "$HOME/.config/fish/conf.d/secrets.fish" << ENDFISH
+  if $IS_MACOS; then
+  cat > "$HOME/.config/fish/conf.d/secrets.fish" << 'ENDFISH'
 # Managed by bootstrap.sh — do not edit by hand.
 # Lazy-loaded: reads from macOS Keychain (populated once from 1Password at bootstrap).
 function opencode-key
@@ -363,10 +389,48 @@ function export-keys
   set -gx GOOGLE_API_KEY     (google-key)
 end
 ENDFISH
-chmod 600 "$HOME/.config/fish/conf.d/secrets.fish"
-else
+  else
+  cat > "$HOME/.config/fish/conf.d/secrets.fish" << ENDFISH
+# Managed by bootstrap.sh — do not edit by hand.
+# Lazy-loaded via op CLI (no macOS Keychain on Linux).
+function opencode-key
+  op read "op://${OP_VAULT}/opencode-api-key/password" 2>/dev/null; or echo ""
+end
+function anthropic-key
+  op read "op://${OP_VAULT}/anthropic-api-key/password" 2>/dev/null; or echo ""
+end
+function openai-key
+  op read "op://${OP_VAULT}/openai-api-key/password" 2>/dev/null; or echo ""
+end
+function context7-key
+  op read "op://${OP_VAULT}/context7-api-key/password" 2>/dev/null; or echo ""
+end
+function devto-key
+  op read "op://${OP_VAULT}/devto-api-key/password" 2>/dev/null; or echo ""
+end
+function oreilly-key
+  op read "op://${OP_VAULT}/oreilly-api-token/password" 2>/dev/null; or echo ""
+end
+function google-key
+  op read "op://${OP_VAULT}/google-api-key/password" 2>/dev/null; or echo ""
+end
+
+# Export all keys into the current shell's environment.
+function export-keys
+  set -gx OPENCODE_API_KEY   (opencode-key)
+  set -gx ANTHROPIC_API_KEY  (anthropic-key)
+  set -gx OPENAI_API_KEY     (openai-key)
+  set -gx CONTEXT7_API_KEY   (context7-key)
+  set -gx DEVTO_API_KEY      (devto-key)
+  set -gx OREILLY_API_TOKEN  (oreilly-key)
+  set -gx GOOGLE_API_KEY     (google-key)
+end
+ENDFISH
+  fi
+  chmod 600 "$HOME/.config/fish/conf.d/secrets.fish"
+  else
   log "OP_VAULT not set — skipping API key setup"
-fi
+  fi
 fi
 
 # =========================================================================
@@ -399,15 +463,16 @@ if [[ -n "$OP_VAULT" ]]; then
   eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
 
   # ── Migrate API keys to macOS Keychain ──────────────────────────────
-  if op account list 2>/dev/null | grep -q .; then
+  if $IS_MACOS && op account list 2>/dev/null | grep -q .; then
     log "Pulling API keys from 1Password → macOS Keychain"
     keychain_store() {
       local name="$1"
-      security add-generic-password -a "$USER" -s "$name" \
-        -w "$(op read "op://${OP_VAULT}/$name/password")" -U 2>/dev/null || warn "Failed to store $name in Keychain"
+      security add-generic-password -a "$USER" -s "$name" -w "$(op read "op://${OP_VAULT}/$name/password" 2>/dev/null)" -U 2>/dev/null \
+        || warn "Failed to store $name in Keychain"
     }
     keychain_store "opencode-api-key"
     keychain_store "anthropic-api-key"
+    keychain_store "openai-api-key"
     keychain_store "context7-api-key"
     keychain_store "devto-api-key"
     keychain_store "oreilly-api-token"
@@ -427,6 +492,8 @@ else
   read -r < "$TTY"
   gh auth login --web || warn "gh auth login failed; run it manually with 'gh auth login --web'."
 fi
+log "Setting gh to use SSH"
+gh config set git_protocol ssh 2>/dev/null || true
 
 # ── opencode config (private repo — needs auth) ──────────────────────
 echo ""
