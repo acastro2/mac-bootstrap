@@ -19,6 +19,7 @@ OPENCODE_SKILLS_REPO=""
 # Source personal config if present (gitignored, not committed).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/config.env" ]]; then
+  # shellcheck source=/dev/null
   source "$SCRIPT_DIR/config.env"
 fi
 
