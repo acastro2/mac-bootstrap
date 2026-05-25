@@ -5,7 +5,7 @@ One command. Zero to a fully armed and operational macOS workstation. Shell, too
 If you're the kind of engineer who treats their machine like a cattle, not a pet, this is your herd script.
 
 !!! tip
-    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks, no Keychain. Everything else (Homebrew, fish, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
+    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks. Everything else (Homebrew, fish, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
 
 ---
 
@@ -14,7 +14,7 @@ If you're the kind of engineer who treats their machine like a cattle, not a pet
 - **Apple ID** — signed into the App Store (for `mas` to pull apps)
 - **A functioning brain** — the script's interactive. It'll ask you things. It won't hold your hand for `sudo`.
 
-**1Password is optional.** If you set your vault name in `config.env`, the bootstrap pulls API keys into the macOS Keychain. If you don't, everything else still works — you'll just need to configure API keys yourself.
+**1Password is optional.** If you set your vault name in `config.env`, the bootstrap pulls API keys into a fish env file. If you don't, everything else still works — you'll just need to configure API keys yourself.
 
 ---
 
@@ -72,7 +72,7 @@ Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be s
 ./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `fish`, `fisher`, `git`, `ssh`, `herdr`, `opencode`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `fish`, `fisher`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
 ---
 
@@ -108,7 +108,7 @@ You'll get `gs`, `gss`, `gst`, `ga`, `gc`, `gp`, `gco`, `gb`, and about 30 other
 
 ### The secret sauce (optional)
 
-**1Password CLI → macOS Keychain.** If you set `OP_VAULT` in `config.env`, every API key gets pulled from your 1Password vault into the macOS Keychain. Fish functions in `conf.d/` read them back and export them as environment variables. No plaintext `.env` files. No "export OPENAI_API_KEY=sk-..." in your shell config. The Keychain is encrypted at rest. If your laptop gets stolen, the keys die with the Secure Enclave.
+**1Password CLI → fish env file.** If you set `OP_VAULT` in `config.env`, every API key gets pulled from your 1Password vault into `~/.config/fish/.api-keys.env` (chmod 600). Fish's `conf.d/secrets.fish` sources it at shell start. Keys end up as environment variables. This is the "naive but works everywhere" approach — your company blocks Keychain access? Fine. No problem.
 
 Skip it if you want — you'll just set up API keys yourself.
 
@@ -140,7 +140,7 @@ Who runs this? Someone who:
 - Ships infrastructure for a living (platform, SRE, DevOps, cloud)
 - Uses AI coding agents and wants them wired into their tools, not bolted on
 - Has strong opinions about prompt rendering speed and won't tolerate lag
-- Wants their API keys encrypted at rest, not in a `.zshrc`
+- Doesn't want to touch a Keychain API ever again
 
 If that's you — welcome. Run the command. Break things. Send PRs.
 
@@ -152,7 +152,7 @@ The script runs in two phases:
 
 **Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, fish as default shell, Fisher plugins, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, dotfiles via chezmoi, and API key functions written to fish `conf.d/` (if `OP_VAULT` is set).
 
-**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in, Keychain import of all API keys. Always: GitHub CLI SSO login, opencode config clone (if repo is set), agent skills clone (if repo is set), and a doctor check that verifies critical binaries are alive.
+**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in, API keys written to `~/.config/fish/.api-keys.env`. Always: GitHub CLI SSO login, opencode config clone (if repo is set), agent skills clone (if repo is set), and a doctor check that verifies critical binaries are alive.
 
 If anything fails, it tells you what and keeps going. Re-run anytime.
 

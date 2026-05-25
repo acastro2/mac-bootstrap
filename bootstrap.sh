@@ -207,6 +207,21 @@ else
   fi
 fi
 log "Default shell: $FISH_PATH"
+
+log "Writing fishconfig helper function"
+mkdir -p "$HOME/.config/fish/functions"
+cat > "$HOME/.config/fish/functions/fishconfig.fish" << 'ENDFISH'
+function fishconfig --description "Open the fish config directory in VS Code"
+  if type -q code-insiders
+    code-insiders "$HOME/.config/fish"
+  else if type -q code
+    code "$HOME/.config/fish"
+  else
+    echo "fishconfig: neither code-insiders nor code found in PATH" >&2
+    return 1
+  end
+end
+ENDFISH
 fi
 
 # ── fzf key bindings ──────────────────────────────────────────────────
@@ -273,6 +288,17 @@ section "opencode"
 if [[ ! -x "$HOME/.opencode/bin/opencode" ]]; then
   log "Installing opencode"
   curl -fsSL https://opencode.ai/install | bash
+else
+  log "Already installed."
+fi
+fi
+
+# ── Snowflake Cortex Code CLI ─────────────────────────────────────────
+if should_run cortex; then
+section "Cortex Code CLI"
+if [[ ! -x "$HOME/.local/bin/cortex" ]]; then
+  log "Installing Cortex Code CLI"
+  curl -LsS https://ai.snowflake.com/static/cc-scripts/install.sh | sh
 else
   log "Already installed."
 fi
@@ -353,81 +379,14 @@ if should_run secrets; then
   if [[ -n "$OP_VAULT" ]]; then
   log "Writing API key functions to fish conf.d"
   mkdir -p "$HOME/.config/fish/conf.d"
-  if $IS_MACOS; then
   cat > "$HOME/.config/fish/conf.d/secrets.fish" << 'ENDFISH'
 # Managed by bootstrap.sh — do not edit by hand.
-# Lazy-loaded: reads from macOS Keychain (populated once from 1Password at bootstrap).
-function opencode-key
-  security find-generic-password -w -s "opencode-api-key" -a "$USER"
-end
-function anthropic-key
-  security find-generic-password -w -s "anthropic-api-key" -a "$USER"
-end
-function openai-key
-  security find-generic-password -w -s "openai-api-key" -a "$USER"
-end
-function context7-key
-  security find-generic-password -w -s "context7-api-key" -a "$USER"
-end
-function devto-key
-  security find-generic-password -w -s "devto-api-key" -a "$USER"
-end
-function oreilly-key
-  security find-generic-password -w -s "oreilly-api-token" -a "$USER"
-end
-function google-key
-  security find-generic-password -w -s "google-api-key" -a "$USER"
-end
+# API keys exported as env vars from ~/.config/fish/.api-keys.env (populated from 1Password at bootstrap).
 
-# Export all keys into the current shell's environment.
-function export-keys
-  set -gx OPENCODE_API_KEY   (opencode-key)
-  set -gx ANTHROPIC_API_KEY  (anthropic-key)
-  set -gx OPENAI_API_KEY     (openai-key)
-  set -gx CONTEXT7_API_KEY   (context7-key)
-  set -gx DEVTO_API_KEY      (devto-key)
-  set -gx OREILLY_API_TOKEN  (oreilly-key)
-  set -gx GOOGLE_API_KEY     (google-key)
+if test -f "$HOME/.config/fish/.api-keys.env"
+  source "$HOME/.config/fish/.api-keys.env"
 end
 ENDFISH
-  else
-  cat > "$HOME/.config/fish/conf.d/secrets.fish" << ENDFISH
-# Managed by bootstrap.sh — do not edit by hand.
-# Lazy-loaded via op CLI (no macOS Keychain on Linux).
-function opencode-key
-  op read "op://${OP_VAULT}/opencode-api-key/password" 2>/dev/null; or echo ""
-end
-function anthropic-key
-  op read "op://${OP_VAULT}/anthropic-api-key/password" 2>/dev/null; or echo ""
-end
-function openai-key
-  op read "op://${OP_VAULT}/openai-api-key/password" 2>/dev/null; or echo ""
-end
-function context7-key
-  op read "op://${OP_VAULT}/context7-api-key/password" 2>/dev/null; or echo ""
-end
-function devto-key
-  op read "op://${OP_VAULT}/devto-api-key/password" 2>/dev/null; or echo ""
-end
-function oreilly-key
-  op read "op://${OP_VAULT}/oreilly-api-token/password" 2>/dev/null; or echo ""
-end
-function google-key
-  op read "op://${OP_VAULT}/google-api-key/password" 2>/dev/null; or echo ""
-end
-
-# Export all keys into the current shell's environment.
-function export-keys
-  set -gx OPENCODE_API_KEY   (opencode-key)
-  set -gx ANTHROPIC_API_KEY  (anthropic-key)
-  set -gx OPENAI_API_KEY     (openai-key)
-  set -gx CONTEXT7_API_KEY   (context7-key)
-  set -gx DEVTO_API_KEY      (devto-key)
-  set -gx OREILLY_API_TOKEN  (oreilly-key)
-  set -gx GOOGLE_API_KEY     (google-key)
-end
-ENDFISH
-  fi
   chmod 600 "$HOME/.config/fish/conf.d/secrets.fish"
   else
   log "OP_VAULT not set — skipping API key setup"
@@ -463,21 +422,20 @@ if [[ -n "$OP_VAULT" ]]; then
   log "Signing in to 1Password CLI"
   eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
 
-  # ── Migrate API keys to macOS Keychain ──────────────────────────────
-  if $IS_MACOS && op account list 2>/dev/null | grep -q .; then
-    log "Pulling API keys from 1Password → macOS Keychain"
-    keychain_store() {
-      local name="$1"
-      security add-generic-password -a "$USER" -s "$name" -w "$(op read "op://${OP_VAULT}/$name/password" 2>/dev/null)" -U 2>/dev/null \
-        || warn "Failed to store $name in Keychain"
-    }
-    keychain_store "opencode-api-key"
-    keychain_store "anthropic-api-key"
-    keychain_store "openai-api-key"
-    keychain_store "context7-api-key"
-    keychain_store "devto-api-key"
-    keychain_store "oreilly-api-token"
-    keychain_store "google-api-key"
+  # ── Migrate API keys to fish env file ────────────────────────────────
+  if op account list 2>/dev/null | grep -q .; then
+    log "Pulling API keys from 1Password → ~/.config/fish/.api-keys.env"
+    mkdir -p "$HOME/.config/fish"
+    cat > "$HOME/.config/fish/.api-keys.env" << EOF
+set -gx OPENCODE_API_KEY   "$(op read "op://${OP_VAULT}/opencode-api-key/password" 2>/dev/null || echo '')"
+set -gx ANTHROPIC_API_KEY  "$(op read "op://${OP_VAULT}/anthropic-api-key/password" 2>/dev/null || echo '')"
+set -gx OPENAI_API_KEY     "$(op read "op://${OP_VAULT}/openai-api-key/password" 2>/dev/null || echo '')"
+set -gx CONTEXT7_API_KEY   "$(op read "op://${OP_VAULT}/context7-api-key/password" 2>/dev/null || echo '')"
+set -gx DEVTO_API_KEY      "$(op read "op://${OP_VAULT}/devto-api-key/password" 2>/dev/null || echo '')"
+set -gx OREILLY_API_TOKEN  "$(op read "op://${OP_VAULT}/oreilly-api-token/password" 2>/dev/null || echo '')"
+set -gx GOOGLE_API_KEY     "$(op read "op://${OP_VAULT}/google-api-key/password" 2>/dev/null || echo '')"
+EOF
+    chmod 600 "$HOME/.config/fish/.api-keys.env"
   fi
 else
   log "OP_VAULT not set — skipping 1Password setup"
