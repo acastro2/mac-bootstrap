@@ -187,6 +187,8 @@ fish -c "fisher install IlanCosman/tide@v6" < /dev/null || warn "Tide install fa
 log "Run 'tide configure' interactively to set up the prompt."
 log "Installing Sponge (clean history)"
 fish -c "fisher install meaningful-ooo/sponge" < /dev/null || warn "Sponge install failed"
+log "Installing git aliases (oh-my-zsh style)"
+fish -c "fisher install jhillyerd/plugin-git" < /dev/null || warn "plugin-git install failed"
 fi
 
 # ── Git globals ───────────────────────────────────────────────────────
