@@ -31,6 +31,7 @@ alias code='code-insiders'
 function cd-dev;      cd ~/Developer; end
 function cd-down;     cd ~/Downloads; end
 function cd-skills;   cd ~/.agents/skills; end
+function cd-opencode;  cd ~/.config/opencode; end
 function cd-bootstrap; cd ~/Developer/github/acastro2/mac-bootstrap; end
 
 # ── opencode ──────────────────────────────────────────────────────────
