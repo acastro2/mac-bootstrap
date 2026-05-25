@@ -410,15 +410,6 @@ else
   gh auth login --web || warn "gh auth login failed; run it manually with 'gh auth login --web'."
 fi
 
-# ── opencode providers ──────────────────────────────────────────────
-echo ""
-if [[ -x "$HOME/.opencode/bin/opencode" ]]; then
-  log "Configuring opencode providers"
-  log "opencode providers login skipped — configure manually later"
-else
-  warn "opencode not found — skipped provider setup"
-fi
-
 # ── opencode config (private repo — needs auth) ──────────────────────
 echo ""
 if [[ -n "$OPENCODE_CONFIG_REPO" ]]; then
