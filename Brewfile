@@ -33,6 +33,8 @@ brew "k9s"
 brew "helm"
 brew "awscli"
 brew "colima"          # Docker runtime (no Docker Desktop)
+brew "docker"          # Docker CLI
+brew "crane"           # inspect/copy container images without pulling
 brew "ffmpeg"          # Playwright video recording / trace viewer media
 brew "snowflake-cli"
 brew "pgcli"
