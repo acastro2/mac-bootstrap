@@ -22,7 +22,7 @@ The target machine needs:
 
 Run these on the source MacBook. All outputs land on `~/Desktop` for easy AirDrop.
 
-### 1.1 Export session data (opencode + Claude Code conversations)
+### 1.1 Export session data (opencode + Claude Code + Cortex conversations)
 
 ```bash
 cd ~/Developer/github/acastro2/mac-bootstrap
@@ -45,7 +45,24 @@ This creates `~/Desktop/agent-sessions-<timestamp>.tar.gz` containing:
 
 Note: the Cortex cache (~154MB) is intentionally excluded since it rebuilds on use.
 
-### 1.2 Push config repos
+### 1.2 Export workspace (personal projects)
+
+```bash
+./bootstrap.sh --export-workspace
+```
+
+This creates `~/Desktop/workspace-<timestamp>.tar.gz` containing everything in `~/Developer` except:
+- `Engineering-Attain-Finance/` (re-clone from GitHub)
+- `Data-Engineering-Attain-Finance/` (re-clone from GitHub)
+- `.venv`, `node_modules`, `.terraform`, `__pycache__` (regenerable)
+
+These repos have local work that is NOT pushed anywhere:
+- `live-check`, `grafana-improvements`, `legal-summary`, `redshift-project`
+- `snowflake-audit`, `aws-audit`, `ADRs`, `hardening_architecture`
+- `cyberark-replacement`, `digifi`, `ops-streamlit-apps`, `risk-streamlit-apps`
+- `hiring-data-engineer`, `claude-kickoff-deck`, `plans`
+
+### 1.3 Push config repos
 
 Ensure all config repos are up to date:
 
@@ -75,7 +92,8 @@ security find-generic-password -s GRAFANA_SERVICE_ACCOUNT_TOKEN -w
 ### 1.4 AirDrop to target
 
 Send these files via AirDrop to the target MacBook:
-- `~/Desktop/agent-sessions-<timestamp>.tar.gz`
+- `~/Desktop/agent-sessions-<timestamp>.tar.gz` (sessions, ~721MB)
+- `~/Desktop/workspace-<timestamp>.tar.gz` (personal projects)
 
 That's it. Everything else comes from git repos or 1Password.
 
@@ -118,10 +136,15 @@ The bootstrap will:
 
 ### 2.2 Import session data
 
-After AirDrop delivers the tarball (check `~/Downloads` or wherever macOS puts it):
+After AirDrop delivers the tarballs (check `~/Downloads` or wherever macOS puts them):
 
 ```bash
 cd ~/Developer/github/acastro2/mac-bootstrap
+
+# Restore workspace (personal projects)
+tar -xzf ~/Downloads/workspace-*.tar.gz -C $HOME
+
+# Restore sessions (all three agents)
 ./bootstrap.sh --import-sessions=~/Downloads/agent-sessions-*.tar.gz
 ```
 

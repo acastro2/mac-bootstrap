@@ -6,6 +6,7 @@
 #   ./bootstrap.sh --skip=macos-defaults,auth  --only=brew,mise
 #   ./bootstrap.sh --clean                     # remove managed artifacts before a fresh re-run
 #   ./bootstrap.sh --export-sessions           # pack session data to ~/Desktop for airdrop
+#   ./bootstrap.sh --export-workspace          # pack ~/Developer (minus org repos) for airdrop
 #   ./bootstrap.sh --import-sessions=<file>    # restore session data from tarball
 set -euo pipefail
 
@@ -47,6 +48,7 @@ SKIP=""
 ONLY=""
 CLEAN=false
 EXPORT_SESSIONS=false
+EXPORT_WORKSPACE=false
 IMPORT_SESSIONS=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -56,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     -o|--only) ONLY="$2"; shift 2 ;;
     --clean) CLEAN=true; shift ;;
     --export-sessions) EXPORT_SESSIONS=true; shift ;;
+    --export-workspace) EXPORT_WORKSPACE=true; shift ;;
     --import-sessions=*) IMPORT_SESSIONS="${1#*=}"; shift ;;
     --import-sessions) IMPORT_SESSIONS="$2"; shift 2 ;;
     *) warn "Unknown argument: $1"; shift ;;
@@ -157,6 +160,34 @@ if $EXPORT_SESSIONS; then
   log "Export complete: $(du -h "$EXPORT_FILE" | cut -f1) → $EXPORT_FILE"
   log "AirDrop this file to the target machine, then run:"
   log "  ./bootstrap.sh --import-sessions=$EXPORT_FILE"
+  exit 0
+fi
+
+# ── Export workspace (packs ~/Developer minus org repos) ───────────────
+# Creates a tarball of personal/non-org projects for airdrop transfer.
+# Excludes: Engineering-Attain-Finance, Data-Engineering-Attain-Finance,
+# .venv, node_modules, .terraform, __pycache__, .git objects (keeps .git/HEAD + refs)
+if $EXPORT_WORKSPACE; then
+  section "Export workspace"
+  EXPORT_DIR="$HOME/Desktop"
+  EXPORT_FILE="$EXPORT_DIR/workspace-$(date +%Y%m%d-%H%M%S).tar.gz"
+
+  log "Packing ~/Developer (excluding org repos and regenerable artifacts)"
+  tar -czf "$EXPORT_FILE" -C "$HOME" \
+    --exclude="Developer/Engineering-Attain-Finance" \
+    --exclude="Developer/Data-Engineering-Attain-Finance" \
+    --exclude=".venv" \
+    --exclude="node_modules" \
+    --exclude=".terraform" \
+    --exclude="__pycache__" \
+    --exclude=".mypy_cache" \
+    --exclude=".pytest_cache" \
+    --exclude=".ruff_cache" \
+    Developer
+
+  log "Export complete: $(du -h "$EXPORT_FILE" | cut -f1) → $EXPORT_FILE"
+  log "AirDrop this file to the target machine, then extract with:"
+  log "  tar -xzf $EXPORT_FILE -C \$HOME"
   exit 0
 fi
 
