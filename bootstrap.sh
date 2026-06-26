@@ -4,6 +4,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/acastro2/mac-bootstrap/main/bootstrap.sh | bash
 #   ./bootstrap.sh
 #   ./bootstrap.sh --skip=macos-defaults,auth  --only=brew,mise
+#   ./bootstrap.sh --clean                     # remove managed artifacts before a fresh re-run
+#   ./bootstrap.sh --export-sessions           # pack session data to ~/Desktop for airdrop
+#   ./bootstrap.sh --import-sessions=<file>    # restore session data from tarball
 set -euo pipefail
 
 # ── Configuration ────────────────────────────────────────────────────
@@ -15,6 +18,7 @@ REPO_URL="https://github.com/acastro2/mac-bootstrap.git"
 REPO_DIR="${HOME}/Developer/github/acastro2/mac-bootstrap"
 OPENCODE_CONFIG_REPO=""
 OPENCODE_SKILLS_REPO=""
+CLAUDE_CONFIG_REPO=""
 
 # Source personal config if present (gitignored, not committed).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -41,15 +45,203 @@ section(){ printf "\n\033[1;37m━━━ %s ━━━\033[0m\n" "$*"; }
 # ── Selective re-run flags ──────────────────────────────────────────
 SKIP=""
 ONLY=""
+CLEAN=false
+EXPORT_SESSIONS=false
+IMPORT_SESSIONS=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip=*) SKIP="${1#*=}"; shift ;;
     --only=*) ONLY="${1#*=}"; shift ;;
     -s|--skip) SKIP="$2"; shift 2 ;;
     -o|--only) ONLY="$2"; shift 2 ;;
+    --clean) CLEAN=true; shift ;;
+    --export-sessions) EXPORT_SESSIONS=true; shift ;;
+    --import-sessions=*) IMPORT_SESSIONS="${1#*=}"; shift ;;
+    --import-sessions) IMPORT_SESSIONS="$2"; shift 2 ;;
     *) warn "Unknown argument: $1"; shift ;;
   esac
 done
+
+# ── Export sessions (creates a tarball for airdrop) ────────────────────
+if $EXPORT_SESSIONS; then
+  section "Export sessions"
+  EXPORT_DIR="$HOME/Desktop"
+  EXPORT_FILE="$EXPORT_DIR/agent-sessions-$(date +%Y%m%d-%H%M%S).tar.gz"
+
+  PATHS_TO_EXPORT=()
+
+  # opencode sessions database
+  if [[ -f "$HOME/.local/share/opencode/opencode.db" ]]; then
+    PATHS_TO_EXPORT+=(".local/share/opencode/opencode.db")
+  fi
+
+  # Claude Code conversations and session index
+  if [[ -d "$HOME/.claude/projects" ]]; then
+    PATHS_TO_EXPORT+=(".claude/projects")
+  fi
+  if [[ -f "$HOME/.claude/history.jsonl" ]]; then
+    PATHS_TO_EXPORT+=(".claude/history.jsonl")
+  fi
+  if [[ -d "$HOME/.claude/sessions" ]]; then
+    PATHS_TO_EXPORT+=(".claude/sessions")
+  fi
+
+  # Claude Code account state (project settings, feature flags)
+  if [[ -f "$HOME/.claude.json" ]]; then
+    PATHS_TO_EXPORT+=(".claude.json")
+  fi
+
+  # Claude Desktop app config
+  CLAUDE_DESKTOP="Library/Application Support/Claude"
+  if [[ -f "$HOME/$CLAUDE_DESKTOP/claude_desktop_config.json" ]]; then
+    PATHS_TO_EXPORT+=("$CLAUDE_DESKTOP/claude_desktop_config.json")
+  fi
+
+  # Cortex Code plans (per-project, scattered under ~/Developer)
+  if [[ -d "$HOME/Developer" ]]; then
+    while IFS= read -r -d '' cortex_dir; do
+      rel_path="${cortex_dir#"$HOME/"}"
+      PATHS_TO_EXPORT+=("$rel_path")
+    done < <(find "$HOME/Developer" -name ".cortex" -type d -print0 2>/dev/null)
+  fi
+  # Cortex fish completions
+  if [[ -f "$HOME/.config/fish/completions/cortex.fish" ]]; then
+    PATHS_TO_EXPORT+=(".config/fish/completions/cortex.fish")
+  fi
+
+  # Cortex Code sessions, settings, and connection config (skip cache, it rebuilds)
+  if [[ -d "$HOME/.snowflake/cortex/conversations" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/conversations")
+  fi
+  if [[ -f "$HOME/.snowflake/cortex/settings.json" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/settings.json")
+  fi
+  if [[ -f "$HOME/.snowflake/cortex/cortex.json" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/cortex.json")
+  fi
+  if [[ -f "$HOME/.snowflake/cortex/permissions.json" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/permissions.json")
+  fi
+  if [[ -f "$HOME/.snowflake/cortex/skills.json" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/skills.json")
+  fi
+  if [[ -d "$HOME/.snowflake/cortex/skills" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/skills")
+  fi
+  if [[ -d "$HOME/.snowflake/cortex/plugins" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/plugins")
+  fi
+  if [[ -d "$HOME/.snowflake/cortex/commands" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/commands")
+  fi
+  if [[ -f "$HOME/.snowflake/cortex/thread_goals.sqlite" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/thread_goals.sqlite")
+  fi
+  if [[ -d "$HOME/.snowflake/cortex/history" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/cortex/history")
+  fi
+  # Snowflake connection config (shared between cortex and snowflake-cli)
+  if [[ -f "$HOME/.snowflake/connections.toml" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/connections.toml")
+  fi
+  if [[ -f "$HOME/.snowflake/config.toml" ]]; then
+    PATHS_TO_EXPORT+=(".snowflake/config.toml")
+  fi
+
+  if [[ ${#PATHS_TO_EXPORT[@]} -eq 0 ]]; then
+    die "Nothing to export: no session data found."
+  fi
+
+  log "Packing ${#PATHS_TO_EXPORT[@]} paths into $EXPORT_FILE"
+  tar -czf "$EXPORT_FILE" -C "$HOME" "${PATHS_TO_EXPORT[@]}"
+  log "Export complete: $(du -h "$EXPORT_FILE" | cut -f1) → $EXPORT_FILE"
+  log "AirDrop this file to the target machine, then run:"
+  log "  ./bootstrap.sh --import-sessions=$EXPORT_FILE"
+  exit 0
+fi
+
+# ── Import sessions (restores from airdrop tarball) ────────────────────
+if [[ -n "$IMPORT_SESSIONS" ]]; then
+  section "Import sessions"
+  if [[ ! -f "$IMPORT_SESSIONS" ]]; then
+    die "File not found: $IMPORT_SESSIONS"
+  fi
+
+  log "Listing contents of $IMPORT_SESSIONS:"
+  tar -tzf "$IMPORT_SESSIONS" | head -20
+  echo ""
+
+  # Remove existing session data so the import is a clean replacement
+  log "Cleaning existing session data before import"
+  rm -f "$HOME/.local/share/opencode/opencode.db" 2>/dev/null || true
+  rm -rf "$HOME/.claude/projects" 2>/dev/null || true
+  rm -f "$HOME/.claude/history.jsonl" 2>/dev/null || true
+  rm -rf "$HOME/.claude/sessions" 2>/dev/null || true
+  rm -f "$HOME/.claude.json" 2>/dev/null || true
+  rm -rf "$HOME/.snowflake/cortex/conversations" 2>/dev/null || true
+  rm -f "$HOME/.snowflake/cortex/settings.json" 2>/dev/null || true
+  rm -f "$HOME/.snowflake/cortex/cortex.json" 2>/dev/null || true
+  rm -f "$HOME/.snowflake/cortex/permissions.json" 2>/dev/null || true
+  rm -f "$HOME/.snowflake/cortex/skills.json" 2>/dev/null || true
+  rm -rf "$HOME/.snowflake/cortex/skills" 2>/dev/null || true
+  rm -rf "$HOME/.snowflake/cortex/plugins" 2>/dev/null || true
+  rm -rf "$HOME/.snowflake/cortex/commands" 2>/dev/null || true
+  rm -f "$HOME/.snowflake/cortex/thread_goals.sqlite" 2>/dev/null || true
+  rm -rf "$HOME/.snowflake/cortex/history" 2>/dev/null || true
+  rm -f "$HOME/.snowflake/connections.toml" 2>/dev/null || true
+  rm -f "$HOME/.snowflake/config.toml" 2>/dev/null || true
+  # Per-project .cortex dirs: only remove if tarball contains Developer paths
+  if tar -tzf "$IMPORT_SESSIONS" | grep -q "^Developer/"; then
+    find "$HOME/Developer" -name ".cortex" -type d -exec rm -rf {} + 2>/dev/null || true
+  fi
+
+  log "Extracting into $HOME"
+  mkdir -p "$HOME/.local/share/opencode" "$HOME/.claude" "$HOME/.snowflake/cortex"
+  tar -xzf "$IMPORT_SESSIONS" -C "$HOME"
+  log "Import complete. Session data restored."
+  exit 0
+fi
+
+# ── Cleanup mode ───────────────────────────────────────────────────────
+# Removes managed artifacts so re-running the script produces a clean state.
+# Does NOT uninstall Homebrew itself or remove ~/Developer.
+if $CLEAN; then
+  section "Cleanup (preparing for fresh bootstrap)"
+
+  log "Removing Homebrew packages (keeping Homebrew itself)"
+  brew remove --force --ignore-dependencies $(brew list --formula) 2>/dev/null || true
+  brew remove --force --cask $(brew list --cask) 2>/dev/null || true
+  brew cleanup --prune=all 2>/dev/null || true
+
+  log "Removing fish plugins"
+  rm -rf "$HOME/.config/fish/conf.d/fisher" "$HOME/.config/fish/functions/_fisher" 2>/dev/null || true
+  rm -f "$HOME/.config/fish/fish_plugins" 2>/dev/null || true
+
+  log "Removing mise toolchains"
+  rm -rf "$HOME/.local/share/mise" "$HOME/.config/mise" 2>/dev/null || true
+
+  log "Removing opencode binary"
+  rm -rf "$HOME/.opencode" 2>/dev/null || true
+
+  log "Removing claude code (npm global)"
+  npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+
+  log "Removing herdr"
+  rm -f "$(command -v herdr 2>/dev/null)" 2>/dev/null || true
+
+  log "Removing chezmoi state"
+  rm -rf "$HOME/.config/chezmoi" 2>/dev/null || true
+
+  log "Removing generated fish configs"
+  rm -f "$HOME/.config/fish/conf.d/secrets.fish" "$HOME/.config/fish/.api-keys.env" 2>/dev/null || true
+  rm -f "$HOME/.config/fish/functions/fishconfig.fish" 2>/dev/null || true
+
+  log "Removing app CLI symlinks"
+  rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" 2>/dev/null || true
+
+  log "Cleanup complete. Re-run without --clean to reinstall."
+  exit 0
+fi
 
 # ── Sanity checks ────────────────────────────────────────────────────
 IS_MACOS=false
@@ -293,6 +485,17 @@ else
 fi
 fi
 
+# ── Claude Code CLI ───────────────────────────────────────────────────
+if should_run claude; then
+section "Claude Code CLI"
+if ! command -v claude &>/dev/null; then
+  log "Installing Claude Code CLI"
+  npm install -g @anthropic-ai/claude-code
+else
+  log "Already installed: $(claude --version 2>/dev/null || echo 'unknown')"
+fi
+fi
+
 # ── Snowflake Cortex Code CLI ─────────────────────────────────────────
 if should_run cortex; then
 section "Cortex Code CLI"
@@ -453,6 +656,8 @@ else
 fi
 log "Setting gh to use SSH"
 gh config set git_protocol ssh 2>/dev/null || true
+log "Configuring gh as git credential helper"
+gh auth setup-git 2>/dev/null || true
 
 # ── opencode config (private repo — needs auth) ──────────────────────
 echo ""
@@ -462,6 +667,17 @@ if [[ -n "$OPENCODE_CONFIG_REPO" ]]; then
     gh repo clone "$OPENCODE_CONFIG_REPO" "$HOME/.config/opencode" 2>&1 || warn "Config repo clone failed (check gh auth)."
   else
     git -C "$HOME/.config/opencode" pull --ff-only || true
+  fi
+fi
+
+# ── Claude Code config (private repo — needs auth) ───────────────────
+echo ""
+if [[ -n "$CLAUDE_CONFIG_REPO" ]]; then
+  log "Cloning Claude Code config repo into ~/.claude"
+  if [[ ! -d "$HOME/.claude/.git" ]]; then
+    gh repo clone "$CLAUDE_CONFIG_REPO" "$HOME/.claude" 2>&1 || warn "Claude config repo clone failed (check gh auth)."
+  else
+    git -C "$HOME/.claude" pull --ff-only || true
   fi
 fi
 
@@ -492,7 +708,7 @@ check() {
   fi
 }
 check fish;   check mise;   [[ -n "$OP_VAULT" ]] && check op;     check gh
-check chezmoi; check herdr; check opencode
+check chezmoi; check herdr; check opencode; check claude; check cortex
 check aws;    check kubectl; check helm
 check playwright; check uv; check colima
 
