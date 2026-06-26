@@ -80,15 +80,6 @@ git -C ~/.agents/skills add -A && git -C ~/.agents/skills commit -m "pre-migrati
 git -C ~/Developer/github/acastro2/mac-bootstrap add -A && git -C ~/Developer/github/acastro2/mac-bootstrap commit -m "pre-migration snapshot" && git -C ~/Developer/github/acastro2/mac-bootstrap push
 ```
 
-### 1.3 Export macOS Keychain secrets
-
-Write down or copy these values (they cannot be transferred via tarball):
-
-```bash
-security find-generic-password -s ADO_PAT -w
-security find-generic-password -s GRAFANA_SERVICE_ACCOUNT_TOKEN -w
-```
-
 ### 1.4 AirDrop to target
 
 Send these files via AirDrop to the target MacBook:
@@ -154,14 +145,7 @@ This automatically removes any existing session data on the target before extrac
 - Snowflake connection config
 - Per-project `.cortex/` directories (only if the tarball contains Developer paths)
 
-### 2.3 Restore Keychain secrets
-
-```bash
-security add-generic-password -s ADO_PAT -a "$(whoami)" -w '<paste-ado-pat-here>'
-security add-generic-password -s GRAFANA_SERVICE_ACCOUNT_TOKEN -a "$(whoami)" -w '<paste-token-here>'
-```
-
-### 2.4 GitHub multi-account auth
+### 2.3 GitHub multi-account auth
 
 ```bash
 # Personal account
@@ -231,7 +215,7 @@ This removes all Homebrew packages, fish plugins, mise toolchains, opencode/clau
 | Fish config + aliases | `~/.config/fish/` | chezmoi (mac-bootstrap/home) |
 | Ghostty config | `~/.config/ghostty/` | chezmoi (mac-bootstrap/home) |
 | API keys | 1Password + fish conf.d | 1Password vault |
-| Keychain secrets | macOS Keychain | manual (security add-generic-password) |
+| Keychain secrets | macOS Keychain | manual where used; migrate remaining to 1Password |
 | SSH keys | 1Password SSH agent | 1Password vault |
 | Git credential helper | gh auth setup-git | bootstrap Phase 2 |
 

@@ -668,6 +668,8 @@ set -gx CONTEXT7_API_KEY   "$(op read "op://${OP_VAULT}/context7-api-key/passwor
 set -gx DEVTO_API_KEY      "$(op read "op://${OP_VAULT}/devto-api-key/password" 2>/dev/null || echo '')"
 set -gx OREILLY_API_TOKEN  "$(op read "op://${OP_VAULT}/oreilly-api-token/password" 2>/dev/null || echo '')"
 set -gx GOOGLE_API_KEY     "$(op read "op://${OP_VAULT}/google-api-key/password" 2>/dev/null || echo '')"
+set -gx AZURE_DEVOPS_PAT            "$(op read "op://${OP_VAULT}/ado-pat/password" 2>/dev/null || echo '')"
+set -gx GRAFANA_SERVICE_ACCOUNT_TOKEN "$(op read "op://${OP_VAULT}/grafana-service-account-token/password" 2>/dev/null || echo '')"
 EOF
     chmod 600 "$HOME/.config/fish/.api-keys.env"
   fi
