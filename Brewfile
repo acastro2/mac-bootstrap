@@ -44,7 +44,7 @@ brew "redis", restart_service: false
 # ── Apps ───────────────────────────────────────────────────────────────
 cask "1password"
 cask "1password-cli"
-cask "claude"          # Claude Desktop (also bootstraps Claude Code CLI)
+cask "claude"          # Claude Desktop app (CLI installed separately via native installer in bootstrap.sh)
 cask "ghostty"
 cask "visual-studio-code@insiders"
 cask "zed"

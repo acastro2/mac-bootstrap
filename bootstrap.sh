@@ -254,7 +254,9 @@ if $CLEAN; then
   log "Removing opencode binary"
   rm -rf "$HOME/.opencode" 2>/dev/null || true
 
-  log "Removing claude code (npm global)"
+  log "Removing claude code (native + any legacy npm global)"
+  rm -rf "$HOME/.local/share/claude" 2>/dev/null || true
+  rm -f "$HOME/.local/bin/claude" 2>/dev/null || true
   npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
 
   log "Removing herdr"
@@ -520,8 +522,11 @@ fi
 if should_run claude; then
 section "Claude Code CLI"
 if ! command -v claude &>/dev/null; then
-  log "Installing Claude Code CLI"
-  npm install -g @anthropic-ai/claude-code
+  log "Installing Claude Code CLI (native installer)"
+  # Native install (~/.local/share/claude, launcher ~/.local/bin/claude).
+  # Self-updating, no Node dep. Avoid `npm -g` under mise: a node version
+  # switch orphans the binary and triggers dual-install / config mismatch.
+  curl -fsSL https://claude.ai/install.sh | bash
 else
   log "Already installed: $(claude --version 2>/dev/null || echo 'unknown')"
 fi
