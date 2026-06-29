@@ -16,6 +16,9 @@ set -g fish_history_size 50000
 # ── Toolchain managers ───────────────────────────────────────────────
 mise activate fish | source
 
+# tenv: auto-install missing pinned Terraform/OpenTofu versions on demand
+set -gx TENV_AUTO_INSTALL true
+
 # Tide prompt — installed by fisher (bootstrap.sh)
 
 # ── fzf ──────────────────────────────────────────────────────────────
