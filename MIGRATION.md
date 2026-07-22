@@ -13,7 +13,7 @@ Agent-executable runbook for migrating a fully configured MacBook to another mac
 
 The target machine needs:
 - macOS with internet access
-- A terminal open (zsh is fine, fish will be installed by bootstrap)
+- A terminal open (zsh or Fish is fine; Nushell will be installed by bootstrap)
 - Git and Xcode CLI tools (bootstrap handles this if missing)
 
 ---
@@ -41,7 +41,6 @@ This creates `~/Desktop/agent-sessions-<timestamp>.tar.gz` containing:
 - `~/.snowflake/cortex/skills/`, `plugins/`, `commands/`, `history/`
 - `~/.snowflake/cortex/thread_goals.sqlite`
 - `~/.snowflake/connections.toml` + `config.toml` (Snowflake connection config)
-- `~/.config/fish/completions/cortex.fish`
 
 Note: the Cortex cache (~154MB) is intentionally excluded since it rebuilds on use.
 
@@ -119,10 +118,10 @@ EOF
 
 The bootstrap will:
 1. Install Homebrew and all packages (Brewfile)
-2. Set fish as default shell with Tide prompt
+2. Render and validate Nushell with Starship, set it as the login shell, then remove Fish only after account-shell readback succeeds
 3. Install opencode, Claude Code CLI, herdr, mise toolchains
 4. Clone opencode config, Claude Code config, and skills repos
-5. Pull API keys from 1Password into fish environment
+5. Pull API keys from 1Password into Nushell's private environment file
 6. Run doctor checks to verify everything
 
 ### 2.2 Import session data
@@ -167,7 +166,7 @@ gh auth setup-git
 # Quick smoke tests
 opencode --version
 claude --version
-fish -c "echo \$ANTHROPIC_API_KEY" | head -c 10  # should show sk-ant-...
+nu -c '$env.ANTHROPIC_API_KEY | str substring 0..9'  # should show the key prefix
 ```
 
 ---
@@ -182,7 +181,7 @@ cd ~/Developer/github/acastro2/mac-bootstrap
 ./bootstrap.sh --clean
 ```
 
-This removes all Homebrew packages, fish plugins, mise toolchains, opencode/claude binaries, and generated configs. It does NOT remove:
+This removes all Homebrew packages, mise toolchains, opencode/claude binaries, and generated Nushell integration files. It does NOT remove:
 - `~/Developer` (your code)
 - `~/.claude/projects` (conversations)
 - `~/.local/share/opencode` (session DB)
@@ -210,11 +209,11 @@ This removes all Homebrew packages, fish plugins, mise toolchains, opencode/clau
 | Cortex Code plans | `~/Developer/**/.cortex/` | --export-sessions |
 | Cortex skills/plugins | `~/.snowflake/cortex/{skills,plugins,commands}/` | --export-sessions |
 | Snowflake connections | `~/.snowflake/connections.toml` | --export-sessions |
-| Cortex fish completions | `~/.config/fish/completions/cortex.fish` | --export-sessions |
 | Homebrew packages | Brewfile | git repo (mac-bootstrap) |
-| Fish config + aliases | `~/.config/fish/` | chezmoi (mac-bootstrap/home) |
+| Nushell config + aliases (macOS) | `~/Library/Application Support/nushell/` | chezmoi (mac-bootstrap/home) |
+| Nushell config + aliases (Linux) | `~/.config/nushell/` | chezmoi (mac-bootstrap/home) |
 | Ghostty config | `~/.config/ghostty/` | chezmoi (mac-bootstrap/home) |
-| API keys | 1Password + fish conf.d | 1Password vault |
+| API keys | 1Password + Nushell `.api-keys.nu` | 1Password vault |
 | Keychain secrets | macOS Keychain | manual where used; migrate remaining to 1Password |
 | SSH keys | 1Password SSH agent | 1Password vault |
 | Git credential helper | gh auth setup-git | bootstrap Phase 2 |
@@ -227,10 +226,10 @@ This removes all Homebrew packages, fish plugins, mise toolchains, opencode/clau
 
 **Claude Code not found after bootstrap**: The npm global install requires Node. Run `mise install` first, then `./bootstrap.sh --only=claude`.
 
-**Fish not set as default shell**: Run `sudo dscl . -create /Users/$USER UserShell /opt/homebrew/bin/fish`.
+**Nushell was not set as the login shell**: The bootstrap keeps Fish installed when the switch or readback fails. On macOS, run `sudo dscl . -create "/Users/$USER" UserShell /opt/homebrew/bin/nu`, verify it with `dscl . -read "/Users/$USER" UserShell`, then rerun `./bootstrap.sh --only=nushell`.
 
 **1Password CLI prompts for setup**: Open 1Password desktop app first, enable Developer settings (Integrate with CLI, SSH agent, biometric unlock), then re-run auth section.
 
 **Import fails with "file not found"**: Check the exact filename. macOS may have added a suffix or placed it in a different folder after AirDrop. Try `ls ~/Downloads/agent-sessions*`.
 
-**Cortex Code CLI not found**: Re-run `./bootstrap.sh --only=cortex`. The installer puts it at `~/.local/bin/cortex`, which needs to be on PATH (fish config handles this via mise activation).
+**Cortex Code CLI not found**: Re-run `./bootstrap.sh --only=cortex`. The installer puts it at `~/.local/bin/cortex`, which the Nushell environment prepends to `PATH`.

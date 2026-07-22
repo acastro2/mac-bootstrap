@@ -107,11 +107,6 @@ if $EXPORT_SESSIONS; then
       PATHS_TO_EXPORT+=("$rel_path")
     done < <(find "$HOME/Developer" -name ".cortex" -type d -print0 2>/dev/null)
   fi
-  # Cortex fish completions
-  if [[ -f "$HOME/.config/fish/completions/cortex.fish" ]]; then
-    PATHS_TO_EXPORT+=(".config/fish/completions/cortex.fish")
-  fi
-
   # Cortex Code sessions, settings, and connection config (skip cache, it rebuilds)
   if [[ -d "$HOME/.snowflake/cortex/conversations" ]]; then
     PATHS_TO_EXPORT+=(".snowflake/cortex/conversations")
@@ -240,13 +235,13 @@ if $CLEAN; then
   section "Cleanup (preparing for fresh bootstrap)"
 
   log "Removing Homebrew packages (keeping Homebrew itself)"
-  brew remove --force --ignore-dependencies $(brew list --formula) 2>/dev/null || true
-  brew remove --force --cask $(brew list --cask) 2>/dev/null || true
+  brew_formulae=()
+  while IFS= read -r package; do brew_formulae+=("$package"); done < <(brew list --formula)
+  brew_casks=()
+  while IFS= read -r package; do brew_casks+=("$package"); done < <(brew list --cask)
+  ((${#brew_formulae[@]} == 0)) || brew remove --force --ignore-dependencies "${brew_formulae[@]}" 2>/dev/null || true
+  ((${#brew_casks[@]} == 0)) || brew remove --force --cask "${brew_casks[@]}" 2>/dev/null || true
   brew cleanup --prune=all 2>/dev/null || true
-
-  log "Removing fish plugins"
-  rm -rf "$HOME/.config/fish/conf.d/fisher" "$HOME/.config/fish/functions/_fisher" 2>/dev/null || true
-  rm -f "$HOME/.config/fish/fish_plugins" 2>/dev/null || true
 
   log "Removing mise toolchains"
   rm -rf "$HOME/.local/share/mise" "$HOME/.config/mise" 2>/dev/null || true
@@ -265,9 +260,12 @@ if $CLEAN; then
   log "Removing chezmoi state"
   rm -rf "$HOME/.config/chezmoi" 2>/dev/null || true
 
-  log "Removing generated fish configs"
-  rm -f "$HOME/.config/fish/conf.d/secrets.fish" "$HOME/.config/fish/.api-keys.env" 2>/dev/null || true
-  rm -f "$HOME/.config/fish/functions/fishconfig.fish" 2>/dev/null || true
+  log "Removing generated Nushell configs"
+  rm -f "$HOME/.config/nushell/.api-keys.nu" "$HOME/.config/nushell/mise.nu" 2>/dev/null || true
+  rm -f "$HOME/.local/share/nushell/vendor/autoload/starship.nu" 2>/dev/null || true
+  rm -f "$HOME/Library/Application Support/nushell/.api-keys.nu" 2>/dev/null || true
+  rm -f "$HOME/Library/Application Support/nushell/mise.nu" 2>/dev/null || true
+  rm -f "$HOME/Library/Application Support/nushell/vendor/autoload/starship.nu" 2>/dev/null || true
 
   log "Removing app CLI symlinks"
   rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" 2>/dev/null || true
@@ -410,59 +408,73 @@ if [[ -d "/Applications/Zed.app" ]]; then
 fi
 fi
 
-# ── Fish shell ────────────────────────────────────────────────────────
-if should_run fish; then
-section "Shell: fish"
-FISH_PATH="$(brew --prefix)/bin/fish"
+# ── Nushell ───────────────────────────────────────────────────────────
+if should_run nushell; then
+section "Shell: Nushell"
+NU_PATH="$(brew --prefix)/bin/nu"
+[[ -x "$NU_PATH" ]] || die "Nushell is not installed at $NU_PATH. Run the packages section first."
+
+log "Applying Nushell dotfiles before changing the login shell"
+mkdir -p "$HOME/.config/chezmoi"
+cat > "$HOME/.config/chezmoi/chezmoi.toml" << EOF
+sourceDir = "${REPO_DIR}/home"
+EOF
+chezmoi apply
+
+# shellcheck disable=SC2016 # These are Nushell variables, not Bash variables.
+NU_CONFIG_DIR="$($NU_PATH --no-config-file -c '$nu.default-config-dir')"
+# shellcheck disable=SC2016 # These are Nushell variables, not Bash variables.
+NU_DATA_DIR="$($NU_PATH --no-config-file -c '$nu.data-dir')"
+mkdir -p "$NU_CONFIG_DIR" "$NU_DATA_DIR/vendor/autoload"
+touch "$NU_CONFIG_DIR/.api-keys.nu" "$NU_CONFIG_DIR/config.local.nu"
+chmod 600 "$NU_CONFIG_DIR/.api-keys.nu" "$NU_CONFIG_DIR/config.local.nu"
+
+log "Generating Mise and Starship integration"
+mise activate nu > "$NU_CONFIG_DIR/mise.nu"
+starship init nu > "$NU_DATA_DIR/vendor/autoload/starship.nu"
+
+log "Validating Nushell configuration"
+while IFS= read -r nu_file; do
+  "$NU_PATH" --no-config-file -c "nu-check --debug '$nu_file' | if not \$in { exit 1 }" \
+    || die "Invalid Nushell file: $nu_file"
+done < <(find "$NU_CONFIG_DIR" "$NU_DATA_DIR/vendor/autoload" -type f -name '*.nu' -print)
+"$NU_PATH" --env-config "$NU_CONFIG_DIR/env.nu" --config "$NU_CONFIG_DIR/config.nu" -c 'true' \
+  || die "Nushell failed to start with $NU_CONFIG_DIR/config.nu"
+
+if ! grep -qxF "$NU_PATH" /etc/shells 2>/dev/null; then
+  log "Adding Nushell to /etc/shells"
+  echo "$NU_PATH" | sudo tee -a /etc/shells > /dev/null
+fi
+
 if $IS_MACOS; then
-  if ! grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
-    log "Adding fish to /etc/shells"
-    echo "$FISH_PATH" | sudo tee -a /etc/shells > /dev/null
-  fi
-  if [[ "$SHELL" != "$FISH_PATH" ]]; then
-    log "Setting fish as default shell (via dscl)"
-    sudo dscl . -create "/Users/$USER" UserShell "$FISH_PATH" \
-      || warn "Failed to set default shell — run 'sudo dscl . -create /Users/$USER UserShell $FISH_PATH' manually"
-  fi
+  log "Setting Nushell as the login shell via dscl"
+  sudo dscl . -create "/Users/$USER" UserShell "$NU_PATH" \
+    || die "Could not set the login shell. Fish has not been removed."
+  ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell | awk '{print $2}')"
 else
-  if [[ "$SHELL" != "$FISH_PATH" ]]; then
-    log "Setting fish as default shell (via chsh)"
-    sudo chsh -s "$FISH_PATH" "$USER" \
-      || warn "Failed to set default shell — run 'chsh -s $FISH_PATH' manually"
-  fi
+  log "Setting Nushell as the login shell via chsh"
+  sudo chsh -s "$NU_PATH" "$USER" \
+    || die "Could not set the login shell. Fish has not been removed."
+  ACCOUNT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
 fi
-log "Default shell: $FISH_PATH"
+[[ "$ACCOUNT_SHELL" == "$NU_PATH" ]] \
+  || die "Login shell readback returned '$ACCOUNT_SHELL'. Fish has not been removed."
 
-log "Writing fishconfig helper function"
-mkdir -p "$HOME/.config/fish/functions"
-cat > "$HOME/.config/fish/functions/fishconfig.fish" << 'ENDFISH'
-function fishconfig --description "Open the fish config directory in VS Code"
-  if type -q code-insiders
-    code-insiders "$HOME/.config/fish"
-  else if type -q code
-    code "$HOME/.config/fish"
-  else
-    echo "fishconfig: neither code-insiders nor code found in PATH" >&2
-    return 1
-  end
-end
-ENDFISH
+log "Nushell is confirmed as the login shell; removing Fish"
+FISH_PATH="$(brew --prefix)/bin/fish"
+if grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
+  sudo sed -i.bak "\|^${FISH_PATH}\$|d" /etc/shells
+  sudo rm -f /etc/shells.bak
 fi
-
-# ── fzf key bindings ──────────────────────────────────────────────────
-if should_run fisher; then
-log "Installing fzf key bindings"
-"$(brew --prefix)/opt/fzf/install" --key-bindings --completion --no-update-rc 2>/dev/null || true
-
-# ── Fisher + Tide ──────────────────────────────────────────────────────
-section "Fish plugins (Fisher + Tide)"
-log "Installing Tide prompt"
-fish -c "fisher install IlanCosman/tide@v6" < /dev/null || warn "Tide install failed"
-log "Run 'tide configure' interactively to set up the prompt."
-log "Installing Sponge (clean history)"
-fish -c "fisher install meaningful-ooo/sponge" < /dev/null || warn "Sponge install failed"
-log "Installing git aliases (oh-my-zsh style)"
-fish -c "fisher install jhillyerd/plugin-git" < /dev/null || warn "plugin-git install failed"
+if brew list --formula fisher &>/dev/null; then
+  brew uninstall --force fisher || die "Failed to uninstall Fisher"
+fi
+if brew list --formula fish &>/dev/null; then
+  brew uninstall --force fish || die "Failed to uninstall Fish"
+fi
+brew list --formula fish &>/dev/null && die "Fish is still installed; keeping its config for recovery"
+rm -rf "$HOME/.config/fish"
+log "Default shell: $NU_PATH"
 fi
 
 # ── Git globals ───────────────────────────────────────────────────────
@@ -642,21 +654,11 @@ log "Applying dotfiles"
 chezmoi apply
 fi
 
-# ── API keys → fish conf.d ───────────────────────────────────────────
+# ── API keys → Nushell ────────────────────────────────────────────────
 if should_run secrets; then
   section "Secrets"
   if [[ -n "$OP_VAULT" ]]; then
-  log "Writing API key functions to fish conf.d"
-  mkdir -p "$HOME/.config/fish/conf.d"
-  cat > "$HOME/.config/fish/conf.d/secrets.fish" << 'ENDFISH'
-# Managed by bootstrap.sh — do not edit by hand.
-# API keys exported as env vars from ~/.config/fish/.api-keys.env (populated from 1Password at bootstrap).
-
-if test -f "$HOME/.config/fish/.api-keys.env"
-  source "$HOME/.config/fish/.api-keys.env"
-end
-ENDFISH
-  chmod 600 "$HOME/.config/fish/conf.d/secrets.fish"
+  log "Nushell will load API keys from its native config directory"
   else
   log "OP_VAULT not set — skipping API key setup"
   fi
@@ -691,22 +693,35 @@ if [[ -n "$OP_VAULT" ]]; then
   log "Signing in to 1Password CLI"
   eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
 
-  # ── Migrate API keys to fish env file ────────────────────────────────
+  # ── Write API keys in Nushell syntax ─────────────────────────────────
   if op account list 2>/dev/null | grep -q .; then
-    log "Pulling API keys from 1Password → ~/.config/fish/.api-keys.env"
-    mkdir -p "$HOME/.config/fish"
-    cat > "$HOME/.config/fish/.api-keys.env" << EOF
-set -gx OPENCODE_API_KEY   "$(op read "op://${OP_VAULT}/opencode-api-key/password" 2>/dev/null || echo '')"
-set -gx ANTHROPIC_API_KEY  "$(op read "op://${OP_VAULT}/anthropic-api-key/password" 2>/dev/null || echo '')"
-set -gx OPENAI_API_KEY     "$(op read "op://${OP_VAULT}/openai-api-key/password" 2>/dev/null || echo '')"
-set -gx CONTEXT7_API_KEY   "$(op read "op://${OP_VAULT}/context7-api-key/password" 2>/dev/null || echo '')"
-set -gx DEVTO_API_KEY      "$(op read "op://${OP_VAULT}/devto-api-key/password" 2>/dev/null || echo '')"
-set -gx OREILLY_API_TOKEN  "$(op read "op://${OP_VAULT}/oreilly-api-token/password" 2>/dev/null || echo '')"
-set -gx GOOGLE_API_KEY     "$(op read "op://${OP_VAULT}/google-api-key/password" 2>/dev/null || echo '')"
-set -gx AZURE_DEVOPS_PAT            "$(op read "op://${OP_VAULT}/ado-pat/password" 2>/dev/null || echo '')"
-set -gx GRAFANA_SERVICE_ACCOUNT_TOKEN "$(op read "op://${OP_VAULT}/grafana-service-account-token/password" 2>/dev/null || echo '')"
+    NU_PATH="$(brew --prefix)/bin/nu"
+    # shellcheck disable=SC2016 # This is a Nushell variable, not a Bash variable.
+    NU_CONFIG_DIR="$($NU_PATH --no-config-file -c '$nu.default-config-dir')"
+    NU_SECRETS="$NU_CONFIG_DIR/.api-keys.nu"
+    NU_SECRETS_TMP="$NU_SECRETS.tmp"
+    log "Pulling API keys from 1Password → $NU_SECRETS"
+    mkdir -p "$NU_CONFIG_DIR"
+    : > "$NU_SECRETS_TMP"
+    while IFS='|' read -r env_name item_name; do
+      secret_value="$(op read "op://${OP_VAULT}/${item_name}/password" 2>/dev/null || true)"
+      # shellcheck disable=SC2016 # The output intentionally contains Nushell's $env syntax.
+      printf '$env.%s = %s\n' "$env_name" "$(printf '%s' "$secret_value" | jq -Rs .)" >> "$NU_SECRETS_TMP"
+    done << 'EOF'
+OPENCODE_API_KEY|opencode-api-key
+ANTHROPIC_API_KEY|anthropic-api-key
+OPENAI_API_KEY|openai-api-key
+CONTEXT7_API_KEY|context7-api-key
+DEVTO_API_KEY|devto-api-key
+OREILLY_API_TOKEN|oreilly-api-token
+GOOGLE_API_KEY|google-api-key
+AZURE_DEVOPS_PAT|ado-pat
+GRAFANA_SERVICE_ACCOUNT_TOKEN|grafana-service-account-token
 EOF
-    chmod 600 "$HOME/.config/fish/.api-keys.env"
+    chmod 600 "$NU_SECRETS_TMP"
+    "$NU_PATH" --no-config-file -c "nu-check --debug '$NU_SECRETS_TMP' | if not \$in { exit 1 }" \
+      || die "Generated Nushell secrets file is invalid"
+    mv "$NU_SECRETS_TMP" "$NU_SECRETS"
   fi
 else
   log "OP_VAULT not set — skipping 1Password setup"
@@ -767,7 +782,7 @@ section "Doctor"
 pass=0; fail=0
 check() {
   local cmd="$1"
-  if fish -c "command -v $cmd" < /dev/null &>/dev/null; then
+  if command -v "$cmd" &>/dev/null || "$NU_PATH" --config "$NU_CONFIG_DIR/config.nu" -c "which $cmd | is-not-empty" &>/dev/null; then
     printf "  \033[1;32m✓\033[0m %s\n" "$cmd"
     pass=$((pass + 1))
   else
@@ -775,10 +790,26 @@ check() {
     fail=$((fail + 1))
   fi
 }
-check fish;   check mise;   [[ -n "$OP_VAULT" ]] && check op;     check gh
+NU_PATH="$(brew --prefix)/bin/nu"
+# shellcheck disable=SC2016 # This is a Nushell variable, not a Bash variable.
+NU_CONFIG_DIR="$($NU_PATH --no-config-file -c '$nu.default-config-dir')"
+check nu; check starship; check mise; [[ -n "$OP_VAULT" ]] && check op; check gh
 check chezmoi; check herdr; check opencode; check claude; check cortex; check tgrep
 check aws;    check kubectl; check helm
 check playwright; check uv; check colima
+
+if $IS_MACOS; then
+  ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')"
+else
+  ACCOUNT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
+fi
+if [[ "$ACCOUNT_SHELL" == "$NU_PATH" ]]; then
+  printf "  \033[1;32m✓\033[0m login shell\n"
+  pass=$((pass + 1))
+else
+  printf "  \033[1;31m✗\033[0m %-24s (%s)\n" "login shell" "$ACCOUNT_SHELL"
+  fail=$((fail + 1))
+fi
 
 echo ""
 if [[ $fail -eq 0 ]]; then
@@ -793,7 +824,7 @@ fi
 # =========================================================================
 echo ""
 section "Bootstrap complete"
-log "Open a new terminal to start fish."
+log "Open a new terminal to start Nushell."
 echo ""
 log "Next steps:"
 log "  aws sso login --profile <your-profile>"

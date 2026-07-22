@@ -2,9 +2,9 @@ name: Lint
 
 on:
   push:
-    paths: [bootstrap.sh, Brewfile, home/**]
+    paths: [bootstrap.sh, Brewfile, Brewfile.linux, home/**]
   pull_request:
-    paths: [bootstrap.sh, Brewfile, home/**]
+    paths: [bootstrap.sh, Brewfile, Brewfile.linux, home/**]
 
 jobs:
   shellcheck:
@@ -13,3 +13,19 @@ jobs:
       - uses: actions/checkout@v6
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: shellcheck bootstrap.sh
+
+  nushell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.114.1"
+      - run: |
+          nu --no-config-file -c "nu-check --debug 'home/.chezmoitemplates/nushell/env.nu' | if not \$in { exit 1 }"
+          nu --no-config-file -c "nu-check --debug 'home/.chezmoitemplates/nushell/completions/opencode.nu' | if not \$in { exit 1 }"
+          mkdir -p "$RUNNER_TEMP/nu-config/nushell/completions"
+          cp home/.chezmoitemplates/nushell/config.nu "$RUNNER_TEMP/nu-config/nushell/config.nu"
+          cp home/.chezmoitemplates/nushell/completions/opencode.nu "$RUNNER_TEMP/nu-config/nushell/completions/opencode.nu"
+          touch "$RUNNER_TEMP/nu-config/nushell/mise.nu" "$RUNNER_TEMP/nu-config/nushell/.api-keys.nu" "$RUNNER_TEMP/nu-config/nushell/config.local.nu"
+          XDG_CONFIG_HOME="$RUNNER_TEMP/nu-config" nu --no-config-file -c "nu-check --debug (\$nu.default-config-dir | path join config.nu) | if not \$in { exit 1 }"

@@ -5,7 +5,7 @@ One command. Zero to a fully armed and operational macOS workstation. Shell, too
 If you're the kind of engineer who treats their machine like a cattle, not a pet, this is your herd script.
 
 !!! tip
-    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks. Everything else (Homebrew, fish, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
+    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks. Everything else (Homebrew, Nushell, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
 
 ---
 
@@ -14,7 +14,7 @@ If you're the kind of engineer who treats their machine like a cattle, not a pet
 - **Apple ID** — signed into the App Store (for `mas` to pull apps)
 - **A functioning brain** — the script's interactive. It'll ask you things. It won't hold your hand for `sudo`.
 
-**1Password is optional.** If you set your vault name in `config.env`, the bootstrap pulls API keys into a fish env file. If you don't, everything else still works — you'll just need to configure API keys yourself.
+**1Password is optional.** If you set your vault name in `config.env`, the bootstrap pulls API keys into a private Nushell file. If you don't, everything else still works — you'll just need to configure API keys yourself.
 
 ---
 
@@ -68,11 +68,11 @@ cd ~/Developer/github/acastro2/mac-bootstrap
 Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be surgical:
 
 ```bash
-./bootstrap.sh --only=packages,fish        # just packages + shell
+./bootstrap.sh --only=packages,nushell     # just packages + shell retrofit
 ./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `fish`, `fisher`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `nushell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
 ---
 
@@ -86,9 +86,11 @@ Here's the deal: this isn't a generic dotfiles repo. It's the exact setup of a p
 
 ### The shell
 
-**fish** via Homebrew. Not zsh with oh-my-zsh. Not bash with a thousand plugins. Fish because tab completions work out of the box, the syntax doesn't make me want to throw my laptop, and I don't have to maintain a 300-line `.zshrc` that breaks every six months. Tide for the prompt (minimal, fast, shows what branch you're on). Fisher for plugins — currently Tide, Sponge (clean history), and `jhillyerd/plugin-git` for oh-my-zsh-style git aliases.
+**Nushell** via Homebrew, with Starship for the prompt. Nu gives you structured pipelines, fuzzy completion, SQLite history, and Ctrl-R history search without a plugin manager. Mise activation and the Starship hook are generated in Nu's native config/data directories.
 
-You'll get `gs`, `gss`, `gst`, `ga`, `gc`, `gp`, `gco`, `gb`, and about 30 other aliases that your muscle memory already knows.
+The Git shortcuts are based on commands actually used in Fish history, not a giant plugin catalog. You get `gs`, `gss`, `gst`, `ga`, `gaa`, `gc`, `gp`, `gco`, `gcb`, `gb`, and focused helpers for clone, amend, fetch, pull/rebase, remotes, restore, reset, and stash. `git-clean` fetches and prunes `origin`, detects its default branch, and safely deletes local branches already merged into it with `git branch -d`.
+
+On an existing Fish machine, the migration is fail-safe: Nu's files are rendered and parsed first, then the account login shell is changed and read back. Fish is removed only after that exact readback succeeds.
 
 ### The terminal
 
@@ -100,7 +102,7 @@ You'll get `gs`, `gss`, `gst`, `ga`, `gc`, `gp`, `gco`, `gb`, and about 30 other
 
 ### The package manager
 
-**Homebrew** with a `Brewfile`. 44 packages: git, fish, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, postgresql, redis, 1password, ghostty, VS Code, Zed, JetBrains Mono Nerd Font, Geist Mono, and more. Declarative. Boring. Works.
+**Homebrew** with a `Brewfile`. The list includes git, Nushell, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
 
 ### The toolchain manager
 
@@ -108,7 +110,7 @@ You'll get `gs`, `gss`, `gst`, `ga`, `gc`, `gp`, `gco`, `gb`, and about 30 other
 
 ### The secret sauce (optional)
 
-**1Password CLI → fish env file.** If you set `OP_VAULT` in `config.env`, every API key gets pulled from your 1Password vault into `~/.config/fish/.api-keys.env` (chmod 600). Fish's `conf.d/secrets.fish` sources it at shell start. Keys end up as environment variables. This is the "naive but works everywhere" approach — your company blocks Keychain access? Fine. No problem.
+**1Password CLI → Nushell env file.** If you set `OP_VAULT` in `config.env`, every API key gets pulled from your 1Password vault into `.api-keys.nu` under Nu's native config directory (chmod 600). `config.nu` loads it with `source-env`, so the keys become environment variables at shell startup.
 
 Skip it if you want — you'll just set up API keys yourself.
 
@@ -116,7 +118,7 @@ Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, go
 
 ### The dotfiles
 
-**chezmoi** with the source directory inside this repo (`home/`). Your fish config, Ghostty config, git aliases, and editor settings all live here. `chezmoi diff` to preview, `chezmoi apply` to deploy. Templates, if you need them, use chezmoi's built-in templating.
+**chezmoi** with the source directory inside this repo (`home/`). Shared templates render Nushell config to `~/Library/Application Support/nushell` on macOS and `~/.config/nushell` on Linux. Put machine-only overrides in the private `config.local.nu` file created beside `config.nu`. Ghostty and editor settings live here too. `chezmoi diff` previews changes; `chezmoi apply` deploys them.
 
 ### The LLM coding agent
 
@@ -150,9 +152,9 @@ If that's you — welcome. Run the command. Break things. Send PRs.
 
 The script runs in two phases:
 
-**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, fish as default shell, Fisher plugins, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, dotfiles via chezmoi, and API key functions written to fish `conf.d/` (if `OP_VAULT` is set).
+**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated Nushell config and login-shell migration, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. Existing Fish files and packages are removed only after Nu starts successfully and the account shell readback matches.
 
-**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in, API keys written to `~/.config/fish/.api-keys.env`. Always: GitHub CLI SSO login, opencode config clone (if repo is set), agent skills clone (if repo is set), and a doctor check that verifies critical binaries are alive.
+**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to Nu's `.api-keys.nu`. Always: GitHub CLI SSO login, opencode config clone (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
 
 If anything fails, it tells you what and keeps going. Re-run anytime.
 
@@ -166,4 +168,4 @@ mise install      # if any tools need (re)installing
 # Sign in to desktop apps (Slack, VS Code, etc.)
 ```
 
-Open a new terminal. You're in fish. You're home.
+Open a new terminal. You're in Nushell. You're home.

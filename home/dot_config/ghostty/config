@@ -10,6 +10,6 @@ background-opacity = 0.97
 background-blur-radius = 20
 cursor-style = block
 cursor-style-blink = false
-shell-integration = fish
+shell-integration = detect
 copy-on-select = clipboard
 confirm-close-surface = false

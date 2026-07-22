@@ -4,8 +4,8 @@
 # ── Shell & Toolchains ────────────────────────────────────────────────
 brew "git"
 brew "gh"
-brew "fish"
-brew "fisher"          # fish plugin manager
+brew "nushell"
+brew "starship"        # cross-shell prompt
 brew "mise"            # toolchain manager (Go, Node, Python, etc.)
 brew "llhttp"          # mise Node dep — prevent brew cleanup from breaking node
 brew "chezmoi"         # dotfiles
