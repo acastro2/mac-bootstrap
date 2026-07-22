@@ -36,7 +36,8 @@ function cd-down;     cd ~/Downloads; end
 function cd-skills;   cd ~/.agents/skills; end
 function cd-opencode;  cd ~/.config/opencode; end
 function cd-bootstrap; cd ~/Developer/github/acastro2/mac-bootstrap; end
-function cd-onedrive; cd ~/OneDrive\ -\ Attainfinance.com/; end
+function cd-claude;    cd ~/.claude; end
+function cd-onedrive;  cd ~/Library/CloudStorage/OneDrive-Attainfinance.com; end
 
 # ── opencode ──────────────────────────────────────────────────────────
 fish_add_path $HOME/.opencode/bin

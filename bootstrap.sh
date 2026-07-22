@@ -543,6 +543,36 @@ else
 fi
 fi
 
+# ── tgrep ─────────────────────────────────────────────────────────────
+if should_run tgrep; then
+section "tgrep"
+if ! command -v tgrep &>/dev/null; then
+  log "Installing tgrep"
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64)  TGREP_TARGET="aarch64-apple-darwin" ;;
+    Darwin-x86_64) TGREP_TARGET="x86_64-apple-darwin" ;;
+    Linux-aarch64) TGREP_TARGET="aarch64-unknown-linux-musl" ;;
+    Linux-x86_64)  TGREP_TARGET="x86_64-unknown-linux-musl" ;;
+    *) TGREP_TARGET="" ;;
+  esac
+  if [[ -n "$TGREP_TARGET" ]]; then
+    TGREP_TMP="$(mktemp -d)"
+    if gh release download --repo microsoft/tgrep -p "*${TGREP_TARGET}*" -D "$TGREP_TMP" 2>/dev/null; then
+      tar xzf "$TGREP_TMP"/tgrep-*.tar.gz -C "$TGREP_TMP" tgrep
+      install -m 755 "$TGREP_TMP/tgrep" "$HOME/.local/bin/tgrep"
+      log "Installed tgrep: $("$HOME/.local/bin/tgrep" --version)"
+    else
+      warn "tgrep download failed (check gh auth); skipping."
+    fi
+    rm -rf "$TGREP_TMP"
+  else
+    warn "No tgrep release for $(uname -s)-$(uname -m); skipping."
+  fi
+else
+  log "Already installed: $(tgrep --version 2>/dev/null || echo 'unknown')"
+fi
+fi
+
 # ── mise ──────────────────────────────────────────────────────────────
 if should_run mise; then
 section "mise"
@@ -746,7 +776,7 @@ check() {
   fi
 }
 check fish;   check mise;   [[ -n "$OP_VAULT" ]] && check op;     check gh
-check chezmoi; check herdr; check opencode; check claude; check cortex
+check chezmoi; check herdr; check opencode; check claude; check cortex; check tgrep
 check aws;    check kubectl; check helm
 check playwright; check uv; check colima
 
