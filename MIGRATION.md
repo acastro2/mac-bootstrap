@@ -224,7 +224,7 @@ This removes all Homebrew packages, mise toolchains, opencode/claude binaries, a
 
 **`gh repo clone` fails during bootstrap**: Run `gh auth login --web` manually, then re-run `./bootstrap.sh --only=auth`.
 
-**Claude Code not found after bootstrap**: The npm global install requires Node. Run `mise install` first, then `./bootstrap.sh --only=claude`.
+**Claude Code not found after bootstrap**: The native installer drops the launcher at `~/.local/bin/claude`; make sure that dir is on PATH, then re-run `./bootstrap.sh --only=claude`. Do not `npm -g install @anthropic-ai/claude-code` under mise: a node version switch orphans the shim and `claude update` (native updater) then silently no-ops against it.
 
 **Nushell was not set as the login shell**: The bootstrap keeps Fish installed when the switch or readback fails. On macOS, run `sudo dscl . -create "/Users/$USER" UserShell /opt/homebrew/bin/nu`, verify it with `dscl . -read "/Users/$USER" UserShell`, then rerun `./bootstrap.sh --only=nushell`.
 
