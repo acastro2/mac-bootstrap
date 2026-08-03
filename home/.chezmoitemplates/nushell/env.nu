@@ -17,3 +17,11 @@ $env.PATH = ($env.PATH
 
 $env.TENV_AUTO_INSTALL = "true"
 $env.OPENCODE_EXPERIMENTAL = "true"
+
+$env.CARAPACE_BRIDGES = "zsh,fish,bash,inshellisense"
+
+# Trust the corporate CA for Node-based tools and MCP clients.
+let corporate_ca_bundle = ($env.HOME | path join ".config" "corporate-ca-bundle.pem")
+if ($corporate_ca_bundle | path exists) {
+  $env.NODE_EXTRA_CA_CERTS = $corporate_ca_bundle
+}

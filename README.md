@@ -87,7 +87,7 @@ Here's the deal: this isn't a generic dotfiles repo. It's the exact setup of a p
 
 ### The shell
 
-**Nushell** via Homebrew, with Starship for the prompt. Nu gives you structured pipelines, fuzzy completion, SQLite history, and Ctrl-R history search without a plugin manager. Mise activation and the Starship hook are generated in Nu's native config/data directories.
+**Nushell** via Homebrew, with Starship for the prompt and Carapace for command completion. Nu gives you structured pipelines, fuzzy completion, SQLite history, and Ctrl-R history search without a plugin manager. The shared `config.nu` wires Carapace into Nu's external completion API and expands aliases before asking Carapace for suggestions. Mise activation and the Starship hook are generated in Nu's native config/data directories.
 
 The Git shortcuts started from commands actually used in Fish history and now include a curated subset of the Oh My Zsh `git` plugin and Fish `plugin-git`: staging, diffs, branch views, log graphs, rebase/cherry-pick flows, stash, submodules, switch, and worktrees. Dynamic helpers include `grt` (repository root) and `gpsup` (push the current branch with upstream tracking). `git-clean` fetches and prunes `origin`, detects its default branch, and safely deletes local branches already merged into it with `git branch -d`.
 
@@ -105,7 +105,7 @@ On an existing Fish machine, the migration is fail-safe: Nu's files are rendered
 
 ### The package manager
 
-**Homebrew** with a `Brewfile`. The list includes git, Nushell, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
+**Homebrew** with a `Brewfile`. The list includes git, Nushell, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
 
 ### The toolchain manager
 

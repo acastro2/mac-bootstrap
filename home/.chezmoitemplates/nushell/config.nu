@@ -9,6 +9,23 @@ $env.config.completions.case_sensitive = false
 $env.config.completions.quick = true
 $env.config.completions.partial = true
 
+let carapace_completer = {|spans|
+  let expanded_alias = (scope aliases | where name == $spans.0 | get -o 0.expansion)
+  let completed_spans = if $expanded_alias == null {
+    $spans
+  } else {
+    $spans | skip 1 | prepend ($expanded_alias | split words)
+  }
+
+  carapace $completed_spans.0 nushell ...$completed_spans | from json
+}
+
+$env.config.completions.external = {
+  enable: true
+  max_results: 100
+  completer: $carapace_completer
+}
+
 if (($nu.default-config-dir | path join "mise.nu") | path exists) {
   use ($nu.default-config-dir | path join "mise.nu")
 }
@@ -29,6 +46,7 @@ def --env cd-dev [] { cd ~/Developer }
 def --env cd-down [] { cd ~/Downloads }
 def --env cd-skills [] { cd ~/.agents/skills }
 def --env cd-opencode [] { cd ~/.config/opencode }
+def --env cd-pi [] { cd ~/.pi }
 def --env cd-bootstrap [] { cd ~/Developer/github/acastro2/mac-bootstrap }
 def --env cd-claude [] { cd ~/.claude }
 def --env cd-onedrive [] { cd ~/Library/CloudStorage/OneDrive-Attainfinance.com }

@@ -5,6 +5,7 @@
 brew "git"
 brew "gh"
 brew "nushell"
+brew "carapace"
 brew "starship"        # cross-shell prompt
 brew "mise"            # toolchain manager (Go, Node, Python, etc.)
 brew "llhttp"          # mise Node dep — prevent brew cleanup from breaking node
