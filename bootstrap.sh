@@ -20,6 +20,7 @@ REPO_DIR="${HOME}/Developer/github/acastro2/mac-bootstrap"
 OPENCODE_CONFIG_REPO=""
 OPENCODE_SKILLS_REPO=""
 CLAUDE_CONFIG_REPO=""
+PI_CONFIG_REPO=""
 
 # Source personal config if present (gitignored, not committed).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -601,6 +602,7 @@ dotnet     = "9"
 opentofu   = "latest"
 "npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
 "npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
+"npm:@earendil-works/pi-coding-agent" = "latest"
 
 [settings]
 experimental = true
@@ -764,6 +766,19 @@ if [[ -n "$CLAUDE_CONFIG_REPO" ]]; then
   fi
 fi
 
+# ── Pi config (private repo — needs auth) ────────────────────────────
+echo ""
+if [[ -n "$PI_CONFIG_REPO" ]]; then
+  log "Syncing Pi config repo into ~/.pi"
+  if [[ -d "$HOME/.pi/.git" ]]; then
+    git -C "$HOME/.pi" pull --ff-only || true
+  elif [[ -e "$HOME/.pi" ]]; then
+    warn "$HOME/.pi exists and is not a git repo; skipping clone to avoid overwriting it."
+  else
+    gh repo clone "$PI_CONFIG_REPO" "$HOME/.pi" 2>&1 || warn "Pi config repo clone failed (check gh auth)."
+  fi
+fi
+
 # ── agent skills (→ ~/.agents/skills/) ──────────────────────────────
 echo ""
 if [[ -n "$OPENCODE_SKILLS_REPO" ]]; then
@@ -794,7 +809,7 @@ NU_PATH="$(brew --prefix)/bin/nu"
 # shellcheck disable=SC2016 # This is a Nushell variable, not a Bash variable.
 NU_CONFIG_DIR="$($NU_PATH --no-config-file -c '$nu.default-config-dir')"
 check nu; check starship; check mise; [[ -n "$OP_VAULT" ]] && check op; check gh
-check chezmoi; check herdr; check opencode; check claude; check cortex; check tgrep
+check chezmoi; check herdr; check opencode; check claude; check cortex; check pi; check tgrep
 check aws;    check kubectl; check helm
 check playwright; check uv; check colima
 

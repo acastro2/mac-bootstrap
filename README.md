@@ -38,6 +38,7 @@ cd ~/Developer/github/YOU/mac-bootstrap
 | `REPO_DIR`             | Where to clone your fork                                                       |
 | `OPENCODE_CONFIG_REPO` | Private opencode config repo, e.g. `you/opencode_config` (leave empty to skip) |
 | `OPENCODE_SKILLS_REPO` | Public agent skills repo (leave empty to skip)                                 |
+| `PI_CONFIG_REPO`       | Private Pi config repo, e.g. `you/.pi` (leave empty to skip)                   |
 
 Then run:
 
@@ -122,7 +123,7 @@ Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, go
 
 ### The LLM coding agent
 
-**OpenCode.** Installed via the official install script. An optional private config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
+**OpenCode and Pi.** OpenCode is installed via its official install script. Pi is installed from its official npm package through mise, and its optional private config repo (`PI_CONFIG_REPO`) is synced into `~/.pi`. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
 
 ### The browser automation stack
 
@@ -152,9 +153,9 @@ If that's you — welcome. Run the command. Break things. Send PRs.
 
 The script runs in two phases:
 
-**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated Nushell config and login-shell migration, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. Existing Fish files and packages are removed only after Nu starts successfully and the account shell readback matches.
+**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated Nushell config and login-shell migration, git config, SSH via 1Password agent, OpenCode, Pi, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. Existing Fish files and packages are removed only after Nu starts successfully and the account shell readback matches.
 
-**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to Nu's `.api-keys.nu`. Always: GitHub CLI SSO login, opencode config clone (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
+**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to Nu's `.api-keys.nu`. Always: GitHub CLI SSO login, OpenCode and Pi config sync (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
 
 If anything fails, it tells you what and keeps going. Re-run anytime.
 
