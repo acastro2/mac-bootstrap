@@ -69,7 +69,7 @@ alias gsta = git stash
 alias gstp = git stash pop
 alias glo = git log --oneline --decorate --color
 
-# Additional read-only and common Git shortcuts from Oh My Zsh's git plugin
+# Additional common Git shortcuts from Oh My Zsh's git plugin
 # and Fish's plugin-git. Destructive plugin aliases are intentionally omitted.
 alias gapa = git add --patch
 alias gau = git add --update
@@ -261,7 +261,7 @@ alias hup = helm upgrade
 
 # Terraform-plugin aliases backed by the toolchain this repo installs. The
 # wrapper prefers OpenTofu but falls back to Terraform when that is present.
-def tf [...args] {
+def --wrapped tf [...args] {
   if (which tofu | is-empty) {
     ^terraform ...$args
   } else {
