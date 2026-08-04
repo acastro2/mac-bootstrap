@@ -1,5 +1,8 @@
 # Nushell environment managed by chezmoi.
 
+# AWS SSO profiles belong in ~/.aws/config, not inherited shell credentials.
+hide-env --ignore-errors AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE
+
 let brew_paths = [
   /opt/homebrew/bin
   /opt/homebrew/sbin

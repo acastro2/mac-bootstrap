@@ -442,6 +442,16 @@ done < <(find "$NU_CONFIG_DIR" "$NU_DATA_DIR/vendor/autoload" -type f -name '*.n
 "$NU_PATH" --env-config "$NU_CONFIG_DIR/env.nu" --config "$NU_CONFIG_DIR/config.nu" -c 'true' \
   || die "Nushell failed to start with $NU_CONFIG_DIR/config.nu"
 
+log "Validating Nushell drops inherited AWS environment state"
+# shellcheck disable=SC2016 # $env belongs to Nushell, not Bash.
+env AWS_ACCESS_KEY_ID=bootstrap-test \
+  AWS_SECRET_ACCESS_KEY=bootstrap-test \
+  AWS_SESSION_TOKEN=bootstrap-test \
+  AWS_PROFILE=bootstrap-test \
+  "$NU_PATH" --env-config "$NU_CONFIG_DIR/env.nu" --config "$NU_CONFIG_DIR/config.nu" \
+  -c 'if ([AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE] | any { |name| $name in $env }) { exit 1 }' \
+  || die "Nushell retained inherited AWS credentials or profile"
+
 if ! grep -qxF "$NU_PATH" /etc/shells 2>/dev/null; then
   log "Adding Nushell to /etc/shells"
   echo "$NU_PATH" | sudo tee -a /etc/shells > /dev/null

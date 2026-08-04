@@ -93,6 +93,8 @@ The Git shortcuts started from commands actually used in Fish history and now in
 
 The same research added practical Oh My Zsh-style aliases for Docker/Colima, Kubernetes, Helm, AWS, and Terraform/OpenTofu. Fish itself does not ship a comparable alias catalog: `plugin-git` supplies Git abbreviations, `fzf.fish` supplies interactive keybindings, and `bang-bang` supplies Bash-style history expansion. Nushell keeps the useful command shortcuts but intentionally leaves out force-push, hard-reset/pristine, mass-prune/delete, auto-approve, and `!!`/`!$` behaviors. The upstream references are [Oh My Zsh's Git](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/git/git.plugin.zsh), [Docker](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/docker/docker.plugin.zsh), [Kubernetes](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/kubectl/kubectl.plugin.zsh), [Helm](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/helm/helm.plugin.zsh), [Terraform](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/terraform/terraform.plugin.zsh), [Fish plugin-git](https://github.com/jhillyerd/plugin-git), [fzf.fish](https://github.com/PatrickF1/fzf.fish), and [Oh My Fish bang-bang](https://github.com/oh-my-fish/plugin-bang-bang).
 
+Nushell clears inherited `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_PROFILE` values at startup. Authenticate with an explicit SSO profile and scope `AWS_PROFILE` to one command with `with-env`; do not leave AWS credentials or account selection in the shell-wide environment.
+
 On an existing Fish machine, the migration is fail-safe: Nu's files are rendered and parsed first, then the account login shell is changed and read back. Fish is removed only after that exact readback succeeds.
 
 ### The terminal
@@ -165,8 +167,9 @@ If anything fails, it tells you what and keeps going. Re-run anytime.
 
 ## After bootstrap
 
-```bash
+```nu
 aws sso login --profile <your-profile>
+with-env { AWS_PROFILE: "<your-profile>" } { tofu plan }
 mise install      # if any tools need (re)installing
 # Sign in to desktop apps (Slack, VS Code, etc.)
 ```

@@ -51,11 +51,6 @@ def --env cd-bootstrap [] { cd ~/Developer/github/acastro2/mac-bootstrap }
 def --env cd-claude [] { cd ~/.claude }
 def --env cd-onedrive [] { cd ~/Library/CloudStorage/OneDrive-Attainfinance.com }
 
-def --env awssso [profile: string = "default"] {
-  aws sso login --profile $profile
-  $env.AWS_PROFILE = $profile
-}
-
 # Focused Git shortcuts based on commands used in Fish history.
 alias gs = git status
 alias gst = git status
@@ -303,8 +298,7 @@ def tfw [...args] { tf workspace ...$args }
 def tfwl [...args] { tf workspace list ...$args }
 def tfws [...args] { tf workspace select ...$args }
 
-# Small AWS helpers; Fish/OMZ provide richer profile-switching functions, but
-# profile changes are environment mutations and remain explicit in Nu.
+# AWS helpers do not mutate the shell environment; pass profiles explicitly.
 alias awsp = aws configure list-profiles
 alias awswho = aws sts get-caller-identity
 
