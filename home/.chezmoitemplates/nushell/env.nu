@@ -23,8 +23,23 @@ $env.OPENCODE_EXPERIMENTAL = "true"
 
 $env.CARAPACE_BRIDGES = "zsh,fish,bash,inshellisense"
 
-# Trust the corporate CA for Node-based tools and MCP clients.
+# Trust the corporate CA for tools that don't use the macOS keychain.
+# Opt-in: only activates if ~/.config/corporate-ca-bundle.pem exists.
+# Personal machines: leave the file out — this block no-ops.
 let corporate_ca_bundle = ($env.HOME | path join ".config" "corporate-ca-bundle.pem")
 if ($corporate_ca_bundle | path exists) {
+  # Node-based tools and MCP clients.
   $env.NODE_EXTRA_CA_CERTS = $corporate_ca_bundle
+  # Python requests-based tools (pip ignores this; uses PIP_CERT below).
+  $env.REQUESTS_CA_BUNDLE = $corporate_ca_bundle
+  # OpenSSL-native tools (Python stdlib, misc CLIs with bundled OpenSSL).
+  $env.SSL_CERT_FILE = $corporate_ca_bundle
+  # curl and anything linked against it.
+  $env.CURL_CA_BUNDLE = $corporate_ca_bundle
+  # git (Homebrew build uses OpenSSL; system git uses the keychain instead).
+  $env.GIT_SSL_CAINFO = $corporate_ca_bundle
+  # pip itself.
+  $env.PIP_CERT = $corporate_ca_bundle
+  # AWS SDKs (Go v1/v2, boto3, CLI).
+  $env.AWS_CA_BUNDLE = $corporate_ca_bundle
 }

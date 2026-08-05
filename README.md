@@ -175,3 +175,19 @@ mise install      # if any tools need (re)installing
 ```
 
 Open a new terminal. You're in Nushell. You're home.
+
+---
+
+## Corporate CA / TLS inspection
+
+The security stack (Cisco Secure Access, Cisco Umbrella, GSA) does TLS inspection, so apps that don't use the macOS keychain need the corp root trusted explicitly. The env config activates a bundle automatically when present:
+
+- Drop the CA bundle at `~/.config/corporate-ca-bundle.pem`. When it exists, `env.nu` sets `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `PIP_CERT`, `GIT_SSL_CAINFO`, and `AWS_CA_BUNDLE` to it (covers Node, Python requests/pip, OpenSSL tools, curl, Homebrew git, AWS SDKs). Go 1.27+ and .NET read the macOS keychain, not these vars.
+
+To trust the root at the OS level on one Mac (covers browsers, Go < 1.27, .NET, system git/curl):
+
+```bash
+sudo security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain ~/.config/cisco-secure-access-root.pem
+```
+
+Run it in your terminal, not headless — macOS shows an auth dialog. Fleet-wide, prefer a Jamf computer-level configuration profile with the Certificate payload (`com.apple.security.root`, "Allow access to all applications") — that's the Apple-supported way and auto-cleans on profile removal.
