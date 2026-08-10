@@ -73,7 +73,7 @@ Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be s
 ./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `nushell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `nushell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `meridian`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
 ---
 
@@ -129,6 +129,8 @@ Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, go
 
 **OpenCode and Pi.** OpenCode is installed via its official install script. Pi is installed from its official npm package through mise, and its optional private config repo (`PI_CONFIG_REPO`) is synced into `~/.pi`. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
 
+On macOS, **Meridian** bridges the Claude Agent SDK to the standard Anthropic API so any of these tools can talk to Claude through one local endpoint. It's installed as a mise global npm tool (`@rynfar/meridian`) and runs as a `launchd` LaunchAgent (`~/Library/LaunchAgents/com.rynfar.meridian.plist`) so it starts on login and restarts if it dies. It loads the official `@rynfar/meridian-plugin-pi-scrub` plugin (pinned to `0.2.0`, installed into `~/.config/meridian`) to remove Pi's billing fingerprint while preserving project rules, skills, and tools. Logs land in `~/.local/state/meridian`.
+
 ### The browser automation stack
 
 Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent). This is how OpenCode's `webapp-testing` and `playwright-cli` skills drive a real Chromium to test web apps, take screenshots, and fill forms. The bootstrap also opens System Settings so you can grant Accessibility and Screen Recording permissions — no, it can't grant them for you. macOS is a prison.
@@ -157,7 +159,7 @@ If that's you — welcome. Run the command. Break things. Send PRs.
 
 The script runs in two phases:
 
-**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated Nushell config and login-shell migration, git config, SSH via 1Password agent, OpenCode, Pi, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. Existing Fish files and packages are removed only after Nu starts successfully and the account shell readback matches.
+**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated Nushell config and login-shell migration, git config, SSH via 1Password agent, OpenCode, Pi, mise toolchains, Meridian (macOS, launchd-managed), Playwright + browser-use, and dotfiles via chezmoi. Existing Fish files and packages are removed only after Nu starts successfully and the account shell readback matches.
 
 **Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to Nu's `.api-keys.nu`. Always: GitHub CLI SSO login, OpenCode and Pi config sync (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
 
