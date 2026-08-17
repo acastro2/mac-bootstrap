@@ -269,7 +269,7 @@ if $CLEAN; then
   rm -f "$HOME/Library/Application Support/nushell/vendor/autoload/starship.nu" 2>/dev/null || true
 
   log "Removing app CLI symlinks"
-  rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" 2>/dev/null || true
+  rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" "$HOME/.local/bin/ollama" 2>/dev/null || true
 
   log "Cleanup complete. Re-run without --clean to reinstall."
   exit 0
@@ -406,6 +406,11 @@ fi
 if [[ -d "/Applications/Zed.app" ]]; then
   ln -sf "/Applications/Zed.app/Contents/MacOS/cli" "$HOME/.local/bin/zed"
   log "zed → PATH"
+fi
+# The ollama-app cask installs no CLI shim, so point at the binary inside the bundle.
+if [[ -x "/Applications/Ollama.app/Contents/Resources/ollama" ]]; then
+  ln -sf "/Applications/Ollama.app/Contents/Resources/ollama" "$HOME/.local/bin/ollama"
+  log "ollama → PATH"
 fi
 fi
 
@@ -948,6 +953,7 @@ if $IS_MACOS; then
 fi
 check aws;    check kubectl; check helm
 check playwright; check uv; check colima
+$IS_MACOS && check ollama
 
 if $IS_MACOS; then
   ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')"

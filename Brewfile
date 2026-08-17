@@ -54,6 +54,7 @@ cask "copilot-cli"     # GitHub Copilot CLI
 cask "jumpcut"
 cask "beyond-compare"
 cask "keepingyouawake" # Amphetamine alternative
+cask "ollama-app"      # local LLM runtime (CLI symlinked in bootstrap.sh — the app ships none)
 
 # ── Fonts ──────────────────────────────────────────────────────────────
 cask "font-jetbrains-mono-nerd-font"
