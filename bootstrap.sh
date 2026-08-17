@@ -837,7 +837,6 @@ if [[ -n "$OP_VAULT" ]]; then
       printf '$env.%s = %s\n' "$env_name" "$(printf '%s' "$secret_value" | jq -Rs .)" >> "$NU_SECRETS_TMP"
     done << 'EOF'
 OPENCODE_API_KEY|opencode-api-key
-ANTHROPIC_API_KEY|anthropic-api-key
 OPENAI_API_KEY|openai-api-key
 CONTEXT7_API_KEY|context7-api-key
 DEVTO_API_KEY|devto-api-key

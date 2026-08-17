@@ -166,7 +166,6 @@ gh auth setup-git
 # Quick smoke tests
 opencode --version
 claude --version
-nu -c '$env.ANTHROPIC_API_KEY | str substring 0..9'  # should show the key prefix
 ```
 
 ---
