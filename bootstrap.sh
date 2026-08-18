@@ -3,7 +3,7 @@
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/acastro2/mac-bootstrap/main/bootstrap.sh | bash
 #   ./bootstrap.sh
-#   ./bootstrap.sh --skip=macos-defaults,auth  --only=brew,mise
+#   ./bootstrap.sh --skip=macos-defaults,auth,shell  --only=brew,mise
 #   ./bootstrap.sh --clean                     # remove managed artifacts before a fresh re-run
 #   ./bootstrap.sh --export-sessions           # pack session data to ~/Desktop for airdrop
 #   ./bootstrap.sh --export-workspace          # pack ~/Developer (minus org repos) for airdrop
@@ -283,8 +283,8 @@ if ! $IS_MACOS; then
 fi
 
 # ── sudo: prompt once, keep alive ────────────────────────────────────
-if $IS_MACOS; then
-  log "This script needs sudo for a few system tweaks. You'll be prompted once."
+if $IS_MACOS && should_run shell; then
+  log "This script needs sudo to change the login shell. You'll be prompted once."
   sudo -v || die "sudo authentication failed"
   ( while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done ) &
   SUDO_KEEP_ALIVE_PID=$!
@@ -457,40 +457,42 @@ env AWS_ACCESS_KEY_ID=bootstrap-test \
   -c 'if ([AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE] | any { |name| $name in $env }) { exit 1 }' \
   || die "Nushell retained inherited AWS credentials or profile"
 
-if ! grep -qxF "$NU_PATH" /etc/shells 2>/dev/null; then
-  log "Adding Nushell to /etc/shells"
-  echo "$NU_PATH" | sudo tee -a /etc/shells > /dev/null
-fi
+if should_run shell; then
+  if ! grep -qxF "$NU_PATH" /etc/shells 2>/dev/null; then
+    log "Adding Nushell to /etc/shells"
+    echo "$NU_PATH" | sudo tee -a /etc/shells > /dev/null
+  fi
 
-if $IS_MACOS; then
-  log "Setting Nushell as the login shell via dscl"
-  sudo dscl . -create "/Users/$USER" UserShell "$NU_PATH" \
-    || die "Could not set the login shell. Fish has not been removed."
-  ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell | awk '{print $2}')"
-else
-  log "Setting Nushell as the login shell via chsh"
-  sudo chsh -s "$NU_PATH" "$USER" \
-    || die "Could not set the login shell. Fish has not been removed."
-  ACCOUNT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
-fi
-[[ "$ACCOUNT_SHELL" == "$NU_PATH" ]] \
-  || die "Login shell readback returned '$ACCOUNT_SHELL'. Fish has not been removed."
+  if $IS_MACOS; then
+    log "Setting Nushell as the login shell via dscl"
+    sudo dscl . -create "/Users/$USER" UserShell "$NU_PATH" \
+      || die "Could not set the login shell. Fish has not been removed."
+    ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell | awk '{print $2}')"
+  else
+    log "Setting Nushell as the login shell via chsh"
+    sudo chsh -s "$NU_PATH" "$USER" \
+      || die "Could not set the login shell. Fish has not been removed."
+    ACCOUNT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
+  fi
+  [[ "$ACCOUNT_SHELL" == "$NU_PATH" ]] \
+    || die "Login shell readback returned '$ACCOUNT_SHELL'. Fish has not been removed."
 
-log "Nushell is confirmed as the login shell; removing Fish"
-FISH_PATH="$(brew --prefix)/bin/fish"
-if grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
-  sudo sed -i.bak "\|^${FISH_PATH}\$|d" /etc/shells
-  sudo rm -f /etc/shells.bak
+  log "Nushell is confirmed as the login shell; removing Fish"
+  FISH_PATH="$(brew --prefix)/bin/fish"
+  if grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
+    sudo sed -i.bak "\|^${FISH_PATH}\$|d" /etc/shells
+    sudo rm -f /etc/shells.bak
+  fi
+  if brew list --formula fisher &>/dev/null; then
+    brew uninstall --force fisher || die "Failed to uninstall Fisher"
+  fi
+  if brew list --formula fish &>/dev/null; then
+    brew uninstall --force fish || die "Failed to uninstall Fish"
+  fi
+  brew list --formula fish &>/dev/null && die "Fish is still installed; keeping its config for recovery"
+  rm -rf "$HOME/.config/fish"
+  log "Default shell: $NU_PATH"
 fi
-if brew list --formula fisher &>/dev/null; then
-  brew uninstall --force fisher || die "Failed to uninstall Fisher"
-fi
-if brew list --formula fish &>/dev/null; then
-  brew uninstall --force fish || die "Failed to uninstall Fish"
-fi
-brew list --formula fish &>/dev/null && die "Fish is still installed; keeping its config for recovery"
-rm -rf "$HOME/.config/fish"
-log "Default shell: $NU_PATH"
 fi
 
 # ── Git globals ───────────────────────────────────────────────────────
