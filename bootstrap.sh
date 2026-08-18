@@ -849,6 +849,7 @@ OREILLY_API_TOKEN|oreilly-api-token
 GOOGLE_API_KEY|google-api-key
 AZURE_DEVOPS_PAT|ado-pat
 GRAFANA_SERVICE_ACCOUNT_TOKEN|grafana-service-account-token
+EXA_API_KEY|EXA API Key
 EOF
     chmod 600 "$NU_SECRETS_TMP"
     "$NU_PATH" --no-config-file -c "nu-check --debug '$NU_SECRETS_TMP' | if not \$in { exit 1 }" \
