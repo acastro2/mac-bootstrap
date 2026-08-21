@@ -107,7 +107,7 @@ On an existing Fish machine, the migration is fail-safe: Nu's files are rendered
 
 ### The package manager
 
-**Homebrew** with a `Brewfile`. The list includes git, Nushell, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, postgresql, redis, 1password, ghostty, VS Code, Zed, Ollama, and the terminal fonts. Declarative. Boring. Works.
+**Homebrew** with a `Brewfile`. The list includes git, Nushell, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, Azure CLI, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, Ollama, and the terminal fonts. Declarative. Boring. Works.
 
 ### The toolchain manager
 
@@ -137,7 +137,7 @@ Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent
 
 ### The infra tooling
 
-**colima** for containers (Docker Desktop is a resource hog and the licensing got weird). **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
+**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **Azure CLI** (`az`) checks Microsoft Entra app registrations and OAuth setup. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
 
 **Ollama** for local models. The cask installs the app but no CLI, so the `app-clis` section symlinks the binary from inside the bundle (`/Applications/Ollama.app/Contents/Resources/ollama`) into `~/.local/bin`. Without that, `ollama` is not on PATH in any shell. No models are pulled for you: run `ollama pull qwen3:8b` (or whatever you want) after bootstrap.
 
@@ -173,8 +173,11 @@ If anything fails, it tells you what and keeps going. Re-run anytime.
 
 ```nu
 aws sso login --profile <your-profile>
+az login --allow-no-subscriptions  # when checking Microsoft Entra app registrations
 with-env { AWS_PROFILE: "<your-profile>" } { tofu plan }
 mise install      # if any tools need (re)installing
+colima start      # start the Docker runtime when you need containers
+docker compose version
 # Sign in to desktop apps (Slack, VS Code, etc.)
 ```
 

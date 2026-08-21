@@ -270,6 +270,7 @@ if $CLEAN; then
 
   log "Removing app CLI symlinks"
   rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" "$HOME/.local/bin/ollama" 2>/dev/null || true
+  rm -f "$HOME/.docker/cli-plugins/docker-compose" 2>/dev/null || true
 
   log "Cleanup complete. Re-run without --clean to reinstall."
   exit 0
@@ -392,6 +393,20 @@ if $IS_MACOS; then
 else
   log "Using Brewfile.linux"
   brew bundle --file=Brewfile.linux
+fi
+
+log "Configuring Docker Compose for Colima"
+if command -v docker &>/dev/null; then
+  DOCKER_COMPOSE_PLUGIN="$(brew --prefix)/opt/docker-compose/bin/docker-compose"
+  if [[ -x "$DOCKER_COMPOSE_PLUGIN" ]]; then
+    mkdir -p "$HOME/.docker/cli-plugins"
+    ln -sfn "$DOCKER_COMPOSE_PLUGIN" "$HOME/.docker/cli-plugins/docker-compose"
+    log "Docker Compose plugin linked for 'docker compose'"
+  else
+    warn "Docker Compose plugin not found at $DOCKER_COMPOSE_PLUGIN."
+  fi
+else
+  warn "Docker CLI not found after package installation."
 fi
 fi
 
@@ -619,7 +634,9 @@ dotnet     = "9"
 opentofu   = "latest"
 "npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
 "npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
-"npm:@earendil-works/pi-coding-agent" = "latest"
+# Trust excludes for AWS's 2026-08-14 release batch: those @smithy versions went out via
+# aws-sdk-bot without OIDC/provenance, tripping aube's no-downgrade policy. Verified legit.
+"npm:@earendil-works/pi-coding-agent" = { version = "latest", trust_policy_excludes = ["@smithy/core@3.33.0", "@smithy/node-http-handler@4.11.0"] }
 
 [settings]
 experimental = true
@@ -954,9 +971,16 @@ if $IS_MACOS; then
     fail=$((fail + 1))
   fi
 fi
-check aws;    check kubectl; check helm
-check playwright; check uv; check colima
+check aws;    check az; check kubectl; check helm
+check playwright; check uv; check colima; check docker
 $IS_MACOS && check ollama
+if docker compose version &>/dev/null; then
+  printf "  \033[1;32m✓\033[0m docker compose\n"
+  pass=$((pass + 1))
+else
+  printf "  \033[1;31m✗\033[0m %-24s (plugin unavailable)\n" "docker compose"
+  fail=$((fail + 1))
+fi
 
 if $IS_MACOS; then
   ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')"

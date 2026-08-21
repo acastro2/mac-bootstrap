@@ -32,8 +32,10 @@ brew "kubectl"
 brew "k9s"
 brew "helm"
 brew "awscli"
+brew "azure-cli"       # Microsoft Entra app registration checks
 brew "colima"          # Docker runtime (no Docker Desktop)
 brew "docker"          # Docker CLI
+brew "docker-compose"  # Docker Compose CLI plugin
 brew "crane"           # inspect/copy container images without pulling
 brew "ffmpeg"          # Playwright video recording / trace viewer media
 brew "snowflake-cli"
