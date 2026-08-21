@@ -20,6 +20,8 @@ $env.PATH = ($env.PATH
 
 $env.TENV_AUTO_INSTALL = "true"
 $env.OPENCODE_EXPERIMENTAL = "true"
+$env.GRAFANA_SERVER = "https://grafana.attainfinance.com"
+$env.GRAFANA_ORG_ID = "1"
 
 $env.CARAPACE_BRIDGES = "zsh,fish,bash,inshellisense"
 

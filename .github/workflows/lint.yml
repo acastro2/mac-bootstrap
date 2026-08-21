@@ -28,10 +28,15 @@ jobs:
           cp home/.chezmoitemplates/nushell/config.nu "$RUNNER_TEMP/nu-config/nushell/config.nu"
           cp home/.chezmoitemplates/nushell/env.nu "$RUNNER_TEMP/nu-config/nushell/env.nu"
           cp home/.chezmoitemplates/nushell/completions/opencode.nu "$RUNNER_TEMP/nu-config/nushell/completions/opencode.nu"
-          touch "$RUNNER_TEMP/nu-config/nushell/mise.nu" "$RUNNER_TEMP/nu-config/nushell/.api-keys.nu" "$RUNNER_TEMP/nu-config/nushell/config.local.nu"
+          touch "$RUNNER_TEMP/nu-config/nushell/mise.nu" "$RUNNER_TEMP/nu-config/nushell/config.local.nu"
+          printf '$env.GRAFANA_SERVICE_ACCOUNT_TOKEN = "ci-test"\n' > "$RUNNER_TEMP/nu-config/nushell/.api-keys.nu"
           XDG_CONFIG_HOME="$RUNNER_TEMP/nu-config" nu --no-config-file -c "nu-check --debug (\$nu.default-config-dir | path join config.nu) | if not \$in { exit 1 }"
           AWS_ACCESS_KEY_ID=ci-test AWS_SECRET_ACCESS_KEY=ci-test AWS_SESSION_TOKEN=ci-test AWS_PROFILE=ci-test \
             XDG_CONFIG_HOME="$RUNNER_TEMP/nu-config" nu \
             --env-config "$RUNNER_TEMP/nu-config/nushell/env.nu" \
             --config "$RUNNER_TEMP/nu-config/nushell/config.nu" \
             -c 'if ([AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE] | any { |name| $name in $env }) { exit 1 }'
+          XDG_CONFIG_HOME="$RUNNER_TEMP/nu-config" nu \
+            --env-config "$RUNNER_TEMP/nu-config/nushell/env.nu" \
+            --config "$RUNNER_TEMP/nu-config/nushell/config.nu" \
+            -c 'if (($env.GRAFANA_SERVER != "https://grafana.attainfinance.com") or ($env.GRAFANA_ORG_ID != "1") or ($env.GRAFANA_TOKEN != "ci-test")) { exit 1 }'

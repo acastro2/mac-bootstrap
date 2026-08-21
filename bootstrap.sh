@@ -269,7 +269,7 @@ if $CLEAN; then
   rm -f "$HOME/Library/Application Support/nushell/vendor/autoload/starship.nu" 2>/dev/null || true
 
   log "Removing app CLI symlinks"
-  rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" "$HOME/.local/bin/ollama" 2>/dev/null || true
+  rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" 2>/dev/null || true
   rm -f "$HOME/.docker/cli-plugins/docker-compose" 2>/dev/null || true
 
   log "Cleanup complete. Re-run without --clean to reinstall."
@@ -421,11 +421,6 @@ fi
 if [[ -d "/Applications/Zed.app" ]]; then
   ln -sf "/Applications/Zed.app/Contents/MacOS/cli" "$HOME/.local/bin/zed"
   log "zed → PATH"
-fi
-# The ollama-app cask installs no CLI shim, so point at the binary inside the bundle.
-if [[ -x "/Applications/Ollama.app/Contents/Resources/ollama" ]]; then
-  ln -sf "/Applications/Ollama.app/Contents/Resources/ollama" "$HOME/.local/bin/ollama"
-  log "ollama → PATH"
 fi
 fi
 
@@ -634,6 +629,7 @@ dotnet     = "9"
 opentofu   = "latest"
 "npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
 "npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
+"npm:ctx7"             = "latest"   # Context7 documentation CLI
 # Trust excludes for AWS's 2026-08-14 release batch: those @smithy versions went out via
 # aws-sdk-bot without OIDC/provenance, tripping aube's no-downgrade policy. Verified legit.
 "npm:@earendil-works/pi-coding-agent" = { version = "latest", trust_policy_excludes = ["@smithy/core@3.33.0", "@smithy/node-http-handler@4.11.0"] }
@@ -645,122 +641,6 @@ EOF
 log "Installing mise toolchains"
 export GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || echo '')}"
 mise install || warn "Some mise tools may have failed; run 'mise install' manually later."
-fi
-
-# ── Meridian (Anthropic API bridge, launchd-managed) ──────────────────
-if should_run meridian && $IS_MACOS; then
-section "Meridian"
-log "Installing Meridian through mise"
-mise use --global --yes "npm:@rynfar/meridian@latest" \
-  || warn "Meridian install failed; retry with 'mise use --global npm:@rynfar/meridian@latest'."
-MISE_NODE_ROOT="$(mise where node 2>/dev/null || true)"
-MISE_NODE_BIN="${MISE_NODE_ROOT:+$MISE_NODE_ROOT/bin}"
-MERIDIAN_NODE="$MISE_NODE_BIN/node"
-MERIDIAN_NPM="$MISE_NODE_BIN/npm"
-MERIDIAN_BIN_DIR="$(mise where npm:@rynfar/meridian 2>/dev/null || true)"
-MERIDIAN_CLI="$MERIDIAN_BIN_DIR/node_modules/@rynfar/meridian/dist/cli.js"
-
-if [[ -x "$MERIDIAN_NODE" ]] && [[ -f "$MERIDIAN_CLI" ]]; then
-  MERIDIAN_CONFIG_DIR="$HOME/.config/meridian"
-  MERIDIAN_STATE_DIR="$HOME/.local/state/meridian"
-  MERIDIAN_PLUGIN_DIR="$MERIDIAN_CONFIG_DIR/node_modules/@rynfar/meridian-plugin-pi-scrub"
-  MERIDIAN_PLIST="$HOME/Library/LaunchAgents/com.rynfar.meridian.plist"
-
-  log "Installing meridian-plugin-pi-scrub@0.2.0 into $MERIDIAN_CONFIG_DIR"
-  mkdir -p "$MERIDIAN_CONFIG_DIR"
-  if [[ ! -f "$MERIDIAN_CONFIG_DIR/package.json" ]]; then
-    cat > "$MERIDIAN_CONFIG_DIR/package.json" << 'EOF'
-{
-  "private": true
-}
-EOF
-  fi
-  if ( cd "$MERIDIAN_CONFIG_DIR" && "$MERIDIAN_NPM" install --save-exact --no-audit --no-fund "@rynfar/meridian-plugin-pi-scrub@0.2.0" ) \
-    && [[ -f "$MERIDIAN_PLUGIN_DIR/dist/index.js" ]]; then
-    log "Writing $MERIDIAN_CONFIG_DIR/plugins.json"
-    cat > "$MERIDIAN_CONFIG_DIR/plugins.json" << EOF
-{
-  "plugins": [
-    {
-      "path": "$MERIDIAN_PLUGIN_DIR/dist/index.js",
-      "enabled": true
-    }
-  ]
-}
-EOF
-  else
-    warn "meridian-plugin-pi-scrub install failed; existing plugin config was left unchanged."
-  fi
-
-  if [[ -f "$MERIDIAN_PLUGIN_DIR/dist/index.js" ]] && [[ -f "$MERIDIAN_CONFIG_DIR/plugins.json" ]]; then
-  log "Creating Meridian state directory"
-  mkdir -p "$MERIDIAN_STATE_DIR"
-
-  log "Writing LaunchAgent: $MERIDIAN_PLIST"
-  mkdir -p "$HOME/Library/LaunchAgents"
-  cat > "$MERIDIAN_PLIST" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.rynfar.meridian</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>$MERIDIAN_NODE</string>
-    <string>$MERIDIAN_CLI</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>$MISE_NODE_BIN:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-  </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>$MERIDIAN_STATE_DIR/stdout.log</string>
-  <key>StandardErrorPath</key>
-  <string>$MERIDIAN_STATE_DIR/stderr.log</string>
-</dict>
-</plist>
-EOF
-
-  log "Validating LaunchAgent plist"
-  plutil -lint "$MERIDIAN_PLIST" || die "Invalid Meridian plist: $MERIDIAN_PLIST"
-
-  log "Reloading Meridian LaunchAgent"
-  launchctl bootout "gui/$(id -u)/com.rynfar.meridian" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" "$MERIDIAN_PLIST" \
-    || warn "Failed to bootstrap Meridian LaunchAgent; check $MERIDIAN_STATE_DIR/stderr.log"
-
-  log "Checking Meridian health"
-  MERIDIAN_HEALTHY=false
-  for _ in $(seq 1 10); do
-    if curl --connect-timeout 1 --max-time 1 -fsS -o /dev/null "http://127.0.0.1:3456/health" 2>/dev/null; then
-      MERIDIAN_HEALTHY=true
-      break
-    fi
-    sleep 1
-  done
-  if $MERIDIAN_HEALTHY; then
-    log "Meridian is healthy on http://127.0.0.1:3456"
-    if curl --connect-timeout 1 --max-time 3 -fsS "http://127.0.0.1:3456/plugins/list" 2>/dev/null \
-      | jq -e '.plugins[] | select(.name == "pi-scrub" and .status == "active")' >/dev/null; then
-      log "Meridian pi-scrub plugin is active"
-    else
-      warn "Meridian is running without an active pi-scrub plugin; check $MERIDIAN_STATE_DIR/stderr.log"
-    fi
-  else
-    warn "Meridian did not respond to /health within the bounded retry window; check $MERIDIAN_STATE_DIR/stderr.log"
-  fi
-  else
-    warn "Required pi-scrub plugin is missing; skipping Meridian LaunchAgent reload."
-  fi
-else
-  warn "Meridian node/CLI not found under mise; run 'mise install' then re-run --only=meridian"
-fi
 fi
 
 # ── Browser automation (Playwright + browser-use) ────────────────────
@@ -959,21 +839,9 @@ NU_PATH="$(brew --prefix)/bin/nu"
 # shellcheck disable=SC2016 # This is a Nushell variable, not a Bash variable.
 NU_CONFIG_DIR="$($NU_PATH --no-config-file -c '$nu.default-config-dir')"
 check nu; check starship; check mise; [[ -n "$OP_VAULT" ]] && check op; check gh
-check chezmoi; check herdr; check opencode; check claude; check cortex; check pi; check tgrep
-if $IS_MACOS; then
-  check meridian
-  if curl --connect-timeout 1 --max-time 3 -fsS "http://127.0.0.1:3456/plugins/list" 2>/dev/null \
-    | jq -e '.plugins[] | select(.name == "pi-scrub" and .status == "active")' >/dev/null; then
-    printf "  \033[1;32m✓\033[0m %s\n" "meridian pi-scrub"
-    pass=$((pass + 1))
-  else
-    printf "  \033[1;31m✗\033[0m %-24s (inactive)\n" "meridian pi-scrub"
-    fail=$((fail + 1))
-  fi
-fi
-check aws;    check az; check kubectl; check helm
+check chezmoi; check herdr; check opencode; check claude; check cortex; check pi; check ctx7; check tgrep
+check aws; check az; check gcx; check kubectl; check helm
 check playwright; check uv; check colima; check docker
-$IS_MACOS && check ollama
 if docker compose version &>/dev/null; then
   printf "  \033[1;32m✓\033[0m docker compose\n"
   pass=$((pass + 1))

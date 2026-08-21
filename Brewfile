@@ -33,6 +33,7 @@ brew "kubectl"
 brew "k9s"
 brew "helm"
 brew "awscli"
+brew "gcx"             # Grafana OSS/Enterprise 12+ and Cloud CLI
 brew "azure-cli"       # Microsoft Entra app registration checks
 brew "colima"          # Docker runtime (no Docker Desktop)
 brew "docker"          # Docker CLI
@@ -56,7 +57,6 @@ cask "copilot-cli"     # GitHub Copilot CLI
 cask "jumpcut"
 cask "beyond-compare"
 cask "keepingyouawake" # Amphetamine alternative
-cask "ollama-app"      # local LLM runtime (CLI symlinked in bootstrap.sh — the app ships none)
 
 # ── Fonts ──────────────────────────────────────────────────────────────
 cask "font-jetbrains-mono-nerd-font"

@@ -306,6 +306,10 @@ if (($nu.default-config-dir | path join ".api-keys.nu") | path exists) {
   source-env ($nu.default-config-dir | path join ".api-keys.nu")
 }
 
+if ("GRAFANA_SERVICE_ACCOUNT_TOKEN" in $env) {
+  $env.GRAFANA_TOKEN = $env.GRAFANA_SERVICE_ACCOUNT_TOKEN
+}
+
 if (($nu.default-config-dir | path join "config.local.nu") | path exists) {
   source ($nu.default-config-dir | path join "config.local.nu")
 }

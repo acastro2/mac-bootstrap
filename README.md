@@ -73,7 +73,7 @@ Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be s
 ./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `nushell`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `meridian`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `nushell`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
 ---
 
@@ -107,11 +107,11 @@ On an existing Fish machine, the migration is fail-safe: Nu's files are rendered
 
 ### The package manager
 
-**Homebrew** with a `Brewfile`. The list includes git, Nushell, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, Azure CLI, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, Ollama, and the terminal fonts. Declarative. Boring. Works.
+**Homebrew** with a `Brewfile`. The list includes git, Nushell, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, the Grafana `gcx` CLI, Azure CLI, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
 
 ### The toolchain manager
 
-**mise.** Not asdf. Not nvm + pyenv + tfenv. mise is faster, supports piped installs (`npm:@playwright/test`), and doesn't require shims. It pins Go (latest), Node (LTS), pnpm 10, Python 3.12, .NET 9, OpenTofu, and the Playwright CLI — globally. Per-project overrides go in `.mise.toml` or `.tool-versions`.
+**mise.** Not asdf. Not nvm + pyenv + tfenv. mise is faster, supports piped installs (`npm:@playwright/test`), and doesn't require shims. It pins Go (latest), Node (LTS), pnpm 10, Python 3.12, .NET 9, OpenTofu, the Playwright CLI, and the [Context7 CLI](https://context7.com/docs/clients/cli) globally. Per-project overrides go in `.mise.toml` or `.tool-versions`.
 
 ### The secret sauce (optional)
 
@@ -127,9 +127,7 @@ Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, go
 
 ### The LLM coding agent
 
-**OpenCode and Pi.** OpenCode is installed via its official install script. Pi is installed from its official npm package through mise, and its optional private config repo (`PI_CONFIG_REPO`) is synced into `~/.pi`. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
-
-On macOS, **Meridian** bridges the Claude Agent SDK to the standard Anthropic API so any of these tools can talk to Claude through one local endpoint. It's installed as a mise global npm tool (`@rynfar/meridian`) and runs as a `launchd` LaunchAgent (`~/Library/LaunchAgents/com.rynfar.meridian.plist`) so it starts on login and restarts if it dies. It loads the official `@rynfar/meridian-plugin-pi-scrub` plugin (pinned to `0.2.0`, installed into `~/.config/meridian`) to remove Pi's billing fingerprint while preserving project rules, skills, and tools. Logs land in `~/.local/state/meridian`.
+**OpenCode and Pi.** OpenCode is installed via its official install script. Pi and the Context7 documentation CLI (`ctx7`) are installed from their official npm packages through mise. Pi's optional private config repo (`PI_CONFIG_REPO`) is synced into `~/.pi`. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
 
 ### The browser automation stack
 
@@ -137,9 +135,7 @@ Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent
 
 ### The infra tooling
 
-**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **Azure CLI** (`az`) checks Microsoft Entra app registrations and OAuth setup. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
-
-**Ollama** for local models. The cask installs the app but no CLI, so the `app-clis` section symlinks the binary from inside the bundle (`/Applications/Ollama.app/Contents/Resources/ollama`) into `~/.local/bin`. Without that, `ollama` is not on PATH in any shell. No models are pulled for you: run `ollama pull qwen3:8b` (or whatever you want) after bootstrap.
+**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **Azure CLI** (`az`) checks Microsoft Entra app registrations and OAuth setup. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **[gcx](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/grafana-cli/gcx/)** manages Grafana OSS/Enterprise 12+ and Grafana Cloud through their APIs. The shell defaults to Attain's Grafana 13 instance and organization 1. It maps the 1Password service-account token to `GRAFANA_TOKEN` without storing it in the repo. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
 
 ### The profile
 
@@ -161,7 +157,7 @@ If that's you — welcome. Run the command. Break things. Send PRs.
 
 The script runs in two phases:
 
-**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated Nushell config and login-shell migration, git config, SSH via 1Password agent, OpenCode, Pi, mise toolchains, Meridian (macOS, launchd-managed), Playwright + browser-use, and dotfiles via chezmoi. Existing Fish files and packages are removed only after Nu starts successfully and the account shell readback matches.
+**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated Nushell config and login-shell migration, git config, SSH via 1Password agent, OpenCode, Pi, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. Existing Fish files and packages are removed only after Nu starts successfully and the account shell readback matches.
 
 **Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to Nu's `.api-keys.nu`. Always: GitHub CLI SSO login, OpenCode and Pi config sync (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
 
