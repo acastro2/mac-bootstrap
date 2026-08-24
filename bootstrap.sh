@@ -384,12 +384,16 @@ fi
 if should_run packages; then
 section "Packages (Brewfile)"
 log "Installing packages (this takes a while on a fresh machine)..."
+# --no-upgrade: bootstrap maps the machine to an installed set. Upgrades (and
+# the VSCode Insiders self-update desync they trigger) happen via `brew upgrade`.
 if $IS_MACOS; then
   log "Using Brewfile (macOS)"
-  brew bundle --file=Brewfile
+  brew bundle --file=Brewfile --no-upgrade \
+    || warn "brew bundle had failures. Fix the failing package, then re-run: ./bootstrap.sh --only=packages"
 else
   log "Using Brewfile.linux"
-  brew bundle --file=Brewfile.linux
+  brew bundle --file=Brewfile.linux --no-upgrade \
+    || warn "brew bundle had failures. Fix the failing package, then re-run: ./bootstrap.sh --only=packages"
 fi
 
 log "Configuring Docker Compose for Colima"

@@ -96,7 +96,7 @@ setopt MENU_COMPLETE
 alias ls='eza --icons --group-directories-first'
 alias ll='eza -lh --icons --git --group-directories-first'
 alias la='eza -la --icons --git --group-directories-first'
-alias cat='bat --paging=never'
+alias cat='mcat'
 alias k='kubectl'
 alias code='code-insiders'
 alias g='git'

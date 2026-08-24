@@ -73,6 +73,8 @@ Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be s
 ./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
+The packages phase runs `brew bundle --no-upgrade` on purpose: a cask desynced by its own updater (VSCode Insiders self-updates) can't fail the run. When you actually want to upgrade, run `brew upgrade` yourself.
+
 Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
 ---

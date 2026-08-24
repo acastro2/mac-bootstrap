@@ -21,6 +21,7 @@ brew "ripgrep"
 brew "fd"
 brew "bat"
 brew "eza"             # modern ls
+brew "mcat"            # modern cat
 brew "repomix"        # pack a repo into a single file for LLM context
 brew "neovim"
 brew "doggo"           # DNS client (dig alternative)
