@@ -360,3 +360,10 @@ alias awswho='aws sts get-caller-identity'
 
 # Machine-local overrides, not committed.
 [[ -r $HOME/.config/zsh/local.zsh ]] && source $HOME/.config/zsh/local.zsh
+
+# ── Ghostty integration (explicit load) ───────────────────────────────
+# Auto-injection can silently miss; sourcing guarantees OSC 7 CWD reports
+# so new tabs/splits inherit the live folder. No-op outside Ghostty.
+if [[ -n ${GHOSTTY_RESOURCES_DIR:-} ]]; then
+  source "$GHOSTTY_RESOURCES_DIR"/shell-integration/zsh/ghostty-integration
+fi

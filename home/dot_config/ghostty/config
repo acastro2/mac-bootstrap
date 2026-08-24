@@ -10,13 +10,13 @@ background-opacity = 0.97
 background-blur-radius = 20
 cursor-style = block
 cursor-style-blink = false
-shell-integration = zsh   # explicit (not detect) so live CWD reaches new tabs
+# Explicit integration (not detect) so new tabs inherit the live folder.
+shell-integration = zsh
 copy-on-select = clipboard
 confirm-close-surface = false
 
 # ── Workflow ────────────────────────────────────────────────────────
-# Quake-style dropdown terminal (“Ctrl+Shift+Space” anywhere).
-quick-terminal = true
+# Quake-style dropdown terminal: binding toggle_quick_terminal enables it.
 keybind = ctrl+shift+space=toggle_quick_terminal
 
 # Restore all tabs/windows (and quick-terminal state) on next launch.
