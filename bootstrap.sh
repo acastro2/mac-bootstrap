@@ -523,9 +523,13 @@ fi
 # ── Git globals ───────────────────────────────────────────────────────
 if should_run git; then
 section "Git config"
-log "Configuring git globals"
-git config --global user.name "$GIT_NAME"
-git config --global user.email "$GIT_EMAIL"
+if [[ -n "$GIT_NAME" || -n "$GIT_EMAIL" ]]; then
+  log "Configuring git identity"
+else
+  warn "GIT_NAME/GIT_EMAIL not set in config.env; keeping the current git identity."
+fi
+[[ -n "$GIT_NAME" ]] && git config --global user.name "$GIT_NAME"
+[[ -n "$GIT_EMAIL" ]] && git config --global user.email "$GIT_EMAIL"
 git config --global init.defaultBranch main
 git config --global pull.rebase true
 git config --global rerere.enabled true
