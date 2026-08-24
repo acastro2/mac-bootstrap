@@ -10,6 +10,17 @@ background-opacity = 0.97
 background-blur-radius = 20
 cursor-style = block
 cursor-style-blink = false
-shell-integration = detect
+shell-integration = zsh   # explicit (not detect) so live CWD reaches new tabs
 copy-on-select = clipboard
 confirm-close-surface = false
+
+# ── Workflow ────────────────────────────────────────────────────────
+# Quake-style dropdown terminal (“Ctrl+Shift+Space” anywhere).
+quick-terminal = true
+keybind = ctrl+shift+space=toggle_quick_terminal
+
+# Restore all tabs/windows (and quick-terminal state) on next launch.
+window-save-state = always
+
+# Hide the cursor while typing.
+mouse-hide-while-typing = true

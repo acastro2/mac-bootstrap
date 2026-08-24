@@ -1,0 +1,19 @@
+# Zsh login-shell config, managed by chezmoi.
+# Loaded once per new shell by login shells (Ghostty starts one per tab).
+
+# Kiro CLI pre block. Keep at the top of this file.
+[[ -f "${HOME}/Library/Application Support/kiro-cli/shell/zprofile.pre.zsh" ]] && builtin source "${HOME}/Library/Application Support/kiro-cli/shell/zprofile.pre.zsh"
+
+# Single brew shellenv — was previously appended hundreds of times by
+# installers, adding seconds to every login shell. Keep exactly one.
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+# added by Snowflake SnowflakeCLI installer v1.0
+export PATH=/Applications/SnowflakeCLI.app/Contents/MacOS/:$PATH
+
+# Kiro CLI post block. Keep at the bottom of this file.
+[[ -f "${HOME}/Library/Application Support/kiro-cli/shell/zprofile.post.zsh" ]] && builtin source "${HOME}/Library/Application Support/kiro-cli/shell/zprofile.post.zsh"
