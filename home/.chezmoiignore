@@ -1,5 +1,0 @@
-{{- if eq .chezmoi.os "darwin" }}
-.config/nushell
-{{- else }}
-Library/Application Support/nushell
-{{- end }}

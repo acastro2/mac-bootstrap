@@ -261,12 +261,15 @@ if $CLEAN; then
   log "Removing chezmoi state"
   rm -rf "$HOME/.config/chezmoi" 2>/dev/null || true
 
-  log "Removing generated Nushell configs"
-  rm -f "$HOME/.config/nushell/.api-keys.nu" "$HOME/.config/nushell/mise.nu" 2>/dev/null || true
-  rm -f "$HOME/.local/share/nushell/vendor/autoload/starship.nu" 2>/dev/null || true
-  rm -f "$HOME/Library/Application Support/nushell/.api-keys.nu" 2>/dev/null || true
-  rm -f "$HOME/Library/Application Support/nushell/mise.nu" 2>/dev/null || true
-  rm -f "$HOME/Library/Application Support/nushell/vendor/autoload/starship.nu" 2>/dev/null || true
+  log "Removing Zsh/Zim managed files"
+  rm -rf "$HOME/.zim" 2>/dev/null || true
+  rm -f "$HOME/.zshrc" "$HOME/.zimrc" 2>/dev/null || true
+  rm -rf "$HOME/.config/zsh" 2>/dev/null || true
+  rm -rf "$HOME/.cache/carapace" 2>/dev/null || true
+
+  log "Removing legacy Nushell configs"
+  rm -rf "$HOME/.config/nushell" "$HOME/.local/share/nushell" \
+    "$HOME/Library/Application Support/nushell" 2>/dev/null || true
 
   log "Removing app CLI symlinks"
   rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" 2>/dev/null || true
@@ -283,14 +286,8 @@ if ! $IS_MACOS; then
   log "Running on non-macOS ($(uname)). macOS-specific sections will be skipped."
 fi
 
-# ── sudo: prompt once, keep alive ────────────────────────────────────
-if $IS_MACOS && should_run shell; then
-  log "This script needs sudo to change the login shell. You'll be prompted once."
-  sudo -v || die "sudo authentication failed"
-  ( while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done ) &
-  SUDO_KEEP_ALIVE_PID=$!
-  trap 'kill "$SUDO_KEEP_ALIVE_PID" 2>/dev/null || true' EXIT INT TERM
-fi
+# sudo is only needed when the login shell has to change or /etc/shells must
+# be edited; it is requested lazily in those branches.
 
 # =========================================================================
 # PHASE 0: Prerequisites
@@ -424,85 +421,103 @@ if [[ -d "/Applications/Zed.app" ]]; then
 fi
 fi
 
-# ── Nushell ───────────────────────────────────────────────────────────
-if should_run nushell; then
-section "Shell: Nushell"
-NU_PATH="$(brew --prefix)/bin/nu"
-[[ -x "$NU_PATH" ]] || die "Nushell is not installed at $NU_PATH. Run the packages section first."
+# ── Shell: Zsh + Zim ──────────────────────────────────────────────────
+if should_run zsh; then
+section "Shell: Zsh + Zim"
+ZSH_BIN="$(command -v zsh || echo /bin/zsh)"
+[[ -x "$ZSH_BIN" ]] || die "zsh is not installed at $ZSH_BIN. Run the packages section first."
 
-log "Applying Nushell dotfiles before changing the login shell"
+log "Applying dotfiles before validating the shell"
 mkdir -p "$HOME/.config/chezmoi"
 cat > "$HOME/.config/chezmoi/chezmoi.toml" << EOF
 sourceDir = "${REPO_DIR}/home"
 EOF
 chezmoi apply
 
-# shellcheck disable=SC2016 # These are Nushell variables, not Bash variables.
-NU_CONFIG_DIR="$($NU_PATH --no-config-file -c '$nu.default-config-dir')"
-# shellcheck disable=SC2016 # These are Nushell variables, not Bash variables.
-NU_DATA_DIR="$($NU_PATH --no-config-file -c '$nu.data-dir')"
-mkdir -p "$NU_CONFIG_DIR" "$NU_DATA_DIR/vendor/autoload"
-touch "$NU_CONFIG_DIR/.api-keys.nu" "$NU_CONFIG_DIR/config.local.nu"
-chmod 600 "$NU_CONFIG_DIR/.api-keys.nu" "$NU_CONFIG_DIR/config.local.nu"
+log "Preparing private zsh files"
+mkdir -p "$HOME/.config/zsh"
+[[ -f "$HOME/.config/zsh/.api-keys.zsh" ]] || : > "$HOME/.config/zsh/.api-keys.zsh"
+chmod 600 "$HOME/.config/zsh/.api-keys.zsh"
+touch "$HOME/.config/zsh/local.zsh"
 
-log "Generating Mise and Starship integration"
-mise activate nu > "$NU_CONFIG_DIR/mise.nu"
-starship init nu > "$NU_DATA_DIR/vendor/autoload/starship.nu"
+if command -v opencode &>/dev/null; then
+  log "Caching opencode completions"
+  opencode completion zsh > "$HOME/.config/zsh/opencode-completions.zsh" 2>/dev/null \
+    || warn "opencode completion generation failed; skipping."
+else
+  warn "opencode not found yet; its completions will be missing until you re-run this section."
+fi
 
-log "Validating Nushell configuration"
-while IFS= read -r nu_file; do
-  "$NU_PATH" --no-config-file -c "nu-check --debug '$nu_file' | if not \$in { exit 1 }" \
-    || die "Invalid Nushell file: $nu_file"
-done < <(find "$NU_CONFIG_DIR" "$NU_DATA_DIR/vendor/autoload" -type f -name '*.nu' -print)
-"$NU_PATH" --env-config "$NU_CONFIG_DIR/env.nu" --config "$NU_CONFIG_DIR/config.nu" -c 'true' \
-  || die "Nushell failed to start with $NU_CONFIG_DIR/config.nu"
+log "Validating zsh files"
+while IFS= read -r zsh_file; do
+  "$ZSH_BIN" -n "$zsh_file" || die "Invalid zsh file: $zsh_file"
+done < <(find "$HOME/.config/zsh" -maxdepth 1 -type f -name '*.zsh' -print; echo "$HOME/.zshrc"; echo "$HOME/.zimrc")
 
-log "Validating Nushell drops inherited AWS environment state"
-# shellcheck disable=SC2016 # $env belongs to Nushell, not Bash.
+log "Validating zsh starts cleanly with all zim modules (first run downloads zimfw)"
+SMOKE_OUT="$("$ZSH_BIN" -ic 'true' </dev/null 2>&1)" \
+  || { printf '%s\n' "$SMOKE_OUT"; die "zsh failed to start with ~/.zshrc"; }
+
+log "Validating zsh drops inherited AWS environment state"
+# shellcheck disable=SC2016 # ${VAR:-} belongs to zsh, not Bash.
 env AWS_ACCESS_KEY_ID=bootstrap-test \
   AWS_SECRET_ACCESS_KEY=bootstrap-test \
   AWS_SESSION_TOKEN=bootstrap-test \
   AWS_PROFILE=bootstrap-test \
-  "$NU_PATH" --env-config "$NU_CONFIG_DIR/env.nu" --config "$NU_CONFIG_DIR/config.nu" \
-  -c 'if ([AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE] | any { |name| $name in $env }) { exit 1 }' \
-  || die "Nushell retained inherited AWS credentials or profile"
+  "$ZSH_BIN" -ic '[[ -z "${AWS_ACCESS_KEY_ID:-}" && -z "${AWS_SECRET_ACCESS_KEY:-}" && -z "${AWS_SESSION_TOKEN:-}" && -z "${AWS_PROFILE:-}" ]]' </dev/null \
+  || die "zsh retained inherited AWS credentials or profile"
 
+log "zsh configuration validated"
+fi
+
+# ── Login shell + Nushell removal ──────────────────────────────────────
 if should_run shell; then
-  if ! grep -qxF "$NU_PATH" /etc/shells 2>/dev/null; then
-    log "Adding Nushell to /etc/shells"
-    echo "$NU_PATH" | sudo tee -a /etc/shells > /dev/null
-  fi
+section "Login shell"
 
+if $IS_MACOS; then
+  EXPECTED_SHELL="/bin/zsh"
+  ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell | awk '{print $2}')"
+else
+  EXPECTED_SHELL="$(command -v zsh)"
+  ACCOUNT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
+fi
+[[ -n "$EXPECTED_SHELL" ]] || die "zsh binary not found."
+
+if [[ "$ACCOUNT_SHELL" != "$EXPECTED_SHELL" ]]; then
+  log "Switching the login shell from '$ACCOUNT_SHELL' to '$EXPECTED_SHELL'"
+  if ! grep -qxF "$EXPECTED_SHELL" /etc/shells 2>/dev/null; then
+    log "Adding $EXPECTED_SHELL to /etc/shells"
+    echo "$EXPECTED_SHELL" | sudo tee -a /etc/shells > /dev/null \
+      || die "Could not update /etc/shells."
+  fi
   if $IS_MACOS; then
-    log "Setting Nushell as the login shell via dscl"
-    sudo dscl . -create "/Users/$USER" UserShell "$NU_PATH" \
-      || die "Could not set the login shell. Fish has not been removed."
+    sudo dscl . -create "/Users/$USER" UserShell "$EXPECTED_SHELL" \
+      || die "Could not set the login shell. Nushell is untouched."
     ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell | awk '{print $2}')"
   else
-    log "Setting Nushell as the login shell via chsh"
-    sudo chsh -s "$NU_PATH" "$USER" \
-      || die "Could not set the login shell. Fish has not been removed."
+    sudo chsh -s "$EXPECTED_SHELL" "$USER" \
+      || die "Could not set the login shell. Nushell is untouched."
     ACCOUNT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
   fi
-  [[ "$ACCOUNT_SHELL" == "$NU_PATH" ]] \
-    || die "Login shell readback returned '$ACCOUNT_SHELL'. Fish has not been removed."
-
-  log "Nushell is confirmed as the login shell; removing Fish"
-  FISH_PATH="$(brew --prefix)/bin/fish"
-  if grep -qxF "$FISH_PATH" /etc/shells 2>/dev/null; then
-    sudo sed -i.bak "\|^${FISH_PATH}\$|d" /etc/shells
-    sudo rm -f /etc/shells.bak
-  fi
-  if brew list --formula fisher &>/dev/null; then
-    brew uninstall --force fisher || die "Failed to uninstall Fisher"
-  fi
-  if brew list --formula fish &>/dev/null; then
-    brew uninstall --force fish || die "Failed to uninstall Fish"
-  fi
-  brew list --formula fish &>/dev/null && die "Fish is still installed; keeping its config for recovery"
-  rm -rf "$HOME/.config/fish"
-  log "Default shell: $NU_PATH"
+  [[ "$ACCOUNT_SHELL" == "$EXPECTED_SHELL" ]] \
+    || die "Login shell readback returned '$ACCOUNT_SHELL'. Nushell is untouched."
+else
+  log "Login shell already $EXPECTED_SHELL"
 fi
+
+log "Removing Nushell"
+NU_PATH="$(brew --prefix)/bin/nu"
+if brew list --formula nushell &>/dev/null; then
+  brew uninstall --force nushell || die "Failed to uninstall Nushell"
+fi
+brew list --formula nushell &>/dev/null && die "Nushell is still installed; keeping its config for recovery"
+[[ -x "$NU_PATH" ]] && die "Nushell binary still present at $NU_PATH"
+if grep -qxF "$NU_PATH" /etc/shells 2>/dev/null; then
+  sudo sed -i.bak "\|^${NU_PATH}\$|d" /etc/shells
+  sudo rm -f /etc/shells.bak
+fi
+rm -rf "$HOME/.config/nushell" "$HOME/.local/share/nushell"
+rm -rf "$HOME/Library/Application Support/nushell"
+log "Default shell: $ACCOUNT_SHELL"
 fi
 
 # ── Git globals ───────────────────────────────────────────────────────
@@ -638,6 +653,9 @@ opentofu   = "latest"
 experimental = true
 python.github_attestations = false
 EOF
+log "Trusting mise config so shells start without a prompt"
+mise trust "$HOME/.config/mise/config.toml" \
+  || warn "mise trust failed; the first shell may prompt to trust the config."
 log "Installing mise toolchains"
 export GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || echo '')}"
 mise install || warn "Some mise tools may have failed; run 'mise install' manually later."
@@ -686,11 +704,11 @@ log "Applying dotfiles"
 chezmoi apply
 fi
 
-# ── API keys → Nushell ────────────────────────────────────────────────
+# ── API keys → zsh ───────────────────────────────────────────────────
 if should_run secrets; then
   section "Secrets"
   if [[ -n "$OP_VAULT" ]]; then
-  log "Nushell will load API keys from its native config directory"
+  log "zsh will load API keys from ~/.config/zsh/.api-keys.zsh"
   else
   log "OP_VAULT not set — skipping API key setup"
   fi
@@ -725,20 +743,18 @@ if [[ -n "$OP_VAULT" ]]; then
   log "Signing in to 1Password CLI"
   eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
 
-  # ── Write API keys in Nushell syntax ─────────────────────────────────
+  # ── Write API keys in zsh syntax ────────────────────────────────────
   if op account list 2>/dev/null | grep -q .; then
-    NU_PATH="$(brew --prefix)/bin/nu"
-    # shellcheck disable=SC2016 # This is a Nushell variable, not a Bash variable.
-    NU_CONFIG_DIR="$($NU_PATH --no-config-file -c '$nu.default-config-dir')"
-    NU_SECRETS="$NU_CONFIG_DIR/.api-keys.nu"
-    NU_SECRETS_TMP="$NU_SECRETS.tmp"
-    log "Pulling API keys from 1Password → $NU_SECRETS"
-    mkdir -p "$NU_CONFIG_DIR"
-    : > "$NU_SECRETS_TMP"
-    while IFS='|' read -r env_name item_name; do
-      secret_value="$(op read "op://${OP_VAULT}/${item_name}/password" 2>/dev/null || true)"
-      # shellcheck disable=SC2016 # The output intentionally contains Nushell's $env syntax.
-      printf '$env.%s = %s\n' "$env_name" "$(printf '%s' "$secret_value" | jq -Rs .)" >> "$NU_SECRETS_TMP"
+    ZSH_BIN="$(command -v zsh || echo /bin/zsh)"
+    ZSH_SECRETS="$HOME/.config/zsh/.api-keys.zsh"
+    ZSH_SECRETS_TMP="$ZSH_SECRETS.tmp"
+    log "Pulling API keys from 1Password → $ZSH_SECRETS"
+    mkdir -p "$HOME/.config/zsh"
+    : > "$ZSH_SECRETS_TMP"
+    while IFS='|' read -r env_name item_name field_name; do
+      secret_value="$(op read "op://${OP_VAULT}/${item_name}/${field_name:-password}" 2>/dev/null || true)"
+      # jq -Rs emits a JSON string, which is also a valid single-quoted zsh value.
+      printf 'export %s=%s\n' "$env_name" "$(printf '%s' "$secret_value" | jq -Rs .)" >> "$ZSH_SECRETS_TMP"
     done << 'EOF'
 OPENCODE_API_KEY|opencode-api-key
 OPENAI_API_KEY|openai-api-key
@@ -749,11 +765,11 @@ GOOGLE_API_KEY|google-api-key
 AZURE_DEVOPS_PAT|ado-pat
 GRAFANA_SERVICE_ACCOUNT_TOKEN|grafana-service-account-token
 EXA_API_KEY|EXA API Key
+RESEND_API_KEY|Resend API Credential|credential
 EOF
-    chmod 600 "$NU_SECRETS_TMP"
-    "$NU_PATH" --no-config-file -c "nu-check --debug '$NU_SECRETS_TMP' | if not \$in { exit 1 }" \
-      || die "Generated Nushell secrets file is invalid"
-    mv "$NU_SECRETS_TMP" "$NU_SECRETS"
+    chmod 600 "$ZSH_SECRETS_TMP"
+    "$ZSH_BIN" -n "$ZSH_SECRETS_TMP" || die "Generated zsh secrets file is invalid"
+    mv "$ZSH_SECRETS_TMP" "$ZSH_SECRETS"
   fi
 else
   log "OP_VAULT not set — skipping 1Password setup"
@@ -827,7 +843,7 @@ section "Doctor"
 pass=0; fail=0
 check() {
   local cmd="$1"
-  if command -v "$cmd" &>/dev/null || "$NU_PATH" --config "$NU_CONFIG_DIR/config.nu" -c "which $cmd | is-not-empty" &>/dev/null; then
+  if command -v "$cmd" &>/dev/null; then
     printf "  \033[1;32m✓\033[0m %s\n" "$cmd"
     pass=$((pass + 1))
   else
@@ -835,10 +851,16 @@ check() {
     fail=$((fail + 1))
   fi
 }
-NU_PATH="$(brew --prefix)/bin/nu"
-# shellcheck disable=SC2016 # This is a Nushell variable, not a Bash variable.
-NU_CONFIG_DIR="$($NU_PATH --no-config-file -c '$nu.default-config-dir')"
-check nu; check starship; check mise; [[ -n "$OP_VAULT" ]] && check op; check gh
+check_file() {
+  if [[ -e "$1" ]]; then
+    printf "  \033[1;32m✓\033[0m %s\n" "$2"
+    pass=$((pass + 1))
+  else
+    printf "  \033[1;31m✗\033[0m %-24s (missing)\n" "$2"
+    fail=$((fail + 1))
+  fi
+}
+check zsh; check starship; check mise; [[ -n "$OP_VAULT" ]] && check op; check gh
 check chezmoi; check herdr; check opencode; check claude; check cortex; check pi; check ctx7; check tgrep
 check aws; check az; check gcx; check kubectl; check helm
 check playwright; check uv; check colima; check docker
@@ -849,13 +871,16 @@ else
   printf "  \033[1;31m✗\033[0m %-24s (plugin unavailable)\n" "docker compose"
   fail=$((fail + 1))
 fi
+check_file "$HOME/.zim/zimfw.zsh" "zim"
 
 if $IS_MACOS; then
   ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')"
+  EXPECTED_SHELL="/bin/zsh"
 else
   ACCOUNT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
+  EXPECTED_SHELL="$(command -v zsh)"
 fi
-if [[ "$ACCOUNT_SHELL" == "$NU_PATH" ]]; then
+if [[ "$ACCOUNT_SHELL" == "$EXPECTED_SHELL" ]]; then
   printf "  \033[1;32m✓\033[0m login shell\n"
   pass=$((pass + 1))
 else
@@ -876,7 +901,7 @@ fi
 # =========================================================================
 echo ""
 section "Bootstrap complete"
-log "Open a new terminal to start Nushell."
+log "Open a new terminal to start zsh."
 echo ""
 log "Next steps:"
 log "  aws sso login --profile <your-profile>"

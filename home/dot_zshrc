@@ -1,0 +1,362 @@
+# Zsh configuration managed by chezmoi.
+# Framework: Zim (https://github.com/zimfw/zimfw). Modules live in ~/.zimrc.
+
+# ── History ───────────────────────────────────────────────────────────
+HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
+HISTSIZE=50000
+SAVEHIST=50000
+setopt HIST_IGNORE_ALL_DUPS SHARE_HISTORY HIST_REDUCE_BLANKS
+
+# ── Input ─────────────────────────────────────────────────────────────
+bindkey -e
+WORDCHARS=${WORDCHARS//[\/]}
+
+# Module configuration read at init time.
+ZSH_AUTOSUGGEST_MANUAL_REBIND=1
+ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
+
+# ── Environment ───────────────────────────────────────────────────────
+# AWS SSO profiles belong in ~/.aws/config, not inherited shell credentials.
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE 2>/dev/null || true
+
+# Deduplicated PATH; Homebrew and local tool bins first.
+typeset -U path
+for _brew_dir in \
+  /opt/homebrew/bin /opt/homebrew/sbin \
+  /usr/local/bin /usr/local/sbin \
+  /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin; do
+  [[ -d $_brew_dir ]] && path=($_brew_dir $path)
+done
+path=($HOME/.local/bin $HOME/.opencode/bin $path)
+unset _brew_dir
+
+export TENV_AUTO_INSTALL=true
+export OPENCODE_EXPERIMENTAL=true
+export GRAFANA_SERVER=https://grafana.attainfinance.com
+export GRAFANA_ORG_ID=1
+export CARAPACE_BRIDGES='zsh,fish,bash,inshellisense'
+
+# Trust the corporate CA for tools that don't use the macOS keychain.
+# Opt-in: only activates if ~/.config/corporate-ca-bundle.pem exists.
+# Personal machines: leave the file out — this block no-ops.
+_corporate_ca_bundle=$HOME/.config/corporate-ca-bundle.pem
+if [[ -f $_corporate_ca_bundle ]]; then
+  export NODE_EXTRA_CA_CERTS=$_corporate_ca_bundle  # Node-based tools and MCP clients
+  export REQUESTS_CA_BUNDLE=$_corporate_ca_bundle   # Python requests-based tools
+  export SSL_CERT_FILE=$_corporate_ca_bundle        # OpenSSL-native tools
+  export CURL_CA_BUNDLE=$_corporate_ca_bundle       # curl and anything linked against it
+  export GIT_SSL_CAINFO=$_corporate_ca_bundle       # git (Homebrew build uses OpenSSL)
+  export PIP_CERT=$_corporate_ca_bundle             # pip itself
+  export AWS_CA_BUNDLE=$_corporate_ca_bundle        # AWS SDKs and CLI
+fi
+unset _corporate_ca_bundle
+
+# ── Zim framework ─────────────────────────────────────────────────────
+ZIM_HOME=${ZDOTDIR:-$HOME}/.zim
+if [[ ! -e ${ZIM_HOME}/zimfw.zsh ]]; then
+  mkdir -p ${ZIM_HOME}
+  if (( $+commands[curl] )); then
+    curl -fsSL -o ${ZIM_HOME}/zimfw.zsh \
+      https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
+  else
+    wget -nv -O ${ZIM_HOME}/zimfw.zsh \
+      https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
+  fi
+fi
+if [[ ! ${ZIM_HOME}/init.zsh -nt ${ZDOTDIR:-$HOME}/.zimrc ]]; then
+  source ${ZIM_HOME}/zimfw.zsh init
+fi
+[[ -e ${ZIM_HOME}/init.zsh ]] && source ${ZIM_HOME}/init.zsh
+
+# Up/down arrow searches history for what you already typed.
+if (( $+widgets[history-substring-search-up] )); then
+  [[ -n $terminfo[kcuu1] ]] && bindkey "$terminfo[kcuu1]" history-substring-search-up
+  [[ -n $terminfo[kcud1] ]] && bindkey "$terminfo[kcud1]" history-substring-search-down
+fi
+
+# ── Tool integrations (completion system is live from here on) ────────
+(( $+commands[mise] )) && eval "$(mise activate zsh)"
+
+# Bash-style completion scripts (yargs CLIs), e.g. the cached opencode script.
+autoload -U +X bashcompinit && bashcompinit
+[[ -r $HOME/.config/zsh/opencode-completions.zsh ]] && source $HOME/.config/zsh/opencode-completions.zsh
+
+# Carapace structured completions for hundreds of CLIs.
+(( $+commands[carapace] )) && source <(carapace _carapace)
+zstyle ':completion:*' menu search
+setopt MENU_COMPLETE
+
+# fzf: fuzzy Ctrl-R history search, Ctrl-T file insert, Alt-C cd.
+(( $+commands[fzf] )) && eval "$(fzf --zsh)"
+
+# Starship prompt.
+(( $+commands[starship] )) && eval "$(starship init zsh)"
+
+# ── Aliases ───────────────────────────────────────────────────────────
+alias ls='eza --icons --group-directories-first'
+alias ll='eza -lh --icons --git --group-directories-first'
+alias la='eza -la --icons --git --group-directories-first'
+alias cat='bat --paging=never'
+alias k='kubectl'
+alias code='code-insiders'
+alias g='git'
+
+cd-dev()       { cd ~/Developer }
+cd-down()      { cd ~/Downloads }
+cd-skills()    { cd ~/.agents/skills }
+cd-opencode()  { cd ~/.config/opencode }
+cd-pi()        { cd ~/.pi }
+cd-bootstrap() { cd ~/Developer/github/acastro2/mac-bootstrap }
+cd-claude()    { cd ~/.claude }
+cd-onedrive()  { cd ~/Library/CloudStorage/OneDrive-Attainfinance.com }
+
+# Git shortcuts based on commands actually used, plus a curated subset of the
+# Oh My Zsh git plugin and Fish plugin-git. Destructive plugin aliases are
+# intentionally omitted.
+alias gs='git status'
+alias gst='git status'
+alias gss='git status --short'
+alias ga='git add'
+alias gaa='git add --all'
+alias gb='git branch'
+alias gbd='git branch -d'
+alias gco='git checkout'
+alias gcb='git checkout -b'
+alias gcl='git clone'
+alias gc='git commit'
+alias gcm='git commit -m'
+alias gca='git commit --amend'
+alias gcan='git commit --amend --no-edit'
+alias gf='git fetch'
+alias gfa='git fetch --all --prune'
+alias gl='git pull'
+alias glr='git pull --rebase'
+alias gp='git push'
+alias gpf='git push --force-with-lease'
+alias gr='git remote -v'
+alias gra='git remote add'
+alias grr='git remote remove'
+alias grs='git restore'
+alias grh='git reset HEAD'
+alias grh1='git reset HEAD~1'
+alias gsta='git stash'
+alias gstp='git stash pop'
+alias glo='git log --oneline --decorate --color'
+
+alias gapa='git add --patch'
+alias gau='git add --update'
+alias gav='git add --verbose'
+alias gba='git branch --all'
+alias gbl='git blame -w'
+alias gbs='git bisect'
+alias gbsb='git bisect bad'
+alias gbsg='git bisect good'
+alias gbsr='git bisect reset'
+alias gbss='git bisect start'
+alias gcmsg='git commit --message'
+alias gcam='git commit --all --message'
+alias gcf='git config --list'
+alias gcp='git cherry-pick'
+alias gcpa='git cherry-pick --abort'
+alias gcpc='git cherry-pick --continue'
+alias gd='git diff'
+alias gdca='git diff --cached'
+alias gdw='git diff --word-diff'
+alias gfo='git fetch origin'
+alias glg='git log --stat'
+alias glgg='git log --graph'
+alias glgga='git log --graph --decorate --all'
+alias glog='git log --oneline --decorate --graph'
+alias gloga='git log --oneline --decorate --graph --all'
+alias gm='git merge'
+alias gma='git merge --abort'
+alias gmff='git merge --ff-only'
+alias gpr='git pull --rebase'
+alias gpra='git pull --rebase --autostash'
+alias gpv='git push --verbose'
+alias grb='git rebase'
+alias grba='git rebase --abort'
+alias grbc='git rebase --continue'
+alias grbi='git rebase --interactive'
+alias grbs='git rebase --skip'
+alias grev='git revert'
+alias grmv='git remote rename'
+alias grrm='git remote remove'
+alias grset='git remote set-url'
+alias grup='git remote update'
+alias grv='git remote --verbose'
+alias grst='git restore --staged'
+alias gsb='git status --short --branch'
+alias gsh='git show'
+alias gstd='git stash drop'
+alias gstl='git stash list'
+alias gsts='git stash show --patch'
+alias gstall='git stash --all'
+alias gsu='git submodule update'
+alias gsur='git submodule update --recursive'
+alias gsuri='git submodule update --recursive --init'
+alias gsw='git switch'
+alias gswc='git switch --create'
+alias gtv='git tag'
+alias gwt='git worktree'
+alias gwta='git worktree add'
+alias gwtls='git worktree list'
+alias gwtrm='git worktree remove'
+alias gup='git pull --rebase'
+
+grt() {
+  local root
+  root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    print -u2 'grt must run inside a Git worktree'
+    return 1
+  }
+  cd $root
+}
+
+gpsup() {
+  local branch
+  branch=$(git branch --show-current)
+  if [[ -z $branch ]]; then
+    print -u2 'gpsup requires a named Git branch'
+    return 1
+  fi
+  git push --set-upstream origin $branch
+}
+
+git-clean() {
+  git rev-parse --is-inside-work-tree &>/dev/null || {
+    print -u2 'git-clean must run inside a Git worktree'
+    return 1
+  }
+  git remote get-url origin &>/dev/null || {
+    print -u2 'git-clean requires an origin remote'
+    return 1
+  }
+  git fetch --prune origin || return 1
+
+  local default_ref
+  default_ref=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null) || {
+    print -u2 "Cannot detect origin's default branch. Run: git remote set-head origin --auto"
+    return 1
+  }
+
+  local current_branch
+  current_branch=$(git branch --show-current)
+  local -a merged
+  merged=($(git for-each-ref --format='%(refname:short)' "--merged=${default_ref}" refs/heads))
+  merged=(${merged:#${current_branch}})
+  merged=(${merged:#${default_ref#origin/}})
+
+  if (( ${#merged[@]} == 0 )); then
+    print "No local branches are merged into ${default_ref}."
+    return 0
+  fi
+
+  local branch
+  for branch in $merged; do
+    git branch -d $branch
+  done
+}
+
+# Docker aliases from Oh My Zsh's docker plugin. They assume the Docker CLI
+# is connected to the intended Colima context.
+alias dbl='docker build'
+alias dcin='docker container inspect'
+alias dcls='docker container ls'
+alias dclsa='docker container ls --all'
+alias dib='docker image build'
+alias dii='docker image inspect'
+alias dils='docker image ls'
+alias dlo='docker container logs'
+alias dnc='docker network create'
+alias dnls='docker network ls'
+alias dpo='docker container port'
+alias dps='docker ps'
+alias dpsa='docker ps --all'
+alias dpu='docker pull'
+alias dr='docker container run'
+alias drit='docker container run --interactive --tty'
+alias drm='docker container rm'
+alias dst='docker container start'
+alias drs='docker container restart'
+alias dstp='docker container stop'
+alias dsts='docker stats'
+alias dtop='docker top'
+alias dvi='docker volume inspect'
+alias dvls='docker volume ls'
+alias dxc='docker container exec'
+alias dxcit='docker container exec --interactive --tty'
+
+# Kubernetes aliases from Oh My Zsh's kubectl plugin. Context-changing and
+# destructive delete/restart aliases stay explicit for safety.
+alias kaf='kubectl apply --filename'
+alias kapk='kubectl apply --kustomize'
+alias keti='kubectl exec --tty --stdin'
+alias kccc='kubectl config current-context'
+alias kcgc='kubectl config get-contexts'
+alias kcuc='kubectl config use-context'
+alias kge='kubectl get events --sort-by=".lastTimestamp"'
+alias kgp='kubectl get pods'
+alias kgpa='kubectl get pods --all-namespaces'
+alias kgpw='kubectl get pods --watch'
+alias kgpwide='kubectl get pods --output wide'
+alias kgs='kubectl get services'
+alias kgsa='kubectl get services --all-namespaces'
+alias kgsw='kubectl get services --watch'
+alias kgns='kubectl get namespaces'
+alias kgd='kubectl get deployments'
+alias kgda='kubectl get deployments --all-namespaces'
+alias kgdw='kubectl get deployments --watch'
+alias kgdwide='kubectl get deployments --output wide'
+alias kgno='kubectl get nodes'
+alias kga='kubectl get all'
+alias kgaa='kubectl get all --all-namespaces'
+alias kl='kubectl logs'
+alias klf='kubectl logs --follow'
+alias kcp='kubectl cp'
+alias kpf='kubectl port-forward'
+
+# Helm aliases from Oh My Zsh's helm plugin.
+alias h='helm'
+alias hin='helm install'
+alias hun='helm uninstall'
+alias hse='helm search'
+alias hup='helm upgrade'
+
+# Terraform-plugin aliases backed by the toolchain this repo installs. The
+# wrapper prefers OpenTofu but falls back to Terraform when that is present.
+tf() {
+  if (( $+commands[tofu] )); then
+    tofu "$@"
+  else
+    terraform "$@"
+  fi
+}
+alias tfi='tf init'
+alias tfir='tf init --reconfigure'
+alias tfiu='tf init --upgrade'
+alias tff='tf fmt'
+alias tffr='tf fmt --recursive'
+alias tfp='tf plan'
+alias tfpo='tf plan --out tfplan'
+alias tfa='tf apply'
+alias tfv='tf validate'
+alias tfo='tf output'
+alias tfsh='tf show'
+alias tft='tf test'
+alias tfw='tf workspace'
+alias tfwl='tf workspace list'
+alias tfws='tf workspace select'
+
+# AWS helpers do not mutate the shell environment; pass profiles explicitly.
+alias awsp='aws configure list-profiles'
+alias awswho='aws sts get-caller-identity'
+
+# ── Private files ─────────────────────────────────────────────────────
+# API keys written by bootstrap from 1Password (chmod 600).
+[[ -r $HOME/.config/zsh/.api-keys.zsh ]] && source $HOME/.config/zsh/.api-keys.zsh
+# Map the Grafana service-account token to the variable gcx reads.
+[[ -n ${GRAFANA_SERVICE_ACCOUNT_TOKEN:-} ]] && export GRAFANA_TOKEN=$GRAFANA_SERVICE_ACCOUNT_TOKEN
+
+# Machine-local overrides, not committed.
+[[ -r $HOME/.config/zsh/local.zsh ]] && source $HOME/.config/zsh/local.zsh

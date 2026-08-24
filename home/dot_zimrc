@@ -1,0 +1,26 @@
+# Zim module configuration managed by chezmoi.
+# Docs: https://zimfw.sh/docs/modules/
+
+# Sets sane Zsh built-in environment options.
+zmodule environment
+
+# Applies correct bindkeys for input events.
+zmodule input
+
+# Additional completion definitions for Zsh.
+zmodule zsh-users/zsh-completions --fpath src
+
+# Enables and configures smart and extensive tab completion. Must come after
+# every module that adds completion definitions.
+zmodule completion
+
+# Modules that must be initialized last:
+
+# Fish-like syntax highlighting for Zsh, must be sourced after completion.
+zmodule zsh-users/zsh-syntax-highlighting
+
+# Fish-like history search for Zsh, must be sourced after syntax highlighting.
+zmodule zsh-users/zsh-history-substring-search
+
+# Fish-like autosuggestions for Zsh.
+zmodule zsh-users/zsh-autosuggestions

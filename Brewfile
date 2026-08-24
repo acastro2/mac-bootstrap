@@ -4,7 +4,6 @@
 # ── Shell & Toolchains ────────────────────────────────────────────────
 brew "git"
 brew "gh"
-brew "nushell"
 brew "carapace"
 brew "starship"        # cross-shell prompt
 brew "mise"            # toolchain manager (Go, Node, Python, etc.)

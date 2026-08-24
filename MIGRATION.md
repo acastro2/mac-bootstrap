@@ -13,7 +13,7 @@ Agent-executable runbook for migrating a fully configured MacBook to another mac
 
 The target machine needs:
 - macOS with internet access
-- A terminal open (zsh or Fish is fine; Nushell will be installed by bootstrap)
+- A terminal open (any shell works; zsh + Zim are configured by bootstrap)
 - Git and Xcode CLI tools (bootstrap handles this if missing)
 
 ---
@@ -118,10 +118,10 @@ EOF
 
 The bootstrap will:
 1. Install Homebrew and all packages (Brewfile)
-2. Render and validate Nushell with Starship, set it as the login shell, then remove Fish only after account-shell readback succeeds
+2. Render and validate zsh + Zim with Starship, Carapace, and fzf, keep the login shell on zsh, then remove Nushell only after the config checks and account-shell readback succeed
 3. Install opencode, Claude Code CLI, herdr, mise toolchains
 4. Clone opencode config, Claude Code config, and skills repos
-5. Pull API keys from 1Password into Nushell's private environment file
+5. Pull API keys from 1Password into `~/.config/zsh/.api-keys.zsh`, sourced by `.zshrc` at startup
 6. Run doctor checks to verify everything
 
 ### 2.2 Import session data
@@ -180,7 +180,7 @@ cd ~/Developer/github/acastro2/mac-bootstrap
 ./bootstrap.sh --clean
 ```
 
-This removes all Homebrew packages, mise toolchains, opencode/claude binaries, and generated Nushell integration files. It does NOT remove:
+This removes all Homebrew packages, mise toolchains, opencode/claude binaries, Zim files (`.zim`, `.zshrc`, `.zimrc`), and legacy Nushell configs. It does NOT remove:
 - `~/Developer` (your code)
 - `~/.claude/projects` (conversations)
 - `~/.local/share/opencode` (session DB)
@@ -209,10 +209,9 @@ This removes all Homebrew packages, mise toolchains, opencode/claude binaries, a
 | Cortex skills/plugins | `~/.snowflake/cortex/{skills,plugins,commands}/` | --export-sessions |
 | Snowflake connections | `~/.snowflake/connections.toml` | --export-sessions |
 | Homebrew packages | Brewfile | git repo (mac-bootstrap) |
-| Nushell config + aliases (macOS) | `~/Library/Application Support/nushell/` | chezmoi (mac-bootstrap/home) |
-| Nushell config + aliases (Linux) | `~/.config/nushell/` | chezmoi (mac-bootstrap/home) |
+| zsh config + aliases | `~/.zshrc`, `~/.zimrc`, `~/.zim/` | chezmoi (mac-bootstrap/home) |
 | Ghostty config | `~/.config/ghostty/` | chezmoi (mac-bootstrap/home) |
-| API keys | 1Password + Nushell `.api-keys.nu` | 1Password vault |
+| API keys | 1Password + `~/.config/zsh/.api-keys.zsh` | 1Password vault |
 | Keychain secrets | macOS Keychain | manual where used; migrate remaining to 1Password |
 | SSH keys | 1Password SSH agent | 1Password vault |
 | Git credential helper | gh auth setup-git | bootstrap Phase 2 |
@@ -225,10 +224,10 @@ This removes all Homebrew packages, mise toolchains, opencode/claude binaries, a
 
 **Claude Code not found after bootstrap**: The native installer drops the launcher at `~/.local/bin/claude`; make sure that dir is on PATH, then re-run `./bootstrap.sh --only=claude`. Do not `npm -g install @anthropic-ai/claude-code` under mise: a node version switch orphans the shim and `claude update` (native updater) then silently no-ops against it.
 
-**Nushell was not set as the login shell**: The bootstrap keeps Fish installed when the switch or readback fails. On macOS, run `sudo dscl . -create "/Users/$USER" UserShell /opt/homebrew/bin/nu`, verify it with `dscl . -read "/Users/$USER" UserShell`, then rerun `./bootstrap.sh --only=nushell`.
+**zsh was not set as the login shell**: The bootstrap keeps Nushell in place when the switch or readback fails. On macOS, run `sudo dscl . -create "/Users/$USER" UserShell /bin/zsh`, verify it with `dscl . -read "/Users/$USER" UserShell`, then rerun `./bootstrap.sh --only=zsh,shell`.
 
 **1Password CLI prompts for setup**: Open 1Password desktop app first, enable Developer settings (Integrate with CLI, SSH agent, biometric unlock), then re-run auth section.
 
 **Import fails with "file not found"**: Check the exact filename. macOS may have added a suffix or placed it in a different folder after AirDrop. Try `ls ~/Downloads/agent-sessions*`.
 
-**Cortex Code CLI not found**: Re-run `./bootstrap.sh --only=cortex`. The installer puts it at `~/.local/bin/cortex`, which the Nushell environment prepends to `PATH`.
+**Cortex Code CLI not found**: Re-run `./bootstrap.sh --only=cortex`. The installer puts it at `~/.local/bin/cortex`, which the zsh config prepends to `PATH`.

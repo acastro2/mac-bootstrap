@@ -5,7 +5,7 @@ One command. Zero to a fully armed and operational macOS workstation. Shell, too
 If you're the kind of engineer who treats their machine like a cattle, not a pet, this is your herd script.
 
 !!! tip
-    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks. Everything else (Homebrew, Nushell, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
+    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks. Everything else (Homebrew, zsh + Zim, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
 
 ---
 
@@ -14,7 +14,7 @@ If you're the kind of engineer who treats their machine like a cattle, not a pet
 - **Apple ID** — signed into the App Store (for `mas` to pull apps)
 - **A functioning brain** — the script's interactive. It'll ask you things. It won't hold your hand for `sudo`.
 
-**1Password is optional.** If you set your vault name in `config.env`, the bootstrap pulls API keys into a private Nushell file. If you don't, everything else still works — you'll just need to configure API keys yourself.
+**1Password is optional.** If you set your vault name in `config.env`, the bootstrap pulls API keys into a private zsh file. If you don't, everything else still works — you'll just need to configure API keys yourself.
 
 ---
 
@@ -69,11 +69,11 @@ cd ~/Developer/github/acastro2/mac-bootstrap
 Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be surgical:
 
 ```bash
-./bootstrap.sh --only=packages,nushell     # just packages + shell retrofit
+./bootstrap.sh --only=packages,zsh        # just packages + shell retrofit
 ./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `nushell`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
 ---
 
@@ -87,15 +87,15 @@ Here's the deal: this isn't a generic dotfiles repo. It's the exact setup of a p
 
 ### The shell
 
-**Nushell** via Homebrew, with Starship for the prompt and Carapace for command completion. Nu gives you structured pipelines, fuzzy completion, SQLite history, and Ctrl-R history search without a plugin manager. The shared `config.nu` wires Carapace into Nu's external completion API and expands aliases before asking Carapace for suggestions. Mise activation and the Starship hook are generated in Nu's native config/data directories.
+**Zsh + Zim.** macOS ships zsh; Zim (zimfw) adds the layers on top: sane options, keybindings, cached completion, Fish-like syntax highlighting, history search, and autosuggestions. The `~/.zimrc` module list is short. Fzf binds fuzzy Ctrl-R history search, Ctrl-T file insert, and Alt-C directory jump. Starship renders the prompt; Carapace supplies structured completions for hundreds of CLIs, bridged into zsh's completion system.
 
 The Git shortcuts started from commands actually used in Fish history and now include a curated subset of the Oh My Zsh `git` plugin and Fish `plugin-git`: staging, diffs, branch views, log graphs, rebase/cherry-pick flows, stash, submodules, switch, and worktrees. Dynamic helpers include `grt` (repository root) and `gpsup` (push the current branch with upstream tracking). `git-clean` fetches and prunes `origin`, detects its default branch, and safely deletes local branches already merged into it with `git branch -d`.
 
-The same research added practical Oh My Zsh-style aliases for Docker/Colima, Kubernetes, Helm, AWS, and Terraform/OpenTofu. Fish itself does not ship a comparable alias catalog: `plugin-git` supplies Git abbreviations, `fzf.fish` supplies interactive keybindings, and `bang-bang` supplies Bash-style history expansion. Nushell keeps the useful command shortcuts but intentionally leaves out force-push, hard-reset/pristine, mass-prune/delete, auto-approve, and `!!`/`!$` behaviors. The upstream references are [Oh My Zsh's Git](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/git/git.plugin.zsh), [Docker](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/docker/docker.plugin.zsh), [Kubernetes](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/kubectl/kubectl.plugin.zsh), [Helm](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/helm/helm.plugin.zsh), [Terraform](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/terraform/terraform.plugin.zsh), [Fish plugin-git](https://github.com/jhillyerd/plugin-git), [fzf.fish](https://github.com/PatrickF1/fzf.fish), and [Oh My Fish bang-bang](https://github.com/oh-my-fish/plugin-bang-bang).
+The same research added practical Oh My Zsh-style aliases for Docker/Colima, Kubernetes, Helm, AWS, and Terraform/OpenTofu. The upstream references are [Oh My Zsh's Git](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/git/git.plugin.zsh), [Docker](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/docker/docker.plugin.zsh), [Kubernetes](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/kubectl/kubectl.plugin.zsh), [Helm](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/helm/helm.plugin.zsh), [Terraform](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/terraform/terraform.plugin.zsh), [Fish plugin-git](https://github.com/jhillyerd/plugin-git), [fzf.fish](https://github.com/PatrickF1/fzf.fish), and [Oh My Fish bang-bang](https://github.com/oh-my-fish/plugin-bang-bang). The shortcuts intentionally leave out force-push, hard-reset/pristine, mass-prune/delete, auto-approve, and `!!`/`!$` behaviors.
 
-Nushell clears inherited `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_PROFILE` values at startup. Authenticate with an explicit SSO profile and scope `AWS_PROFILE` to one command with `with-env`; do not leave AWS credentials or account selection in the shell-wide environment.
+zsh clears inherited `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_PROFILE` values at login. Authenticate with an explicit SSO profile and scope `AWS_PROFILE` to a single command (`AWS_PROFILE=work tofu plan`); do not leave AWS credentials or account selection in the shell-wide environment.
 
-On an existing Fish machine, the migration is fail-safe: Nu's files are rendered and parsed first, then the account login shell is changed and read back. Fish is removed only after that exact readback succeeds.
+On a machine that still runs Nushell, the migration is fail-safe: the zsh config is rendered and validated first, then the login shell is switched and read back. Nushell is uninstalled and its configs wiped only after that exact readback succeeds.
 
 ### The terminal
 
@@ -107,7 +107,7 @@ On an existing Fish machine, the migration is fail-safe: Nu's files are rendered
 
 ### The package manager
 
-**Homebrew** with a `Brewfile`. The list includes git, Nushell, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, the Grafana `gcx` CLI, Azure CLI, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
+**Homebrew** with a `Brewfile`. The list includes git, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, the Grafana `gcx` CLI, Azure CLI, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
 
 ### The toolchain manager
 
@@ -115,15 +115,15 @@ On an existing Fish machine, the migration is fail-safe: Nu's files are rendered
 
 ### The secret sauce (optional)
 
-**1Password CLI → Nushell env file.** If you set `OP_VAULT` in `config.env`, every API key gets pulled from your 1Password vault into `.api-keys.nu` under Nu's native config directory (chmod 600). `config.nu` loads it with `source-env`, so the keys become environment variables at shell startup.
+**1Password CLI → private zsh file.** If you set `OP_VAULT` in `config.env`, every API key gets pulled from your 1Password vault into `~/.config/zsh/.api-keys.zsh` (chmod 600) as `export` lines. `.zshrc` sources it, so the keys become environment variables at shell startup.
 
 Skip it if you want — you'll just set up API keys yourself.
 
-Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, google.
+Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, google, resend.
 
 ### The dotfiles
 
-**chezmoi** with the source directory inside this repo (`home/`). Shared templates render Nushell config to `~/Library/Application Support/nushell` on macOS and `~/.config/nushell` on Linux. Put machine-only overrides in the private `config.local.nu` file created beside `config.nu`. Ghostty and editor settings live here too. `chezmoi diff` previews changes; `chezmoi apply` deploys them.
+**chezmoi** with the source directory inside this repo (`home/`). It ships `.zshrc` and `.zimrc`, one layout for macOS and Linux. Private files live outside the repo: bootstrap creates `~/.config/zsh/.api-keys.zsh` (secrets) and `~/.config/zsh/local.zsh` (machine-only overrides, sourced last). Ghostty settings live here too. `chezmoi diff` previews changes; `chezmoi apply` deploys them.
 
 ### The LLM coding agent
 
@@ -157,9 +157,9 @@ If that's you — welcome. Run the command. Break things. Send PRs.
 
 The script runs in two phases:
 
-**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated Nushell config and login-shell migration, git config, SSH via 1Password agent, OpenCode, Pi, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. Existing Fish files and packages are removed only after Nu starts successfully and the account shell readback matches.
+**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated zsh + Zim config and login-shell check, git config, SSH via 1Password agent, OpenCode, Pi, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. On a Nushell machine, Nushell is uninstalled only after zsh starts successfully and the account shell readback matches.
 
-**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to Nu's `.api-keys.nu`. Always: GitHub CLI SSO login, OpenCode and Pi config sync (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
+**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to `~/.config/zsh/.api-keys.zsh`. Always: GitHub CLI SSO login, OpenCode and Pi config sync (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
 
 If anything fails, it tells you what and keeps going. Re-run anytime.
 
@@ -167,25 +167,25 @@ If anything fails, it tells you what and keeps going. Re-run anytime.
 
 ## After bootstrap
 
-```nu
+```sh
 aws sso login --profile <your-profile>
 az login --allow-no-subscriptions  # when checking Microsoft Entra app registrations
-with-env { AWS_PROFILE: "<your-profile>" } { tofu plan }
+AWS_PROFILE=<your-profile> tofu plan
 mise install      # if any tools need (re)installing
 colima start      # start the Docker runtime when you need containers
 docker compose version
 # Sign in to desktop apps (Slack, VS Code, etc.)
 ```
 
-Open a new terminal. You're in Nushell. You're home.
+Open a new terminal. You're in zsh. You're home.
 
 ---
 
 ## Corporate CA / TLS inspection
 
-The security stack (Cisco Secure Access, Cisco Umbrella, GSA) does TLS inspection, so apps that don't use the macOS keychain need the corp root trusted explicitly. The env config activates a bundle automatically when present:
+The security stack (Cisco Secure Access, Cisco Umbrella, GSA) does TLS inspection, so apps that don't use the macOS keychain need the corp root trusted explicitly. The zsh config activates a bundle automatically when present:
 
-- Drop the CA bundle at `~/.config/corporate-ca-bundle.pem`. When it exists, `env.nu` sets `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `PIP_CERT`, `GIT_SSL_CAINFO`, and `AWS_CA_BUNDLE` to it (covers Node, Python requests/pip, OpenSSL tools, curl, Homebrew git, AWS SDKs). Go 1.27+ and .NET read the macOS keychain, not these vars.
+- Drop the CA bundle at `~/.config/corporate-ca-bundle.pem`. When it exists, `.zshrc` exports `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `PIP_CERT`, `GIT_SSL_CAINFO`, and `AWS_CA_BUNDLE` to it (covers Node, Python requests/pip, OpenSSL tools, curl, Homebrew git, AWS SDKs). Go 1.27+ and .NET read the macOS keychain, not these vars.
 
 To trust the root at the OS level on one Mac (covers browsers, Go < 1.27, .NET, system git/curl):
 
