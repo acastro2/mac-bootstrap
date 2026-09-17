@@ -448,8 +448,18 @@ touch "$HOME/.config/zsh/local.zsh"
 
 if command -v opencode &>/dev/null; then
   log "Caching opencode completions"
-  opencode completion zsh > "$HOME/.config/zsh/opencode-completions.zsh" 2>/dev/null \
-    || warn "opencode completion generation failed; skipping."
+  # V2 spells this `--completions zsh`. The old `completion zsh` exits 1 and
+  # prints the help text, so write to a temp file and only accept real output:
+  # a bad file here breaks every new shell, since .zshrc sources it.
+  OC_COMPLETIONS="$HOME/.config/zsh/opencode-completions.zsh"
+  OC_COMPLETIONS_TMP="$OC_COMPLETIONS.tmp"
+  if opencode --completions zsh > "$OC_COMPLETIONS_TMP" 2>/dev/null \
+    && grep -q -- '###-begin-opencode-completions-###' "$OC_COMPLETIONS_TMP"; then
+    mv "$OC_COMPLETIONS_TMP" "$OC_COMPLETIONS"
+  else
+    rm -f "$OC_COMPLETIONS_TMP"
+    warn "opencode completion generation failed; keeping the previous file."
+  fi
 else
   warn "opencode not found yet; its completions will be missing until you re-run this section."
 fi
