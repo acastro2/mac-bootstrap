@@ -115,6 +115,30 @@ cd-bootstrap() { cd ~/Developer/github/acastro2/mac-bootstrap }
 cd-claude()    { cd ~/.claude }
 cd-onedrive()  { cd ~/Library/CloudStorage/OneDrive-Attainfinance.com }
 
+# Pull every agent and config repo in one shot. Each pull runs in a subshell,
+# so the current directory never changes. --autostash keeps uncommitted edits
+# safe across the rebase; on a stash-pop conflict git keeps the stash. Returns
+# non-zero if any repo failed.
+cd-configs-gpr() {
+  local -a repos=(
+    "$HOME/.config/opencode"
+    "$HOME/.claude"
+    "$HOME/.agents/skills"
+    "$HOME/.pi"
+    "$HOME/Developer/github/acastro2/mac-bootstrap"
+  )
+  local repo rc=0
+  for repo in $repos; do
+    print -- "── ${repo/#$HOME/~}"
+    if [[ ! -d $repo/.git ]]; then
+      print -u2 "   skip: not a Git repo"
+      continue
+    fi
+    ( cd $repo && git pull --rebase --autostash ) || rc=1
+  done
+  return $rc
+}
+
 # Git shortcuts based on commands actually used, plus a curated subset of the
 # Oh My Zsh git plugin and Fish plugin-git. Destructive plugin aliases are
 # intentionally omitted.
