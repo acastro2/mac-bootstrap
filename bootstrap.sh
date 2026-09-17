@@ -586,10 +586,25 @@ fi
 if should_run opencode; then
 section "opencode"
 if [[ ! -x "$HOME/.opencode/bin/opencode" ]]; then
-  log "Installing opencode"
-  curl -fsSL https://opencode.ai/install | bash
+  log "Installing opencode (v2)"
+  curl -fsSL https://opencode.ai/v2/install | bash
 else
-  log "Already installed."
+  # Teach bootstrap the v1 -> v2 upgrade: back up the config repo, then re-run the installer.
+  # V1 plugins (DCP, notifier, kiro-auth, goal) do not run on v2 — see opencode_config repo for the fallout.
+  OPENCODE_VERSION="$("$HOME/.opencode/bin/opencode" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+  if [[ "$OPENCODE_VERSION" == 1.* ]]; then
+    log "Upgrading opencode v1 ($OPENCODE_VERSION) -> v2"
+    mkdir -p "$HOME/backups"
+    OPENCODE_BACKUP="$HOME/backups/opencode-v1-config-$(date +%Y%m%d).tgz"
+    if tar -czf "$OPENCODE_BACKUP" -C "$HOME" --exclude='.config/opencode/node_modules' .config/opencode; then
+      log "Backed up ~/.config/opencode to $OPENCODE_BACKUP"
+    else
+      warn "Config backup failed; continuing with the upgrade anyway."
+    fi
+    curl -fsSL https://opencode.ai/v2/install | bash
+  else
+    log "Already installed: $OPENCODE_VERSION"
+  fi
 fi
 fi
 
