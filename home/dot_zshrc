@@ -1,3 +1,8 @@
+# >>> startup probe (temporary) — logic in ~/.config/zsh/startup-probe.zsh on the
+# >>> machine under measurement; no-op on machines without it. Remove both blocks when done.
+[[ -o interactive && -r $HOME/.config/zsh/startup-probe.zsh ]] && source $HOME/.config/zsh/startup-probe.zsh rc-top
+# <<< startup probe
+
 # Zsh configuration managed by chezmoi.
 # Framework: Zim (https://github.com/zimfw/zimfw). Modules live in ~/.zimrc.
 
@@ -367,3 +372,7 @@ alias awswho='aws sts get-caller-identity'
 if [[ -n ${GHOSTTY_RESOURCES_DIR:-} ]]; then
   source "$GHOSTTY_RESOURCES_DIR"/shell-integration/zsh/ghostty-integration
 fi
+
+# >>> startup probe (end) — see the block at the top of this file
+[[ -o interactive && -r $HOME/.config/zsh/startup-probe.zsh ]] && source $HOME/.config/zsh/startup-probe.zsh rc-end
+# <<< startup probe (end)
