@@ -19,6 +19,8 @@ REPO_URL="https://github.com/acastro2/mac-bootstrap.git"
 REPO_DIR="${HOME}/Developer/github/acastro2/mac-bootstrap"
 OPENCODE_CONFIG_REPO=""
 OPENCODE_SKILLS_REPO=""
+OPENCODE_WEB_ITEM=""
+OPENCODE_WEB_PORT=""
 CLAUDE_CONFIG_REPO=""
 PI_CONFIG_REPO=""
 
@@ -781,6 +783,74 @@ EOF
   fi
 else
   log "OP_VAULT not set — skipping 1Password setup"
+fi
+fi
+
+# ── opencode web access ───────────────────────────────────────────────
+# The web UI password comes from 1Password, never from the config repo.
+if should_run opencode-web; then
+section "opencode web"
+OC_BIN="$(command -v opencode 2>/dev/null || true)"
+if [[ -z "$OC_BIN" && -x "$HOME/.opencode/bin/opencode" ]]; then
+  OC_BIN="$HOME/.opencode/bin/opencode"
+fi
+
+# Only touch the service when a value actually changes; `service set`
+# stops the background server, so a no-op re-run must not restart it.
+WEB_CHANGED=false
+set_service() {
+  local key="$1" want="$2" current
+  current="$("$OC_BIN" service get "$key" 2>/dev/null || true)"
+  if [[ "$current" == "$want" ]]; then
+    log "$key already set."
+    return 0
+  fi
+  log "Setting $key"
+  if "$OC_BIN" service set "$key" "$want" >/dev/null 2>&1; then
+    WEB_CHANGED=true
+  else
+    warn "opencode service set $key failed."
+  fi
+}
+
+WEB_ITEM="${OPENCODE_WEB_ITEM:-}"
+WEB_PW=""
+if [[ -z "$OC_BIN" ]]; then
+  warn "opencode not installed — skipping web setup."
+elif [[ -z "$OP_VAULT" || -z "$WEB_ITEM" ]]; then
+  warn "OP_VAULT or OPENCODE_WEB_ITEM not set — skipping web setup."
+elif ! op account list &>/dev/null; then
+  warn "1Password CLI not signed in — skipping web setup."
+else
+  WEB_PW="$(op read "op://${OP_VAULT}/${WEB_ITEM}/password" 2>/dev/null || true)"
+  if [[ -z "$WEB_PW" ]]; then
+    warn "Could not read op://${OP_VAULT}/${WEB_ITEM}/password — skipping web setup."
+  else
+    set_service password "$WEB_PW"
+  fi
+fi
+
+if [[ -n "$WEB_PW" ]]; then
+  # A tailnet address keeps the server off the local network. Localhost-only
+  # stays the fallback when Tailscale is down.
+  TS_IP=""
+  if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
+    TS_IP="$(tailscale ip -4 2>/dev/null | head -n 1)"
+  fi
+  if [[ -n "$TS_IP" ]]; then
+    set_service hostname "$TS_IP"
+  else
+    warn "Tailscale is not running — the web server stays on localhost."
+    warn "Run 'tailscale up', then re-run: ./bootstrap.sh --only=opencode-web"
+  fi
+  if [[ -n "${OPENCODE_WEB_PORT:-}" ]]; then
+    set_service port "$OPENCODE_WEB_PORT"
+  fi
+  if $WEB_CHANGED; then
+    log "Starting the OpenCode server"
+    "$OC_BIN" service start >/dev/null 2>&1 || warn "opencode service start failed."
+  fi
+  log "Web login: username 'opencode', password from the 1Password item '$WEB_ITEM'."
 fi
 
 # ── GitHub CLI ────────────────────────────────────────────────────────

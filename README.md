@@ -38,6 +38,8 @@ cd ~/Developer/github/YOU/mac-bootstrap
 | `REPO_DIR`             | Where to clone your fork                                                       |
 | `OPENCODE_CONFIG_REPO` | Private opencode config repo, e.g. `you/opencode_config` (leave empty to skip) |
 | `OPENCODE_SKILLS_REPO` | Public agent skills repo (leave empty to skip)                                 |
+| `OPENCODE_WEB_ITEM`    | 1Password login item holding the web UI password (leave empty to skip)         |
+| `OPENCODE_WEB_PORT`    | Fixed web UI port so the phone URL stays stable                                |
 | `PI_CONFIG_REPO`       | Private Pi config repo, e.g. `you/.pi` (leave empty to skip)                   |
 
 Then run:
@@ -75,7 +77,7 @@ Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be s
 
 The packages phase runs `brew bundle --no-upgrade` on purpose: a cask desynced by its own updater (VSCode Insiders self-updates) can't fail the run. When you actually want to upgrade, run `brew upgrade` yourself.
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `opencode-web`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
 
 ---
 
@@ -130,6 +132,8 @@ Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, go
 ### The LLM coding agent
 
 **OpenCode and Pi.** OpenCode is installed via its official install script. Pi and the Context7 documentation CLI (`ctx7`) are installed from their official npm packages through mise. Pi's optional private config repo (`PI_CONFIG_REPO`) is synced into `~/.pi`. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
+
+**OpenCode web UI.** The web UI is password protected, and that password lives in 1Password (`OPENCODE_WEB_ITEM`), never in the config repo — the bootstrap reads it and hands it to `opencode service set password`, so every machine ends up with the same login. When Tailscale is up, the same section binds the server to the tailnet address (`OPENCODE_WEB_PORT`) so the phone can reach it from anywhere without exposing a port on the local network. With Tailscale down the server stays on localhost, which is also the safe default.
 
 ### The browser automation stack
 
