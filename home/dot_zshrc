@@ -35,6 +35,16 @@ done
 path=($HOME/.local/bin $HOME/.opencode/bin $path)
 unset _brew_dir
 
+# One canonical fpath in every shell. brew shellenv exports FPATH, so child
+# shells (Herdr panes, editor terminals) inherit it and Zim prepends its dirs
+# a second time. Zim keys ~/.zcompdump on the full fpath, so any difference
+# between shells forces a multi-second compinit rebuild on the next start.
+typeset -U fpath
+for _fdir in /opt/homebrew/share/zsh/site-functions /home/linuxbrew/.linuxbrew/share/zsh/site-functions; do
+  [[ -d $_fdir ]] && fpath=($_fdir $fpath)
+done
+unset _fdir
+
 export TENV_AUTO_INSTALL=true
 export OPENCODE_EXPERIMENTAL=true
 export GRAFANA_SERVER=https://grafana.attainfinance.com

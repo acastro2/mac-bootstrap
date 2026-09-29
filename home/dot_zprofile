@@ -12,6 +12,23 @@ elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 
+# Local tool bins ahead of Homebrew, for *every* shell kind. .zshrc does the
+# same, but only runs when interactive; without this a non-interactive login
+# shell resolves ~/.local/bin tools (claude, cortex, herdr) to a Homebrew or
+# npm copy instead, so the same command gives a different version per shell.
+#
+# Move to front, do not skip when already present: the kiro-cli pre block above
+# appends ~/.local/bin near the tail, and a "prepend only if missing" guard
+# would see it there and leave the wrong order in place.
+for _local_bin in "$HOME/.opencode/bin" "$HOME/.local/bin"; do
+  [[ -d $_local_bin ]] || continue
+  PATH="${PATH//":$_local_bin:"/":"}"   # strip middle occurrence
+  PATH="${PATH#"$_local_bin:"}"          # strip leading
+  PATH="${PATH%":$_local_bin"}"          # strip trailing
+  export PATH="$_local_bin:$PATH"
+done
+unset _local_bin
+
 # added by Snowflake SnowflakeCLI installer v1.0
 export PATH=/Applications/SnowflakeCLI.app/Contents/MacOS/:$PATH
 

@@ -46,6 +46,20 @@ prompt(){ printf "\n\033[1;35m??\033[0m %s\n" "$*"; }
 die()   { printf "\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 section(){ printf "\n\033[1;37m━━━ %s ━━━\033[0m\n" "$*"; }
 
+# Warn when a tool resolves to something other than the install this script
+# manages. A second copy on PATH (Homebrew prefix, npm global, a cask) does not
+# replace the managed one — it shadows it in whichever shells order PATH
+# differently, so the same command reports a different version per shell.
+check_single_install() {
+  local cmd="$1" managed="$2" resolved
+  resolved=$(command -v "$cmd" 2>/dev/null || true)
+  [[ -z "$resolved" || "$resolved" == "$managed" ]] && return 0
+  warn "Second $cmd install shadows the managed one:"
+  warn "    on PATH:  $resolved"
+  warn "    managed:  $managed"
+  warn "    Remove the first, or it will win in shells that order PATH differently."
+}
+
 # ── Selective re-run flags ──────────────────────────────────────────
 SKIP=""
 ONLY=""
@@ -256,9 +270,20 @@ if $CLEAN; then
   rm -rf "$HOME/.local/share/claude" 2>/dev/null || true
   rm -f "$HOME/.local/bin/claude" 2>/dev/null || true
   npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+  # `npm uninstall -g` only touches the *current* npm prefix (mise node), so a
+  # copy installed while the prefix pointed at Homebrew survives it. Clear both.
+  for _npm_prefix in /opt/homebrew /usr/local /home/linuxbrew/.linuxbrew; do
+    rm -rf "$_npm_prefix/lib/node_modules/@anthropic-ai/claude-code" 2>/dev/null || true
+    rmdir "$_npm_prefix/lib/node_modules/@anthropic-ai" 2>/dev/null || true
+    [[ -L "$_npm_prefix/bin/claude" ]] && rm -f "$_npm_prefix/bin/claude" 2>/dev/null || true
+  done
+  unset _npm_prefix
 
   log "Removing herdr"
-  rm -f "$(command -v herdr 2>/dev/null)" 2>/dev/null || true
+  rm -f "$HOME/.local/bin/herdr" 2>/dev/null || true
+  _herdr_stray=$(command -v herdr 2>/dev/null || true)
+  [[ -n "$_herdr_stray" ]] && warn "herdr still on PATH at $_herdr_stray (not managed here); remove it manually."
+  unset _herdr_stray
 
   log "Removing chezmoi state"
   rm -rf "$HOME/.config/chezmoi" 2>/dev/null || true
@@ -574,12 +599,16 @@ fi
 # ── herdr ─────────────────────────────────────────────────────────────
 if should_run herdr; then
 section "herdr"
-if ! command -v herdr &>/dev/null; then
+# Test the managed path, not `command -v`: a copy elsewhere on PATH satisfies
+# `command -v` and silently skips this install, leaving two versions that
+# alternate by shell kind.
+if [[ ! -x "$HOME/.local/bin/herdr" ]]; then
   log "Installing herdr"
   curl -fsSL https://herdr.dev/install.sh | sh
 else
-  log "Already installed."
+  log "Already installed: $("$HOME/.local/bin/herdr" --version 2>/dev/null || echo 'unknown')"
 fi
+check_single_install herdr "$HOME/.local/bin/herdr"
 fi
 
 # ── opencode ──────────────────────────────────────────────────────────
@@ -611,15 +640,20 @@ fi
 # ── Claude Code CLI ───────────────────────────────────────────────────
 if should_run claude; then
 section "Claude Code CLI"
-if ! command -v claude &>/dev/null; then
+# Test the native launcher, not `command -v claude`: a stray npm copy on PATH
+# (e.g. /opt/homebrew/bin/claude) satisfies `command -v` and silently skips the
+# native install, leaving two versions that alternate by shell kind.
+if [[ ! -x "$HOME/.local/bin/claude" ]]; then
   log "Installing Claude Code CLI (native installer)"
   # Native install (~/.local/share/claude, launcher ~/.local/bin/claude).
   # Self-updating, no Node dep. Avoid `npm -g` under mise: a node version
   # switch orphans the binary and triggers dual-install / config mismatch.
   curl -fsSL https://claude.ai/install.sh | bash
 else
-  log "Already installed: $(claude --version 2>/dev/null || echo 'unknown')"
+  log "Already installed: $("$HOME/.local/bin/claude" --version 2>/dev/null || echo 'unknown')"
 fi
+
+check_single_install claude "$HOME/.local/bin/claude"
 fi
 
 # ── Snowflake Cortex Code CLI ─────────────────────────────────────────
@@ -631,12 +665,13 @@ if [[ ! -x "$HOME/.local/bin/cortex" ]]; then
 else
   log "Already installed."
 fi
+check_single_install cortex "$HOME/.local/bin/cortex"
 fi
 
 # ── tgrep ─────────────────────────────────────────────────────────────
 if should_run tgrep; then
 section "tgrep"
-if ! command -v tgrep &>/dev/null; then
+if [[ ! -x "$HOME/.local/bin/tgrep" ]]; then
   log "Installing tgrep"
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64)  TGREP_TARGET="aarch64-apple-darwin" ;;
@@ -945,9 +980,12 @@ if should_run doctor; then
 section "Doctor"
 pass=0; fail=0
 check() {
-  local cmd="$1"
-  if command -v "$cmd" &>/dev/null; then
-    printf "  \033[1;32m✓\033[0m %s\n" "$cmd"
+  local cmd="$1" resolved
+  # Print the resolved path, not a bare tick: a tick alone hid the case where
+  # `claude` resolved to a stale npm copy instead of the native install.
+  resolved=$(command -v "$cmd" 2>/dev/null || true)
+  if [[ -n "$resolved" ]]; then
+    printf "  \033[1;32m✓\033[0m %-24s %s\n" "$cmd" "${resolved/#$HOME/~}"
     pass=$((pass + 1))
   else
     printf "  \033[1;31m✗\033[0m %-24s (not found)\n" "$cmd"

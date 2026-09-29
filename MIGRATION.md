@@ -222,6 +222,8 @@ This removes all Homebrew packages, mise toolchains, opencode/claude binaries, Z
 
 **`gh repo clone` fails during bootstrap**: Run `gh auth login --web` manually, then re-run `./bootstrap.sh --only=auth`.
 
+**Same command, different version per shell**: you have two installs and PATH orders them differently per shell kind. Check with `which -a <tool>`. The usual culprit is a leftover `npm install -g` in a Homebrew prefix (`/opt/homebrew/bin/<tool>` + `/opt/homebrew/lib/node_modules/...`); `brew uninstall` will not touch it and `npm uninstall -g` only clears the *current* npm prefix (mise node), so remove both paths by hand. `./bootstrap.sh` now warns about this at install time and prints the resolved path for every tool in its final summary. `~/.zprofile` puts `~/.local/bin` ahead of Homebrew for every shell kind, so the two no longer disagree.
+
 **Claude Code not found after bootstrap**: The native installer drops the launcher at `~/.local/bin/claude`; make sure that dir is on PATH, then re-run `./bootstrap.sh --only=claude`. Do not `npm -g install @anthropic-ai/claude-code` under mise: a node version switch orphans the shim and `claude update` (native updater) then silently no-ops against it.
 
 **zsh was not set as the login shell**: The bootstrap keeps Nushell in place when the switch or readback fails. On macOS, run `sudo dscl . -create "/Users/$USER" UserShell /bin/zsh`, verify it with `dscl . -read "/Users/$USER" UserShell`, then rerun `./bootstrap.sh --only=zsh,shell`.
