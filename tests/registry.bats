@@ -131,12 +131,12 @@ install_registry_targets() {
 
 @test "an absent dependency skips its row instead of failing" {
   install_registry_targets
-  /bin/rm -f "$TMP/bin/docker"
+  /bin/rm -f "$TMP/bin/uv"
 
   run "$REPO/bootstrap.sh" --only=doctor --strict
   [ "$status" -eq 0 ]
-  [[ "$output" == *"docker-compose"* ]]
-  [[ "$output" == *"docker not installed"* ]]
+  [[ "$output" == *"playwright"* ]]
+  [[ "$output" == *"uv not installed"* ]]
 }
 
 @test "a managed install PATH cannot see warns but does not gate" {
