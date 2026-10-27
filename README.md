@@ -77,7 +77,9 @@ Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be s
 
 The packages phase runs `brew bundle --no-upgrade` on purpose: a cask desynced by its own updater (VSCode Insiders self-updates) can't fail the run. When you actually want to upgrade, run `brew upgrade` yourself.
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `opencode-web`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `claude`, `opencode-web`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `rea`, `doctor`.
+
+The managed install registry is the one list of tools this script installs directly, with the path each one must resolve to. `--dump-tools` prints it. `doctor` reports it, and `--strict` makes doctor exit 1 when a managed install is shadowed or missing. `--clean --dry-run` prints the full reset plan without removing anything.
 
 ---
 
@@ -134,6 +136,8 @@ Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, go
 **OpenCode and Pi.** OpenCode is installed via its official install script. Pi and the Context7 documentation CLI (`ctx7`) are installed from their official npm packages through mise. Pi's optional private config repo (`PI_CONFIG_REPO`) is synced into `~/.pi`. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
 
 **OpenCode web UI.** The web UI is password protected, and that password lives in 1Password (`OPENCODE_WEB_ITEM`), never in the config repo — the bootstrap reads it and hands it to `opencode service set password`, so every machine ends up with the same login. When Tailscale is up, the same section binds the server to the tailnet address (`OPENCODE_WEB_PORT`) so the phone can reach it from anywhere without exposing a port on the local network. With Tailscale down the server stays on localhost, which is also the safe default.
+
+**REA.** [REA](https://github.com/morluto/rea) is a reverse-engineering MCP server: it inspects native binaries, JavaScript/Electron apps, .NET assemblies, and websites, and returns findings with their evidence. Bootstrap registers it with OpenCode and installs Hopper alongside it. Hopper, not Ghidra, because Ghidra ships no decompiler binary for macOS — you would have to build its C++ decompiler from source before it can decompile anything. Hopper is commercial; the free demo is enough to start, and its first launch asks you to pick demo mode or activate a license. The pinned version is `REA_VERSION` at the top of `bootstrap.sh`; bump it deliberately and re-run, the same way the Brewfile maps the machine to an installed set.
 
 ### The browser automation stack
 

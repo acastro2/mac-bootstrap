@@ -5,6 +5,9 @@
 #   ./bootstrap.sh
 #   ./bootstrap.sh --skip=macos-defaults,auth,shell  --only=brew,mise
 #   ./bootstrap.sh --clean                     # remove managed artifacts before a fresh re-run
+#   ./bootstrap.sh --clean --dry-run           # print the cleanup plan, remove nothing
+#   ./bootstrap.sh --only=doctor --strict      # exit 1 when a managed install is wrong
+#   ./bootstrap.sh --dump-tools                # print the managed install registry
 #   ./bootstrap.sh --export-sessions           # pack session data to ~/Desktop for airdrop
 #   ./bootstrap.sh --export-workspace          # pack ~/Developer (minus org repos) for airdrop
 #   ./bootstrap.sh --import-sessions=<file>    # restore session data from tarball
@@ -23,6 +26,7 @@ OPENCODE_WEB_ITEM=""
 OPENCODE_WEB_PORT=""
 CLAUDE_CONFIG_REPO=""
 PI_CONFIG_REPO=""
+REA_VERSION="6.8.0"   # pinned like the Brewfile: bump deliberately, then re-run
 
 # Source personal config if present (gitignored, not committed).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -46,27 +50,169 @@ prompt(){ printf "\n\033[1;35m??\033[0m %s\n" "$*"; }
 die()   { printf "\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 section(){ printf "\n\033[1;37m━━━ %s ━━━\033[0m\n" "$*"; }
 
-# Warn when a tool resolves to something other than the install this script
-# manages. A second copy on PATH (Homebrew prefix, npm global, a cask) does not
-# replace the managed one — it shadows it in whichever shells order PATH
-# differently, so the same command reports a different version per shell.
-check_single_install() {
-  local cmd="$1" managed="$2" resolved
-  resolved=$(command -v "$cmd" 2>/dev/null || true)
-  [[ -z "$resolved" || "$resolved" == "$managed" ]] && return 0
-  warn "Second $cmd install shadows the managed one:"
-  warn "    on PATH:  $resolved"
-  warn "    managed:  $managed"
-  warn "    Remove the first, or it will win in shells that order PATH differently."
+# ── Managed install registry ─────────────────────────────────────────
+# One row per tool this script installs directly. Package managers keep their
+# own registries (Brewfile, mise config); these installs have none, so this
+# table is the only place that knows where each one lives.
+#
+# Fields: name|kind|target|spec|remove
+#   target  path that must exist, relative to $HOME
+#   spec    kind-specific: the uv package, or the app binary a link points at
+#   remove  what --clean deletes, space-separated, relative to $HOME
+#           (empty means the target)
+#
+# Kinds:
+#   script  installed by a curl or gh-release installer
+#   uv      installed with `uv tool install`; checked through `uv tool list`
+#   app     symlink to an application binary; only exists when the app does
+#   plugin  symlink to a Homebrew binary that Docker discovers
+managed_rows() {
+  cat <<'EOF'
+herdr|script|.local/bin/herdr||.local/bin/herdr
+opencode|script|.opencode/bin/opencode||.opencode
+claude|script|.local/bin/claude||.local/bin/claude .local/share/claude
+cortex|script|.local/bin/cortex||.local/bin/cortex
+tgrep|script|.local/bin/tgrep||.local/bin/tgrep
+playwright|uv|.local/bin/playwright|playwright|.local/bin/playwright .local/share/uv/tools/playwright
+browser-use|uv|.local/bin/browser-use|browser-use|.local/bin/browser-use .local/share/uv/tools/browser-use
+code-insiders|app|.local/bin/code-insiders|/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code|.local/bin/code-insiders
+zed|app|.local/bin/zed|/Applications/Zed.app/Contents/MacOS/cli|.local/bin/zed
+docker-compose|plugin|.docker/cli-plugins/docker-compose||.docker/cli-plugins/docker-compose
+EOF
+}
+
+registry_names() {
+  local name _
+  while IFS='|' read -r name _; do
+    printf '%s\n' "$name"
+  done < <(managed_rows)
+}
+
+# Load one row into ROW_KIND, ROW_TARGET, ROW_SPEC and ROW_REMOVE.
+managed_row() {
+  local want="$1" name kind target spec remove
+  ROW_KIND="" ROW_TARGET="" ROW_SPEC="" ROW_REMOVE=""
+  while IFS='|' read -r name kind target spec remove; do
+    [[ "$name" == "$want" ]] || continue
+    ROW_KIND="$kind"
+    ROW_TARGET="$target"
+    ROW_SPEC="$spec"
+    ROW_REMOVE="$remove"
+    return 0
+  done < <(managed_rows)
+  return 1
+}
+
+# Status: 0 present, 1 shadowed, 2 missing, 3 skipped, 4 not on PATH.
+# Sets CHECK_DETAIL to the line the caller prints.
+# shellcheck disable=SC2088  # CHECK_DETAIL is display text; the tilde is literal.
+check_managed() {
+  local name="$1" target resolved link
+  CHECK_DETAIL=""
+  if ! managed_row "$name"; then
+    CHECK_DETAIL="not in the registry"
+    return 2
+  fi
+  target="$HOME/$ROW_TARGET"
+
+  case "$ROW_KIND" in
+    app)
+      [[ -e "$ROW_SPEC" ]] || { CHECK_DETAIL="app not installed"; return 3; }
+      ;;
+    plugin)
+      command -v docker >/dev/null 2>&1 || { CHECK_DETAIL="docker not installed"; return 3; }
+      ;;
+    uv)
+      command -v uv >/dev/null 2>&1 || { CHECK_DETAIL="uv not installed"; return 3; }
+      if uv tool list 2>/dev/null | grep -q "^$ROW_SPEC v"; then
+        CHECK_DETAIL="~/$ROW_TARGET (uv $ROW_SPEC)"
+        return 0
+      fi
+      CHECK_DETAIL="uv tool $ROW_SPEC not installed"
+      return 2
+      ;;
+  esac
+
+  [[ -e "$target" ]] || { CHECK_DETAIL="missing at ~/$ROW_TARGET"; return 2; }
+
+  if [[ "$ROW_KIND" == "plugin" ]]; then
+    link="$(readlink "$target" 2>/dev/null || true)"
+    if [[ "$link" == "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ]]; then
+      CHECK_DETAIL="~/$ROW_TARGET"
+      return 0
+    fi
+    CHECK_DETAIL="~/$ROW_TARGET points at ${link:-nothing}"
+    return 1
+  fi
+
+  if [[ "$ROW_KIND" == "app" ]]; then
+    link="$(readlink "$target" 2>/dev/null || true)"
+    if [[ "$link" != "$ROW_SPEC" ]]; then
+      CHECK_DETAIL="~/$ROW_TARGET points at ${link:-nothing}"
+      return 1
+    fi
+  fi
+
+  resolved="$(command -v "$name" 2>/dev/null || true)"
+  [[ -n "$resolved" ]] || { CHECK_DETAIL="~/$ROW_TARGET (not on PATH in this shell)"; return 4; }
+  [[ "$resolved" == "$target" ]] || { CHECK_DETAIL="$resolved shadows ~/$ROW_TARGET"; return 1; }
+  CHECK_DETAIL="${resolved/#$HOME/~}"
+  return 0
+}
+
+# Warn during install, without failing the phase: a second copy on PATH does
+# not replace the managed one, it changes which version a shell gets.
+warn_if_shadowed() {
+  local name="$1" status=0
+  if check_managed "$name"; then
+    status=0
+  else
+    status=$?
+  fi
+  case "$status" in
+    1|2) warn "$name: $CHECK_DETAIL" ;;
+  esac
+  return 0
+}
+
+# Delete one row's paths, or print them under --dry-run.
+remove_managed() {
+  local name="$1" path
+  local -a paths=()
+  if ! managed_row "$name"; then
+    warn "No registry row for $name"
+    return 0
+  fi
+  read -r -a paths <<< "${ROW_REMOVE:-$ROW_TARGET}"
+  for path in "${paths[@]}"; do
+    [[ -n "$path" ]] || continue
+    if $CLEAN_DRY_RUN; then
+      log "would remove: ~/$path"
+    else
+      rm -rf "${HOME:?}/$path" 2>/dev/null || true
+    fi
+  done
+}
+
+# Run one cleanup command, or print it under --dry-run.
+clean_run() {
+  if $CLEAN_DRY_RUN; then
+    log "would run: $*"
+  else
+    "$@"
+  fi
 }
 
 # ── Selective re-run flags ──────────────────────────────────────────
 SKIP=""
 ONLY=""
 CLEAN=false
+CLEAN_DRY_RUN=false
 EXPORT_SESSIONS=false
 EXPORT_WORKSPACE=false
 IMPORT_SESSIONS=""
+STRICT=false
+DUMP_TOOLS=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip=*) SKIP="${1#*=}"; shift ;;
@@ -74,6 +220,9 @@ while [[ $# -gt 0 ]]; do
     -s|--skip) SKIP="$2"; shift 2 ;;
     -o|--only) ONLY="$2"; shift 2 ;;
     --clean) CLEAN=true; shift ;;
+    --dry-run) CLEAN_DRY_RUN=true; shift ;;
+    --strict) STRICT=true; shift ;;
+    --dump-tools) DUMP_TOOLS=true; shift ;;
     --export-sessions) EXPORT_SESSIONS=true; shift ;;
     --export-workspace) EXPORT_WORKSPACE=true; shift ;;
     --import-sessions=*) IMPORT_SESSIONS="${1#*=}"; shift ;;
@@ -81,6 +230,16 @@ while [[ $# -gt 0 ]]; do
     *) warn "Unknown argument: $1"; shift ;;
   esac
 done
+
+# Read-only view of the registry. Tests and CI use it to check the table.
+if $DUMP_TOOLS; then
+  managed_rows
+  exit 0
+fi
+
+if $CLEAN_DRY_RUN && ! $CLEAN; then
+  die "--dry-run only applies to --clean."
+fi
 
 # ── Export sessions (creates a tarball for airdrop) ────────────────────
 if $EXPORT_SESSIONS; then
@@ -250,57 +409,58 @@ fi
 # Does NOT uninstall Homebrew itself or remove ~/Developer.
 if $CLEAN; then
   section "Cleanup (preparing for fresh bootstrap)"
+  if $CLEAN_DRY_RUN; then
+    warn "Dry run: printing the plan. Nothing will be removed."
+  fi
 
   log "Removing Homebrew packages (keeping Homebrew itself)"
   brew_formulae=()
-  while IFS= read -r package; do brew_formulae+=("$package"); done < <(brew list --formula)
+  while IFS= read -r package; do brew_formulae+=("$package"); done < <(brew list --formula 2>/dev/null || true)
   brew_casks=()
-  while IFS= read -r package; do brew_casks+=("$package"); done < <(brew list --cask)
-  ((${#brew_formulae[@]} == 0)) || brew remove --force --ignore-dependencies "${brew_formulae[@]}" 2>/dev/null || true
-  ((${#brew_casks[@]} == 0)) || brew remove --force --cask "${brew_casks[@]}" 2>/dev/null || true
-  brew cleanup --prune=all 2>/dev/null || true
+  while IFS= read -r package; do brew_casks+=("$package"); done < <(brew list --cask 2>/dev/null || true)
+  ((${#brew_formulae[@]} == 0)) || clean_run brew remove --force --ignore-dependencies "${brew_formulae[@]}" 2>/dev/null || true
+  ((${#brew_casks[@]} == 0)) || clean_run brew remove --force --cask "${brew_casks[@]}" 2>/dev/null || true
+  clean_run brew cleanup --prune=all 2>/dev/null || true
 
   log "Removing mise toolchains"
-  rm -rf "$HOME/.local/share/mise" "$HOME/.config/mise" 2>/dev/null || true
+  clean_run rm -rf "$HOME/.local/share/mise" "$HOME/.config/mise" 2>/dev/null || true
 
-  log "Removing opencode binary"
-  rm -rf "$HOME/.opencode" 2>/dev/null || true
+  log "Removing managed installs"
+  while IFS= read -r _tool; do
+    remove_managed "$_tool"
+  done < <(registry_names)
 
-  log "Removing claude code (native + any legacy npm global)"
-  rm -rf "$HOME/.local/share/claude" 2>/dev/null || true
-  rm -f "$HOME/.local/bin/claude" 2>/dev/null || true
-  npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+  _herdr_stray=$(command -v herdr 2>/dev/null || true)
+  if [[ -n "$_herdr_stray" && "$_herdr_stray" != "$HOME/.local/bin/herdr" ]]; then
+    warn "herdr still on PATH at $_herdr_stray (not managed here); remove it manually."
+  fi
+  unset _herdr_stray
+
+  log "Removing any legacy npm copy of claude code"
+  clean_run npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
   # `npm uninstall -g` only touches the *current* npm prefix (mise node), so a
   # copy installed while the prefix pointed at Homebrew survives it. Clear both.
   for _npm_prefix in /opt/homebrew /usr/local /home/linuxbrew/.linuxbrew; do
-    rm -rf "$_npm_prefix/lib/node_modules/@anthropic-ai/claude-code" 2>/dev/null || true
-    rmdir "$_npm_prefix/lib/node_modules/@anthropic-ai" 2>/dev/null || true
-    [[ -L "$_npm_prefix/bin/claude" ]] && rm -f "$_npm_prefix/bin/claude" 2>/dev/null || true
+    clean_run rm -rf "$_npm_prefix/lib/node_modules/@anthropic-ai/claude-code" 2>/dev/null || true
+    clean_run rmdir "$_npm_prefix/lib/node_modules/@anthropic-ai" 2>/dev/null || true
+    if [[ -L "$_npm_prefix/bin/claude" ]]; then
+      clean_run rm -f "$_npm_prefix/bin/claude" 2>/dev/null || true
+    fi
   done
   unset _npm_prefix
 
-  log "Removing herdr"
-  rm -f "$HOME/.local/bin/herdr" 2>/dev/null || true
-  _herdr_stray=$(command -v herdr 2>/dev/null || true)
-  [[ -n "$_herdr_stray" ]] && warn "herdr still on PATH at $_herdr_stray (not managed here); remove it manually."
-  unset _herdr_stray
-
   log "Removing chezmoi state"
-  rm -rf "$HOME/.config/chezmoi" 2>/dev/null || true
+  clean_run rm -rf "$HOME/.config/chezmoi" 2>/dev/null || true
 
   log "Removing Zsh/Zim managed files"
-  rm -rf "$HOME/.zim" 2>/dev/null || true
-  rm -f "$HOME/.zshrc" "$HOME/.zimrc" 2>/dev/null || true
-  rm -rf "$HOME/.config/zsh" 2>/dev/null || true
-  rm -rf "$HOME/.cache/carapace" 2>/dev/null || true
+  clean_run rm -rf "$HOME/.zim" 2>/dev/null || true
+  clean_run rm -f "$HOME/.zshrc" "$HOME/.zimrc" 2>/dev/null || true
+  clean_run rm -rf "$HOME/.config/zsh" 2>/dev/null || true
+  clean_run rm -rf "$HOME/.cache/carapace" 2>/dev/null || true
 
   log "Removing legacy Nushell configs"
-  rm -rf "$HOME/.config/nushell" "$HOME/.local/share/nushell" \
+  clean_run rm -rf "$HOME/.config/nushell" "$HOME/.local/share/nushell" \
     "$HOME/Library/Application Support/nushell" 2>/dev/null || true
-
-  log "Removing app CLI symlinks"
-  rm -f "$HOME/.local/bin/code-insiders" "$HOME/.local/bin/zed" 2>/dev/null || true
-  rm -f "$HOME/.docker/cli-plugins/docker-compose" 2>/dev/null || true
 
   log "Cleanup complete. Re-run without --clean to reinstall."
   exit 0
@@ -608,7 +768,7 @@ if [[ ! -x "$HOME/.local/bin/herdr" ]]; then
 else
   log "Already installed: $("$HOME/.local/bin/herdr" --version 2>/dev/null || echo 'unknown')"
 fi
-check_single_install herdr "$HOME/.local/bin/herdr"
+warn_if_shadowed herdr
 fi
 
 # ── opencode ──────────────────────────────────────────────────────────
@@ -635,6 +795,7 @@ else
     log "Already installed: $OPENCODE_VERSION"
   fi
 fi
+warn_if_shadowed opencode
 fi
 
 # ── Claude Code CLI ───────────────────────────────────────────────────
@@ -653,7 +814,7 @@ else
   log "Already installed: $("$HOME/.local/bin/claude" --version 2>/dev/null || echo 'unknown')"
 fi
 
-check_single_install claude "$HOME/.local/bin/claude"
+warn_if_shadowed claude
 fi
 
 # ── Snowflake Cortex Code CLI ─────────────────────────────────────────
@@ -665,7 +826,7 @@ if [[ ! -x "$HOME/.local/bin/cortex" ]]; then
 else
   log "Already installed."
 fi
-check_single_install cortex "$HOME/.local/bin/cortex"
+warn_if_shadowed cortex
 fi
 
 # ── tgrep ─────────────────────────────────────────────────────────────
@@ -696,6 +857,7 @@ if [[ ! -x "$HOME/.local/bin/tgrep" ]]; then
 else
   log "Already installed: $(tgrep --version 2>/dev/null || echo 'unknown')"
 fi
+warn_if_shadowed tgrep
 fi
 
 # ── mise ──────────────────────────────────────────────────────────────
@@ -975,10 +1137,39 @@ if [[ -n "$OPENCODE_SKILLS_REPO" ]]; then
 fi
 fi  # auth
 
+# ── REA (reverse engineering MCP) ───────────────────────────────────────
+# Runs after the config and skills clones above: REA writes its MCP entry into
+# ~/.config/opencode and its skill into ~/.agents/skills, and a clone into a
+# non-empty directory fails. Re-running writes nothing when the registration
+# already matches REA_VERSION.
+if should_run rea; then
+section "REA (reverse engineering)"
+if ! $IS_MACOS; then
+  log "Skipping REA: this bootstrap only wires the Hopper provider on macOS."
+else
+  HOPPER_APP="$HOME/Applications/Hopper Disassembler.app"
+  REA_SETUP=(setup --client opencode --yes)
+  if [[ -d "$HOPPER_APP" ]]; then
+    log "Hopper present; refreshing the REA registration"
+  else
+    # Ghidra is not an alternative here: the official macOS release ships no
+    # decompiler binary, so Hopper is the only engine that decompiles.
+    log "Installing Hopper (demo) with REA and registering it with OpenCode"
+    REA_SETUP+=(--install-hopper)
+  fi
+  if npx -y "rea-agents@${REA_VERSION}" "${REA_SETUP[@]}"; then
+    log "REA ready: npx -y rea-agents@${REA_VERSION} mcp"
+  else
+    warn "REA setup stopped at a human step. Open Hopper, choose demo mode or activate a license, then re-run:"
+    warn "  npx -y rea-agents@${REA_VERSION} setup --client opencode --yes"
+  fi
+fi
+fi
+
 # ── Doctor ──────────────────────────────────────────────────────────────
 if should_run doctor; then
 section "Doctor"
-pass=0; fail=0
+pass=0; fail=0; broken=0
 check() {
   local cmd="$1" resolved
   # Print the resolved path, not a bare tick: a tick alone hid the case where
@@ -1001,10 +1192,36 @@ check_file() {
     fail=$((fail + 1))
   fi
 }
-check zsh; check starship; check mise; [[ -n "$OP_VAULT" ]] && check op; check gh
-check chezmoi; check herdr; check opencode; check claude; check cortex; check pi; check ctx7; check tgrep
+# A shadowed or missing managed install is what --strict gates on. A skipped
+# row (app absent) is not a failure.
+check_registry() {
+  local name="$1" status=0
+  if check_managed "$name"; then
+    status=0
+  else
+    status=$?
+  fi
+  case "$status" in
+    0) printf "  \033[1;32m✓\033[0m %-24s %s\n" "$name" "$CHECK_DETAIL"
+       pass=$((pass + 1)) ;;
+    1|2) printf "  \033[1;31m✗\033[0m %-24s %s\n" "$name" "$CHECK_DETAIL"
+       fail=$((fail + 1)); broken=$((broken + 1)) ;;
+    3) printf "  \033[1;33m–\033[0m %-24s %s\n" "$name" "$CHECK_DETAIL" ;;
+    4) printf "  \033[1;33m⚠\033[0m %-24s %s\n" "$name" "$CHECK_DETAIL" ;;
+  esac
+}
+
+log "Managed installs"
+while IFS= read -r _name; do
+  check_registry "$_name"
+done < <(registry_names)
+
+log "Tools from package managers"
+check zsh; check starship; check mise
+if [[ -n "$OP_VAULT" ]]; then check op; fi
+check gh; check chezmoi; check pi; check ctx7
 check aws; check az; check gcx; check kubectl; check helm
-check playwright; check uv; check colima; check docker
+check uv; check colima; check docker
 if docker compose version &>/dev/null; then
   printf "  \033[1;32m✓\033[0m docker compose\n"
   pass=$((pass + 1))
@@ -1015,6 +1232,8 @@ fi
 check_file "$HOME/.zim/zimfw.zsh" "zim"
 
 if $IS_MACOS; then
+  check_file "$HOME/.agents/skills/reverse-engineer-anything/SKILL.md" "rea skill"
+  check_file "$HOME/Applications/Hopper Disassembler.app" "Hopper"
   ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')"
   EXPECTED_SHELL="/bin/zsh"
 else
@@ -1030,6 +1249,11 @@ else
 fi
 
 echo ""
+if [[ $broken -gt 0 ]] && $STRICT; then
+  warn "$pass passed, $fail failed, $broken managed install(s) wrong."
+  warn "Fix the managed installs above, then re-run: ./bootstrap.sh --only=doctor --strict"
+  exit 1
+fi
 if [[ $fail -eq 0 ]]; then
   log "All $pass checks passed."
 else
