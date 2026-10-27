@@ -1238,7 +1238,7 @@ if $IS_MACOS; then
   EXPECTED_SHELL="/bin/zsh"
 else
   ACCOUNT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
-  EXPECTED_SHELL="$(command -v zsh)"
+  EXPECTED_SHELL="$(command -v zsh || true)"
 fi
 if [[ "$ACCOUNT_SHELL" == "$EXPECTED_SHELL" ]]; then
   printf "  \033[1;32m✓\033[0m login shell\n"

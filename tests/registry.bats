@@ -148,6 +148,15 @@ install_registry_targets() {
   [[ "$output" == *"not on PATH"* ]]
 }
 
+@test "doctor survives a machine without zsh" {
+  if command -v zsh >/dev/null 2>&1; then
+    skip "zsh is installed here"
+  fi
+
+  run "$REPO/bootstrap.sh" --only=doctor
+  [ "$status" -eq 0 ]
+}
+
 @test "clean --dry-run plans removals without running them" {
   : > "$HOME/.local/bin/herdr"
 
