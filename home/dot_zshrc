@@ -262,6 +262,22 @@ gpsup() {
   git push --set-upstream origin $branch
 }
 
+# Push as the acastro2 GitHub account without touching the active gh account.
+# The gh credential helper prefers GH_TOKEN over the active account, so the
+# push authenticates as acastro2 while other shells and agent sessions keep
+# the account they were on. Keeps working when a push is interrupted, which
+# a switch-and-restore flow would not.
+git-push-acastro2() {
+  local token
+  token=$(gh auth token --user acastro2 2>/dev/null)
+  if [[ -z $token ]]; then
+    print -u2 'git-push-acastro2: not logged in as acastro2. Run: gh auth login'
+    return 1
+  fi
+  print -- 'Pushing as acastro2'
+  GH_TOKEN=$token git push "$@"
+}
+
 git-clean() {
   git rev-parse --is-inside-work-tree &>/dev/null || {
     print -u2 'git-clean must run inside a Git worktree'
