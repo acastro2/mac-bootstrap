@@ -40,7 +40,6 @@ cd ~/Developer/github/YOU/mac-bootstrap
 | `OPENCODE_SKILLS_REPO` | Public agent skills repo (leave empty to skip)                                 |
 | `OPENCODE_WEB_ITEM`    | 1Password login item holding the web UI password (leave empty to skip)         |
 | `OPENCODE_WEB_PORT`    | Fixed web UI port so the phone URL stays stable                                |
-| `PI_CONFIG_REPO`       | Private Pi config repo, e.g. `you/.pi` (leave empty to skip)                   |
 
 Then run:
 
@@ -113,7 +112,7 @@ On a machine that still runs Nushell, the migration is fail-safe: the zsh config
 
 ### The package manager
 
-**Homebrew** with a `Brewfile`. The list includes git, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, the Grafana `gcx` CLI, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
+**Homebrew** with a `Brewfile`. The list includes git, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
 
 ### The toolchain manager
 
@@ -133,7 +132,7 @@ Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, go
 
 ### The LLM coding agent
 
-**OpenCode and Pi.** OpenCode is installed via its official install script. Pi and the Context7 documentation CLI (`ctx7`) are installed from their official npm packages through mise. Pi's optional private config repo (`PI_CONFIG_REPO`) is synced into `~/.pi`. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
+**OpenCode.** OpenCode is installed via its official install script. The Context7 documentation CLI (`ctx7`) is installed from its official npm package through mise. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
 
 **OpenCode web UI.** The web UI is password protected, and that password lives in 1Password (`OPENCODE_WEB_ITEM`), never in the config repo — the bootstrap reads it and hands it to `opencode service set password`, so every machine ends up with the same login. When Tailscale is up, the same section binds the server to the tailnet address (`OPENCODE_WEB_PORT`) so the phone can reach it from anywhere without exposing a port on the local network. With Tailscale down the server stays on localhost, which is also the safe default.
 
@@ -145,7 +144,7 @@ Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent
 
 ### The infra tooling
 
-**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **[gcx](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/grafana-cli/gcx/)** manages Grafana OSS/Enterprise 12+ and Grafana Cloud through their APIs. The shell defaults to Attain's Grafana 13 instance and organization 1. It maps the 1Password service-account token to `GRAFANA_TOKEN` without storing it in the repo. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
+**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
 
 ### The profile
 

@@ -47,8 +47,6 @@ unset _fdir
 
 export TENV_AUTO_INSTALL=true
 export OPENCODE_EXPERIMENTAL=true
-export GRAFANA_SERVER=https://grafana.attainfinance.com
-export GRAFANA_ORG_ID=1
 export CARAPACE_BRIDGES='zsh,fish,bash,inshellisense'
 
 # Trust the corporate CA for tools that don't use the macOS keychain.
@@ -120,10 +118,9 @@ cd-dev()       { cd ~/Developer }
 cd-down()      { cd ~/Downloads }
 cd-skills()    { cd ~/.agents/skills }
 cd-opencode()  { cd ~/.config/opencode }
-cd-pi()        { cd ~/.pi }
 cd-bootstrap() { cd ~/Developer/github/acastro2/mac-bootstrap }
 cd-claude()    { cd ~/.claude }
-cd-onedrive()  { cd ~/Library/CloudStorage/OneDrive-Attainfinance.com }
+cd-onedrive()  { cd ~/Library/CloudStorage/OneDrive-TheChamberlainGroupLLC }
 
 # Pull every agent and config repo in one shot. Each pull runs in a subshell,
 # so the current directory never changes. --autostash keeps uncommitted edits
@@ -134,7 +131,6 @@ cd-configs-gpr() {
     "$HOME/.config/opencode"
     "$HOME/.claude"
     "$HOME/.agents/skills"
-    "$HOME/.pi"
     "$HOME/Developer/github/acastro2/mac-bootstrap"
   )
   local repo rc=0
@@ -410,8 +406,6 @@ alias awswho='aws sts get-caller-identity'
 # ── Private files ─────────────────────────────────────────────────────
 # API keys written by bootstrap from 1Password (chmod 600).
 [[ -r $HOME/.config/zsh/.api-keys.zsh ]] && source $HOME/.config/zsh/.api-keys.zsh
-# Map the Grafana service-account token to the variable gcx reads.
-[[ -n ${GRAFANA_SERVICE_ACCOUNT_TOKEN:-} ]] && export GRAFANA_TOKEN=$GRAFANA_SERVICE_ACCOUNT_TOKEN
 
 # Machine-local overrides, not committed.
 [[ -r $HOME/.config/zsh/local.zsh ]] && source $HOME/.config/zsh/local.zsh

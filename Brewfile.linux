@@ -32,7 +32,6 @@ brew "kubectl"
 brew "k9s"
 brew "helm"
 brew "awscli"
-brew "gcx"             # Grafana OSS/Enterprise 12+ and Cloud CLI
 brew "colima"          # Docker runtime (no Docker Desktop)
 brew "docker"          # Docker CLI
 brew "docker-compose"  # Docker Compose CLI plugin

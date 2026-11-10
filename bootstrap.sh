@@ -25,7 +25,6 @@ OPENCODE_SKILLS_REPO=""
 OPENCODE_WEB_ITEM=""
 OPENCODE_WEB_PORT=""
 CLAUDE_CONFIG_REPO=""
-PI_CONFIG_REPO=""
 REA_VERSION="6.8.0"   # pinned like the Brewfile: bump deliberately, then re-run
 
 # Source personal config if present (gitignored, not committed).
@@ -162,7 +161,7 @@ check_managed() {
       ;;
     uv)
       command -v uv >/dev/null 2>&1 || { CHECK_DETAIL="uv not installed"; return 3; }
-      if uv tool list 2>/dev/null | grep -q "^$ROW_SPEC v"; then
+      if uv tool list 2>/dev/null | grep "^$ROW_SPEC v" >/dev/null; then
         CHECK_DETAIL="~/$ROW_TARGET (uv $ROW_SPEC)"
         return 0
       fi
@@ -431,7 +430,7 @@ if [[ -n "$IMPORT_SESSIONS" ]]; then
   rm -f "$HOME/.snowflake/connections.toml" 2>/dev/null || true
   rm -f "$HOME/.snowflake/config.toml" 2>/dev/null || true
   # Per-project .cortex dirs: only remove if tarball contains Developer paths
-  if tar -tzf "$IMPORT_SESSIONS" | grep -q "^Developer/"; then
+  if tar -tzf "$IMPORT_SESSIONS" | grep "^Developer/" >/dev/null; then
     find "$HOME/Developer" -name ".cortex" -type d -exec rm -rf {} + 2>/dev/null || true
   fi
 
@@ -934,9 +933,6 @@ opentofu   = "latest"
 "npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
 "npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
 "npm:ctx7"             = "latest"   # Context7 documentation CLI
-# Trust excludes for AWS's 2026-08-14 release batch: those @smithy versions went out via
-# aws-sdk-bot without OIDC/provenance, tripping aube's no-downgrade policy. Verified legit.
-"npm:@earendil-works/pi-coding-agent" = { version = "latest", trust_policy_excludes = ["@smithy/core@3.33.0", "@smithy/node-http-handler@4.11.0"] }
 
 [settings]
 experimental = true
@@ -1013,7 +1009,7 @@ section "Authentication"
 # ── 1Password ─────────────────────────────────────────────────────────
 echo ""
 if [[ -n "$OP_VAULT" ]]; then
-  if op account list 2>/dev/null | grep -q .; then
+  if op account list 2>/dev/null | grep . >/dev/null; then
     log "1Password CLI already configured."
   else
     prompt "1Password CLI is not configured."
@@ -1033,7 +1029,7 @@ if [[ -n "$OP_VAULT" ]]; then
   eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
 
   # ── Write API keys in zsh syntax ────────────────────────────────────
-  if op account list 2>/dev/null | grep -q .; then
+  if op account list 2>/dev/null | grep . >/dev/null; then
     ZSH_BIN="$(command -v zsh || echo /bin/zsh)"
     ZSH_SECRETS="$HOME/.config/zsh/.api-keys.zsh"
     ZSH_SECRETS_TMP="$ZSH_SECRETS.tmp"
@@ -1052,7 +1048,6 @@ DEVTO_API_KEY|devto-api-key
 OREILLY_API_TOKEN|oreilly-api-token
 GOOGLE_API_KEY|google-api-key
 AZURE_DEVOPS_PAT|ado-pat
-GRAFANA_SERVICE_ACCOUNT_TOKEN|grafana-service-account-token
 EXA_API_KEY|EXA API Key
 RESEND_API_KEY|Resend API Credential|credential
 EOF
@@ -1161,13 +1156,6 @@ if [[ -n "$CLAUDE_CONFIG_REPO" ]]; then
   sync_config_repo "$CLAUDE_CONFIG_REPO" "$HOME/.claude"
 fi
 
-# ── Pi config (private repo — needs auth) ────────────────────────────
-echo ""
-if [[ -n "$PI_CONFIG_REPO" ]]; then
-  log "Syncing Pi config repo into ~/.pi"
-  sync_config_repo "$PI_CONFIG_REPO" "$HOME/.pi"
-fi
-
 # ── agent skills (→ ~/.agents/skills/) ──────────────────────────────
 echo ""
 if [[ -n "$OPENCODE_SKILLS_REPO" ]]; then
@@ -1262,8 +1250,8 @@ done < <(registry_names)
 log "Tools from package managers"
 check zsh; check starship; check mise
 if [[ -n "$OP_VAULT" ]]; then check op; fi
-check gh; check chezmoi; check pi; check ctx7
-check aws; check az; check gcx; check kubectl; check helm
+check gh; check chezmoi; check ctx7; check cursor-agent; check tflint
+check aws; check kubectl; check helm
 check uv; check colima; check docker
 if docker compose version &>/dev/null; then
   printf "  \033[1;32m✓\033[0m docker compose\n"
