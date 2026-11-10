@@ -50,6 +50,44 @@ prompt(){ printf "\n\033[1;35m??\033[0m %s\n" "$*"; }
 die()   { printf "\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 section(){ printf "\n\033[1;37m━━━ %s ━━━\033[0m\n" "$*"; }
 
+# sync_config_repo <gh-repo> <dir>
+# Clone a private config repo into <dir>, pull it when already a checkout, or
+# adopt it in place when the tool already created <dir> on first launch (Claude
+# Code and opencode both do, so a plain clone would fail on a fresh Mac).
+# Adopting backs up every local file the repo would overwrite and leaves the
+# rest (sessions, caches, service.json) untouched.
+sync_config_repo() {
+  local repo="$1" dir="$2" tmp backup f
+  if [[ -d "$dir/.git" ]]; then
+    git -C "$dir" pull --ff-only || warn "Could not fast-forward $dir; continuing with local state."
+    return 0
+  fi
+  if [[ ! -e "$dir" ]] || [[ -z "$(ls -A "$dir" 2>/dev/null)" ]]; then
+    rmdir "$dir" 2>/dev/null || true
+    gh repo clone "$repo" "$dir" 2>&1 || warn "Clone of $repo failed (check gh auth)."
+    return 0
+  fi
+  log "$dir already exists; adopting $repo in place"
+  tmp="$(mktemp -d)"
+  if ! gh repo clone "$repo" "$tmp/repo" -- --no-checkout 2>&1; then
+    warn "Clone of $repo failed (check gh auth)."
+    rm -rf "$tmp"
+    return 0
+  fi
+  backup="$dir.pre-clone-$(date +%Y%m%d-%H%M%S)"
+  while IFS= read -r f; do
+    if [[ -e "$dir/$f" ]]; then
+      mkdir -p "$backup/$(dirname "$f")"
+      cp -p "$dir/$f" "$backup/$f"
+    fi
+  done < <(git -C "$tmp/repo" ls-tree -r --name-only HEAD)
+  mv "$tmp/repo/.git" "$dir/.git"
+  rm -rf "$tmp"
+  git -C "$dir" reset --hard -q HEAD || warn "Checkout in $dir failed."
+  [[ -d "$backup" ]] && log "Local files the repo replaced were saved to $backup"
+  return 0
+}
+
 # ── Managed install registry ─────────────────────────────────────────
 # One row per tool this script installs directly. Package managers keep their
 # own registries (Brewfile, mise config); these installs have none, so this
@@ -560,7 +598,14 @@ defaults write NSGlobalDomain AppleInterfaceStyle -string Dark
 log "Accent color: orange"
 defaults write NSGlobalDomain AppleAccentColor -int 1
 
-log "Some changes require logout/login to take full effect."
+# defaults write only updates the plist; restart the apps that cache these
+# settings so dark mode, Dock and Finder change now instead of after logout.
+log "Applying: dark mode, Dock, Finder"
+osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' >/dev/null 2>&1 \
+  || warn "Could not switch to dark mode live (allow Terminal to control System Events); it applies at next login."
+killall Dock Finder SystemUIServer >/dev/null 2>&1 || true
+
+warn "Key repeat speed takes effect after logout/login."
 fi
 
 # =========================================================================
@@ -573,6 +618,18 @@ section "Packages (Brewfile)"
 log "Installing packages (this takes a while on a fresh machine)..."
 # --no-upgrade: bootstrap maps the machine to an installed set. Upgrades (and
 # the VSCode Insiders self-update desync they trigger) happen via `brew upgrade`.
+BREWFILE="Brewfile"
+$IS_MACOS || BREWFILE="Brewfile.linux"
+# Homebrew refuses to load formulae/casks from third-party taps until they are
+# trusted (tflint only ships from terraform-linters/tap), so trust every tap the
+# Brewfile declares before bundling.
+if brew trust --help &>/dev/null; then
+  while IFS= read -r _tap; do
+    brew tap "$_tap" >/dev/null 2>&1 || true
+    brew trust "$_tap" >/dev/null 2>&1 || warn "Could not trust tap $_tap."
+  done < <(sed -n 's/^tap "\([^"]*\)".*/\1/p' "$BREWFILE")
+  unset _tap
+fi
 if $IS_MACOS; then
   log "Using Brewfile (macOS)"
   brew bundle --file=Brewfile --no-upgrade \
@@ -1093,36 +1150,22 @@ gh auth setup-git 2>/dev/null || true
 # ── opencode config (private repo — needs auth) ──────────────────────
 echo ""
 if [[ -n "$OPENCODE_CONFIG_REPO" ]]; then
-  log "Cloning opencode config repo into ~/.config/opencode"
-  if [[ ! -d "$HOME/.config/opencode/.git" ]]; then
-    gh repo clone "$OPENCODE_CONFIG_REPO" "$HOME/.config/opencode" 2>&1 || warn "Config repo clone failed (check gh auth)."
-  else
-    git -C "$HOME/.config/opencode" pull --ff-only || true
-  fi
+  log "Syncing opencode config repo into ~/.config/opencode"
+  sync_config_repo "$OPENCODE_CONFIG_REPO" "$HOME/.config/opencode"
 fi
 
 # ── Claude Code config (private repo — needs auth) ───────────────────
 echo ""
 if [[ -n "$CLAUDE_CONFIG_REPO" ]]; then
-  log "Cloning Claude Code config repo into ~/.claude"
-  if [[ ! -d "$HOME/.claude/.git" ]]; then
-    gh repo clone "$CLAUDE_CONFIG_REPO" "$HOME/.claude" 2>&1 || warn "Claude config repo clone failed (check gh auth)."
-  else
-    git -C "$HOME/.claude" pull --ff-only || true
-  fi
+  log "Syncing Claude Code config repo into ~/.claude"
+  sync_config_repo "$CLAUDE_CONFIG_REPO" "$HOME/.claude"
 fi
 
 # ── Pi config (private repo — needs auth) ────────────────────────────
 echo ""
 if [[ -n "$PI_CONFIG_REPO" ]]; then
   log "Syncing Pi config repo into ~/.pi"
-  if [[ -d "$HOME/.pi/.git" ]]; then
-    git -C "$HOME/.pi" pull --ff-only || true
-  elif [[ -e "$HOME/.pi" ]]; then
-    warn "$HOME/.pi exists and is not a git repo; skipping clone to avoid overwriting it."
-  else
-    gh repo clone "$PI_CONFIG_REPO" "$HOME/.pi" 2>&1 || warn "Pi config repo clone failed (check gh auth)."
-  fi
+  sync_config_repo "$PI_CONFIG_REPO" "$HOME/.pi"
 fi
 
 # ── agent skills (→ ~/.agents/skills/) ──────────────────────────────

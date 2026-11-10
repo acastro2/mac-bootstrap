@@ -113,7 +113,7 @@ On a machine that still runs Nushell, the migration is fail-safe: the zsh config
 
 ### The package manager
 
-**Homebrew** with a `Brewfile`. The list includes git, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, the Grafana `gcx` CLI, Azure CLI, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
+**Homebrew** with a `Brewfile`. The list includes git, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, the Grafana `gcx` CLI, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
 
 ### The toolchain manager
 
@@ -145,7 +145,7 @@ Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent
 
 ### The infra tooling
 
-**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **Azure CLI** (`az`) checks Microsoft Entra app registrations and OAuth setup. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **[gcx](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/grafana-cli/gcx/)** manages Grafana OSS/Enterprise 12+ and Grafana Cloud through their APIs. The shell defaults to Attain's Grafana 13 instance and organization 1. It maps the 1Password service-account token to `GRAFANA_TOKEN` without storing it in the repo. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
+**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **[gcx](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/grafana-cli/gcx/)** manages Grafana OSS/Enterprise 12+ and Grafana Cloud through their APIs. The shell defaults to Attain's Grafana 13 instance and organization 1. It maps the 1Password service-account token to `GRAFANA_TOKEN` without storing it in the repo. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
 
 ### The profile
 
