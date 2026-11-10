@@ -167,6 +167,21 @@ if step agents; then
   clone acastro2/opencode_config "$HOME/.config/opencode"
   clone acastro2/.pi             "$HOME/.pi"
   clone acastro2/alex-skills     "$HOME/.agents/skills"
+
+  # ~/.claude is never empty (Claude Code's own state lives there), so turn it
+  # into a checkout in place. The repo's allowlist .gitignore tracks only the
+  # portable config; local settings.json is backed up before it is replaced.
+  if [[ ! -d $HOME/.claude/.git && -n ${CLAUDE_CONFIG_REPO:-} ]]; then
+    log "Claude Code config (~/.claude ← $CLAUDE_CONFIG_REPO)"
+    mkdir -p "$HOME/.claude"
+    [[ -f $HOME/.claude/settings.json ]] && cp -p "$HOME/.claude/settings.json" "$HOME/.claude/settings.json.pre-repo-$(date +%Y%m%d-%H%M%S)"
+    ( cd "$HOME/.claude" && git init -q -b main && git remote add origin "https://github.com/$CLAUDE_CONFIG_REPO.git" \
+      && GH_TOKEN="$ACASTRO2_TOKEN" git fetch -q origin && git checkout -q -f -B main origin/main \
+      && git branch -q --set-upstream-to=origin/main main ) || warn "Claude config checkout failed"
+    bash "$HOME/.claude/hooks/sync-agents-skills.sh" 2>/dev/null || true
+  elif [[ -d $HOME/.claude/.git ]]; then
+    GH_TOKEN="$ACASTRO2_TOKEN" git -C "$HOME/.claude" pull --ff-only || true
+  fi
 fi
 
 # ── Browser automation ─────────────────────────────────────────────────
