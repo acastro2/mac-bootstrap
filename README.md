@@ -166,9 +166,9 @@ If that's you — welcome. Run the command. Break things. Send PRs.
 
 The script runs in two phases:
 
-**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated zsh + Zim config and login-shell check, git config, SSH via 1Password agent, OpenCode, Pi, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. On a Nushell machine, Nushell is uninstalled only after zsh starts successfully and the account shell readback matches.
+**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated zsh + Zim config and login-shell check, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. On a Nushell machine, Nushell is uninstalled only after zsh starts successfully and the account shell readback matches.
 
-**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to `~/.config/zsh/.api-keys.zsh`. Always: GitHub CLI SSO login, OpenCode and Pi config sync (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
+**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to `~/.config/zsh/.api-keys.zsh`. Always: GitHub CLI SSO login, OpenCode and Claude Code config sync (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
 
 If anything fails, it tells you what and keeps going. Re-run anytime.
 

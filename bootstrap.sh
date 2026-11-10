@@ -583,7 +583,8 @@ log "Screenshots → ~/Screenshots"
 mkdir -p "$HOME/Screenshots"
 defaults write com.apple.screencapture location -string "$HOME/Screenshots"
 
-log "Dock: auto-hide, no delay"
+log "Dock: left side, auto-hide, no delay"
+defaults write com.apple.dock orientation -string left
 defaults write com.apple.dock autohide -bool true
 defaults write com.apple.dock autohide-delay -float 0
 defaults write com.apple.dock autohide-time-modifier -float 0.3
@@ -591,20 +592,28 @@ defaults write com.apple.dock autohide-time-modifier -float 0.3
 log "Disable .DS_Store on network volumes"
 defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
 
-log "Appearance: dark"
-defaults write NSGlobalDomain AppleInterfaceStyle -string Dark
-
-log "Accent color: orange"
+log "Accent and highlight color: orange"
 defaults write NSGlobalDomain AppleAccentColor -int 1
+defaults write NSGlobalDomain AppleHighlightColor -string "1.000000 0.874510 0.701961 Orange"
 
-# defaults write only updates the plist; restart the apps that cache these
-# settings so dark mode, Dock and Finder change now instead of after logout.
-log "Applying: dark mode, Dock, Finder"
-osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' >/dev/null 2>&1 \
-  || warn "Could not switch to dark mode live (allow Terminal to control System Events); it applies at next login."
+# Dark mode goes through System Events, not `defaults write`: System Events
+# saves the setting AND tells every app to repaint, but it skips the repaint
+# when the saved value already says Dark. Writing the plist first therefore
+# left the screen light, so flip it off and on to force the repaint.
+log "Appearance: dark"
+if ! osascript \
+    -e 'tell application "System Events" to tell appearance preferences to set dark mode to false' \
+    -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' \
+    >/dev/null 2>&1; then
+  warn "Could not switch to dark mode live (allow your terminal to control System Events); it applies at next login."
+  defaults write NSGlobalDomain AppleInterfaceStyle -string Dark
+fi
+
+# The other settings above only update plists; restart the processes that
+# cache them so the Dock and Finder change now.
 killall Dock Finder SystemUIServer >/dev/null 2>&1 || true
 
-warn "Key repeat speed takes effect after logout/login."
+warn "Key repeat and accent color take effect after logout/login."
 fi
 
 # =========================================================================
@@ -1025,8 +1034,15 @@ if [[ -n "$OP_VAULT" ]]; then
     read -r < "$TTY"
   fi
 
-  log "Signing in to 1Password CLI"
-  eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
+  # Reuse a live session (desktop-app integration, or an `eval "$(op signin)"`
+  # run in the calling shell) instead of prompting on every run.
+  if op whoami &>/dev/null; then
+    log "1Password CLI already signed in."
+  else
+    log "Signing in to 1Password CLI"
+    log "  (asks for your account password unless 1Password app → Settings → Developer → 'Integrate with 1Password CLI' is on)"
+    eval "$(op signin)" || warn "1Password sign-in failed; API key functions won't work until you sign in."
+  fi
 
   # ── Write API keys in zsh syntax ────────────────────────────────────
   if op account list 2>/dev/null | grep . >/dev/null; then
