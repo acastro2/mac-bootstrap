@@ -5,8 +5,7 @@ One command. Zero to a fully armed and operational macOS workstation. Shell, too
 If you're the kind of engineer who treats their machine like a cattle, not a pet, this is your herd script.
 
 !!! tip
-    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks. Everything else (Homebrew, zsh + Zim, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
-
+    **On Windows / WSL2?** Use [`wsl/setup.sh`](wsl/README.md) instead: Linux-native (apt + mise, native Docker, no sudo required), with the same dotfiles, plus Windows Terminal and `.wslconfig` setup.
 ---
 
 ## Before you run this

@@ -1,0 +1,2 @@
+# Ubuntu: let Zim own compinit (/etc/zsh/zshrc runs it otherwise, twice the work).
+skip_global_compinit=1

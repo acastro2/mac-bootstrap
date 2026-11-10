@@ -1,0 +1,7 @@
+#!/bin/sh
+# Open a URL or file with the Windows default handler (wslview without wslu).
+[ $# -eq 0 ] && set -- .
+case "$1" in
+  *://*) exec /mnt/c/Windows/explorer.exe "$1" ;;
+  *)     exec /mnt/c/Windows/explorer.exe "$(wslpath -w "$1")" ;;
+esac

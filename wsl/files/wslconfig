@@ -1,0 +1,10 @@
+# WSL2 VM settings (16 GB / 12 threads host). Apply with: wsl.exe --shutdown
+[wsl2]
+memory=10GB
+swap=4GB
+
+[experimental]
+# Hand freed memory back to Windows instead of letting the VM balloon.
+autoMemoryReclaim=gradual
+# Let the virtual disk shrink when files are deleted.
+sparseVhd=true

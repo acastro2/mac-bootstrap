@@ -1,0 +1,59 @@
+# Global toolchain + CLI pins for WSL. On the Mac most CLIs come from Homebrew;
+# here mise installs them in user space (no sudo). Override per project with .mise.toml.
+[tools]
+# ── Toolchains (same pins as the Mac) ─────────────────────────────────
+go       = "latest"
+node     = "lts"
+pnpm     = "10"
+python   = "3.12"
+dotnet   = "9"
+opentofu = "latest"
+uv       = "latest"
+
+# ── Shell & CLI utilities ─────────────────────────────────────────────
+"aqua:cli/cli" = "latest"          # gh
+chezmoi    = "latest"
+starship   = "latest"
+carapace   = "latest"
+fzf        = "latest"
+eza        = "latest"
+bat        = "latest"
+fd         = "latest"
+ripgrep    = "latest"
+jq         = "latest"
+yq         = "latest"
+neovim     = "latest"
+doggo      = "latest"
+gitleaks   = "latest"
+pre-commit = "latest"
+shellcheck = "latest"
+bats       = "latest"
+1password  = "latest"              # op CLI
+"github:Skardyy/mcat" = "latest"   # .zshrc aliases cat=mcat
+"npm:repomix" = "latest"
+
+# ── Platform / infra ──────────────────────────────────────────────────
+kubectl  = "latest"
+helm     = "latest"
+k9s      = "latest"
+aws-cli  = "latest"
+crane    = "latest"
+tflint   = "latest"
+"github:grafana/gcx" = "latest"
+"pipx:azure-cli"     = "latest"    # az, isolated venv via uv
+
+# ── Data ──────────────────────────────────────────────────────────────
+"pipx:snowflake-cli" = "latest"
+"pipx:pgcli"         = "latest"
+
+# ── Agents & browser automation ───────────────────────────────────────
+herdr = "latest"
+"github:microsoft/tgrep" = "latest"
+"npm:@playwright/test" = "latest"
+"npm:@playwright/mcp"  = "latest"
+"npm:ctx7"             = "latest"
+"npm:@earendil-works/pi-coding-agent" = { version = "latest", trust_policy_excludes = ["@smithy/core@3.33.0", "@smithy/node-http-handler@4.11.0"] }
+
+[settings]
+experimental = true
+python.github_attestations = false
