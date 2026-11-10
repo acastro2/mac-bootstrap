@@ -35,3 +35,17 @@ export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/ssh-agent.socket
 
 # Windows Terminal owns Ctrl+T (new tab), so fzf's file picker moves to Alt+T.
 (( $+widgets[fzf-file-widget] )) && bindkey '^[t' fzf-file-widget
+
+# Report the cwd to Windows Terminal (OSC 9;9) on every prompt, so Ctrl+T
+# (duplicateTab) opens the new tab in the same folder. Pure zsh, no wslpath
+# call: /mnt/c/x → C:\x, anything else → \\wsl.localhost\<distro>\...
+_wt_report_cwd() {
+  local p
+  if [[ $PWD == /mnt/[a-z](/*|) ]]; then
+    p="${(U)PWD[6]}:${${PWD#/mnt/?}:-/}"
+  else
+    p="\\\\wsl.localhost\\${WSL_DISTRO_NAME}${PWD}"
+  fi
+  printf "\e]9;9;%s\e\\" "${p//\//\\}"
+}
+[[ -n ${WT_SESSION:-} ]] && precmd_functions+=(_wt_report_cwd)

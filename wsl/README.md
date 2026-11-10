@@ -43,9 +43,11 @@ The shared `home/` dotfiles stay unchanged. Everything WSL-specific lives in `fi
 
 | Keys | Action |
 | ---- | ------ |
-| Ctrl+T / Ctrl+W | New tab / close pane (closes the tab when it has one pane) |
+| Ctrl+T / Ctrl+W | New tab in the same folder / close pane (closes the tab when it has one pane) |
 | Ctrl+1…8, Ctrl+9 | Go to tab N, last tab |
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
+
+Copy-on-select is on. In full-screen programs that capture the mouse (Claude Code, vim, k9s), hold **Shift** while dragging.
 
 These take keys away from the shell, so:
 - **fzf file picker:** moves from Ctrl+T to **Alt+T**.

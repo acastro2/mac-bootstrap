@@ -5,7 +5,7 @@
 
 - New tabs/windows open the WSL distro ($WSL_DISTRO_NAME), starting in ~
 - Ghostty-like look: iTerm2 Dark Background, JetBrainsMono Nerd Font, padding
-- Browser-style tabs: Ctrl+T new, Ctrl+W close, Ctrl+1..8 / Ctrl+9 last,
+- Browser-style tabs: Ctrl+T new (same folder), Ctrl+W close, Ctrl+1..8 / Ctrl+9 last,
   Ctrl+Tab / Ctrl+Shift+Tab next/prev
 """
 import json
@@ -52,7 +52,9 @@ scheme = {
 s["schemes"] = [x for x in s.get("schemes", []) if x.get("name") != scheme["name"]] + [scheme]
 
 acts = {
-    "User.newTab":  ({"action": "newTab"}, "ctrl+t"),
+    # duplicateTab, not newTab: reuses the folder the shell reports via OSC 9;9
+    # (local.zsh), so new tabs open where you are, like Ghostty.
+    "User.newTab":  ({"action": "duplicateTab"}, "ctrl+t"),
     "User.close":   ({"action": "closePane"}, "ctrl+w"),  # closes the tab when it has one pane
     "User.lastTab": ({"action": "switchToTab", "index": 4294967295}, "ctrl+9"),
     "User.nextTab": ({"action": "nextTab"}, "ctrl+tab"),
