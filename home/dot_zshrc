@@ -274,6 +274,22 @@ git-push-acastro2() {
   GH_TOKEN=$token git push "$@"
 }
 
+# Pull as acastro2 with the same token trick: gpr (git pull --rebase) as the second
+# account. An SSH origin ignores GH_TOKEN, so say it instead of failing quietly.
+git-pull-acastro2() {
+  local token
+  token=$(gh auth token --user acastro2 2>/dev/null)
+  if [[ -z $token ]]; then
+    print -u2 'git-pull-acastro2: not logged in as acastro2. Run: gh auth login'
+    return 1
+  fi
+  case "$(git remote get-url origin 2>/dev/null)" in
+    git@* | ssh://*) print -u2 'git-pull-acastro2: SSH origin ignores GH_TOKEN' ;;
+  esac
+  print -- 'Pulling as acastro2'
+  GH_TOKEN=$token git pull --rebase "$@"
+}
+
 git-clean() {
   git rev-parse --is-inside-work-tree &>/dev/null || {
     print -u2 'git-clean must run inside a Git worktree'
