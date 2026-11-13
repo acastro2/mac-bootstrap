@@ -114,6 +114,8 @@ On a machine that still runs Nushell, the migration is fail-safe: the zsh config
 
 **Homebrew** with a `Brewfile`. The list includes git, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
 
+Casks install to `~/Applications`, not `/Applications`. A standard user cannot write to `/Applications`, so apps there that update themselves (Sparkle and similar) ask for admin on every update. In a folder you own, they update with no prompt. The Brewfile sets this with `cask_args appdir:`, and `.zshrc` sets `HOMEBREW_CASK_OPTS` for ad-hoc `brew install --cask`. Exception: 1Password stays in `/Applications`, because its browser integration only works from there.
+
 ### The toolchain manager
 
 **mise.** Not asdf. Not nvm + pyenv + tfenv. mise is faster, supports piped installs (`npm:@playwright/test`), and doesn't require shims. It pins Go (latest), Node (LTS), pnpm 10, Python 3.12, .NET 9, OpenTofu, the Playwright CLI, and the [Context7 CLI](https://context7.com/docs/clients/cli) globally. Per-project overrides go in `.mise.toml` or `.tool-versions`.

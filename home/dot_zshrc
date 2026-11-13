@@ -24,6 +24,10 @@ ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
 # AWS SSO profiles belong in ~/.aws/config, not inherited shell credentials.
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE 2>/dev/null || true
 
+# Install casks to ~/Applications so self-updates need no admin rights.
+# Matches cask_args in the Brewfile; covers ad-hoc `brew install --cask`.
+[[ $OSTYPE == darwin* ]] && export HOMEBREW_CASK_OPTS="--appdir=$HOME/Applications"
+
 # Deduplicated PATH; Homebrew and local tool bins first.
 typeset -U path
 for _brew_dir in \

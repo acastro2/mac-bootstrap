@@ -44,7 +44,10 @@ brew "postgresql@16", restart_service: false
 brew "redis", restart_service: false
 
 # ── Apps ───────────────────────────────────────────────────────────────
-cask "1password"
+# Casks go to ~/Applications. A standard (non-admin) user cannot write to
+# /Applications, so self-updating apps there prompt for admin on every update.
+cask_args appdir: "~/Applications"
+cask "1password", args: { appdir: "/Applications" } # must live in /Applications for browser integration
 cask "1password-cli"
 cask "claude"          # Claude Desktop app (CLI installed separately via native installer in bootstrap.sh)
 cask "ghostty"
