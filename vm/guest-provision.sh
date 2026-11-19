@@ -119,20 +119,20 @@ if ! command -v ob >/dev/null 2>&1; then
   fi
 fi
 ob_bin=$(command -v ob 2>/dev/null || true)
-mkdir -p "$HOME/.config/environment.d"
-printf 'OBSIDIAN_VAULT=%s\n' "$HOME/vault" >"$HOME/.config/environment.d/10-den-obsidian.conf" ||
+mkdir -p "$HOME/.config/environment.d" "$HOME/Developer"
+printf 'OBSIDIAN_VAULT=%s\n' "$HOME/Developer/obsidian" >"$HOME/.config/environment.d/10-den-obsidian.conf" ||
   say "could not write the OBSIDIAN_VAULT environment file"
 if [ -n "$ob_bin" ] && "$ob_bin" sync-list-remote --json >/dev/null 2>&1; then
-  if ! "$ob_bin" sync-status --path "$HOME/vault" >/dev/null 2>&1 && [ -n "${OBSIDIAN_VAULT:-}" ]; then
+  if ! "$ob_bin" sync-status --path "$HOME/Developer/obsidian" >/dev/null 2>&1 && [ -n "${OBSIDIAN_VAULT:-}" ]; then
     # Works unattended for a vault without end-to-end encryption.
-    "$ob_bin" sync-setup --vault "$OBSIDIAN_VAULT" --path "$HOME/vault" \
+    "$ob_bin" sync-setup --vault "$OBSIDIAN_VAULT" --path "$HOME/Developer/obsidian" \
       --device-name "${DEN_VM_NAME:-vm}" </dev/null >/dev/null 2>&1 ||
       say "obsidian: sync-setup needs you (E2EE password?); den up on the Mac asks in preflight"
   fi
-  if "$ob_bin" sync-status --path "$HOME/vault" >/dev/null 2>&1; then
+  if "$ob_bin" sync-status --path "$HOME/Developer/obsidian" >/dev/null 2>&1; then
     # Empty --configs: the VM never syncs .obsidian/, so it cannot push plugins
     # (code) to the Mac. File types leave out "unsupported" (e.g. *.pem).
-    "$ob_bin" sync-config --path "$HOME/vault" --configs "" --mode bidirectional \
+    "$ob_bin" sync-config --path "$HOME/Developer/obsidian" --configs "" --mode bidirectional \
       --conflict-strategy merge --file-types image,audio,video,pdf >/dev/null ||
       say "obsidian sync-config failed"
     mkdir -p "$HOME/.config/systemd/user"
@@ -142,7 +142,7 @@ Description=Obsidian Headless sync
 After=network-online.target
 
 [Service]
-ExecStart=$ob_bin sync --continuous --path %h/vault
+ExecStart=$ob_bin sync --continuous --path %h/Developer/obsidian
 Restart=on-failure
 RestartSec=10
 
@@ -153,7 +153,7 @@ UNIT
     systemctl --user enable --now obsidian-sync.service >/dev/null 2>&1 ||
       say "could not enable obsidian-sync.service"
   else
-    say "obsidian: ~/vault is not set up yet; den up on the Mac sets it up in preflight"
+    say "obsidian: ~/Developer/obsidian is not set up yet; den up on the Mac sets it up in preflight"
   fi
 else
   say "obsidian: not signed in yet; den up on the Mac runs ob login in preflight"

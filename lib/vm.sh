@@ -604,7 +604,7 @@ den_preflight_hook_vm() {
   # First vault setup is interactive too: an end-to-end-encrypted vault asks
   # for its password. The vm phase then applies the sync config unattended.
   if den_vm_to 20 limactl shell "$AGENT_VM" -- bash -c \
-    "${DEN_GUEST_ENV}command -v ob >/dev/null 2>&1 && ob sync-list-remote --json >/dev/null 2>&1 && [ ! -d \"\$HOME/vault/.obsidian\" ] && ! ob sync-status --path \"\$HOME/vault\" >/dev/null 2>&1" >/dev/null 2>&1; then
+    "${DEN_GUEST_ENV}command -v ob >/dev/null 2>&1 && ob sync-list-remote --json >/dev/null 2>&1 && [ ! -d \"\$HOME/Developer/obsidian/.obsidian\" ] && ! ob sync-status --path \"\$HOME/Developer/obsidian\" >/dev/null 2>&1" >/dev/null 2>&1; then
     local vault=${OBSIDIAN_SYNC_VAULT:-}
     if [ -z "$vault" ]; then
       local remotes="" line="" vaults=()
@@ -622,10 +622,10 @@ den_preflight_hook_vm() {
       fi
     fi
     if [ -n "$vault" ]; then
-      ui_info "vm: setting up Obsidian Sync for vault '$vault' in ~/vault"
+      ui_info "vm: setting up Obsidian Sync for vault '$vault' in ~/Developer/obsidian"
       # The name travels in the environment: no quoting reaches the guest shell.
       den_vm_to 600 limactl shell --tty=true "$AGENT_VM" -- env OBSIDIAN_VAULT="$vault" bash -c \
-        "${DEN_GUEST_ENV}ob sync-setup --vault \"\$OBSIDIAN_VAULT\" --path \"\$HOME/vault\" --device-name '$AGENT_VM'" ||
+        "${DEN_GUEST_ENV}mkdir -p \"\$HOME/Developer\" && ob sync-setup --vault \"\$OBSIDIAN_VAULT\" --path \"\$HOME/Developer/obsidian\" --device-name '$AGENT_VM'" ||
         ui_warn "vm: ob sync-setup did not finish; run it later with: den vm shell, then ob sync-setup"
     fi
   fi

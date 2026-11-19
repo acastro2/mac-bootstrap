@@ -272,15 +272,15 @@ The VM is the dev box: it gets every key in `den.json`, its own `gh` login
 - `den doctor` checks, in the guest: `docker info` works as the user, and
   `docker compose version`.
 - **Obsidian vault**: Obsidian Headless (`npm i -g obsidian-headless`, `ob`,
-  Node 22+ from the VM's mise) syncs the remote vault into `~/vault` through
+  Node 22+ from the VM's mise) syncs the remote vault into `~/Developer/obsidian` through
   Obsidian Sync. No mount, no Mac bridge, no OneDrive in the VM. Setup:
   `ob login` (interactive, in preflight), `ob sync-setup --vault <name>
-  --path ~/vault --device-name <instance>`, then `ob sync-config --configs ""
+  --path ~/Developer/obsidian --device-name <instance>`, then `ob sync-config --configs ""
   --mode bidirectional --conflict-strategy merge`. The empty `--configs` means
   the VM never syncs `.obsidian/`, so it cannot push plugins (code) to the Mac.
   `--file-types` leaves out `unsupported`, so files like `*.pem` stay off the
   VM. A systemd user unit `obsidian-sync.service` runs `ob sync --continuous`
-  (linger is on); guest-heal restarts it. `OBSIDIAN_VAULT=~/vault` in the VM.
+  (linger is on); guest-heal restarts it. `OBSIDIAN_VAULT=~/Developer/obsidian` in the VM.
   Remote vault name and an E2EE password, if the vault uses one, come from
   `den.json` (`obsidian.vault`) or the wizard. An E2EE vault password is asked in preflight, never stored.
 - **Scribe stays on the Mac** (HiDock over USB, Voice Memos, Hex on the Apple

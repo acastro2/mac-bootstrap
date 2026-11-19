@@ -40,7 +40,7 @@ BRIDGES = [
     (6, ["vm-up", "den up"], ["start · heal", "den copy"], "control", "down"),
     (7, ["Mac browser"], ["dev servers", "localhost"], "port mirror", "up"),
     (8, ["git"], ["own gh login"], "GitHub", "net"),
-    (9, ["Obsidian"], ["~/vault", "notes only"], "Obsidian Sync", "net"),
+    (9, ["Obsidian"], ["~/Developer/obsidian", "notes only"], "Obsidian Sync", "net"),
 ]
 
 
