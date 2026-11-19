@@ -289,6 +289,22 @@ den_finish_run() {
   exit "$(den_run_exit_code)"
 }
 
+# Put den itself on PATH: ~/.local/bin/den -> this checkout (in the VM, the
+# copy in ~/.local/share/den). Every real den up does it, before any phase, so
+# a skipped phase can never leave `den` missing. A dry run changes nothing.
+den_link_self() {
+  local link="$HOME/.local/bin/den"
+  if [ "$DEN_DRY_RUN" = 1 ]; then
+    return 0
+  fi
+  mkdir -p "$HOME/.local/bin" 2>/dev/null || return 0
+  if [ "$(readlink "$link" 2>/dev/null)" != "$DEN_ROOT/bin/den" ]; then
+    ln -sfn "$DEN_ROOT/bin/den" "$link" 2>/dev/null &&
+      ui_info "linked $link -> $DEN_ROOT/bin/den (open a new tab to get it on PATH)"
+  fi
+  return 0
+}
+
 den_cmd_up() {
   den_parse_run_flags "$@"
   den_config_load
@@ -296,6 +312,7 @@ den_cmd_up() {
   den_validate_selection
   den_run_args_from_flags
   ui_banner
+  den_link_self
   den_finish_run
 }
 

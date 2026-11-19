@@ -252,3 +252,19 @@ EOF
   [[ "$output" == *"one"* ]]
   [[ "$output" != *"den: missing"* ]]
 }
+
+@test "den up puts den on PATH: ~/.local/bin/den links to this checkout" {
+  phase 10 one true
+  run den up
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.local/bin/den" ]
+  [ "$(readlink "$HOME/.local/bin/den")" = "$REPO/bin/den" ]
+  run "$HOME/.local/bin/den" phases
+  [ "$status" -eq 0 ]
+}
+
+@test "den up --dry-run does not create the den link" {
+  phase 10 one true
+  run den up --dry-run
+  [ ! -e "$HOME/.local/bin/den" ]
+}
