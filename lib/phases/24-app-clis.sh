@@ -62,16 +62,17 @@ app_clis_browse() {
 }
 
 phase_app_clis() {
-  local vsc="$HOME/Applications/Visual Studio Code.app" failed=0
+  local vsc failed=0
+  vsc=$(den_app_bundle "Visual Studio Code.app")
   app_clis_browse_fix="den up --only=app-clis"
   app_clis_browse || failed=1
   if [ ! -x "$vsc/Contents/Resources/app/bin/code" ]; then
-    den_skip "VS Code is not in ~/Applications" \
+    den_skip "VS Code is not in ${vsc%/*}" \
       "install VS Code with den up --only=packages, then den up --only=app-clis"
   fi
   mkdir -p "$HOME/.local/bin"
   ln -sfn "$vsc/Contents/Resources/app/bin/code" "$HOME/.local/bin/code"
-  ui_ok "code -> ~/.local/bin/code"
+  ui_ok "code -> ~/.local/bin/code (from ${vsc%/*})"
   if [ "$failed" = 1 ]; then
     den_fail "the browse CLI did not install" "$app_clis_browse_fix"
   fi

@@ -174,3 +174,45 @@ macos_only() {
   [[ "$output" == *"code|app|.local/bin/code|Applications/Visual Studio Code.app/Contents/Resources/app/bin/code|"* ]]
   [[ "$output" != *"nsiders"* ]]
 }
+
+# A company Mac: Jamf keeps VS Code in /Applications (root-owned there; the
+# tests mark it with DEN_EXTERNAL_APPS, since they cannot chown to root).
+@test "appdir keeps a Jamf-managed app and drops den's duplicate" {
+  macos_only
+  make_app "$SYSTEM_APPDIR/Visual Studio Code.app"
+  make_app "$HOME/Applications/Visual Studio Code.app"
+  export DEN_EXTERNAL_APPS="Visual Studio Code.app"
+
+  run "$REPO/bin/den" up --only=appdir
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"duplicate"* ]]
+  [[ "$output" == *"kept the managed copy"* ]]
+  grep -F "NO_AUTOREMOVE=1 uninstall --cask visual-studio-code" "$BREW_LOG"
+  ! grep -F "install --cask --appdir" "$BREW_LOG"
+  [ -d "$SYSTEM_APPDIR/Visual Studio Code.app" ]
+}
+
+@test "appdir leaves a Jamf-managed app alone when den has no copy" {
+  macos_only
+  make_app "$SYSTEM_APPDIR/Visual Studio Code.app"
+  export DEN_EXTERNAL_APPS="Visual Studio Code.app"
+
+  run "$REPO/bin/den" up --only=appdir
+  [ "$status" -eq 0 ]
+  ! grep -F "uninstall --cask visual-studio-code" "$BREW_LOG"
+  [ -d "$SYSTEM_APPDIR/Visual Studio Code.app" ]
+}
+
+@test "doctor accepts code linked into a Jamf-managed VS Code" {
+  macos_only
+  bin="$SYSTEM_APPDIR/Visual Studio Code.app/Contents/Resources/app/bin"
+  mkdir -p "$bin"; : > "$bin/code"; chmod +x "$bin/code"
+  ln -s "$bin/code" "$HOME/.local/bin/code"
+  export DEN_EXTERNAL_APPS="Visual Studio Code.app"
+
+  run "$REPO/bin/den" registry check
+  local code_line
+  code_line="$(printf '%s\n' "$output" | grep -E '[^-]code  ')"
+  [[ "$code_line" == *"✓"* ]]
+  [[ "$output" != *"Visual Studio Code.app still in"* ]]
+}

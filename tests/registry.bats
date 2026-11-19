@@ -8,6 +8,8 @@ setup() {
   TMP="$(mktemp -d)"
   HOME="$TMP/home"
   export HOME
+  # Never the real /Applications: a Jamf-managed app there changes the rows.
+  export SYSTEM_APPDIR="$TMP/sysapps"
   # den: plain output, no network probe, state in the temp HOME.
   export DEN_UI=plain DEN_PROBE_NET=ok DEN_STATE_DIR="$TMP/state"
   mkdir -p "$HOME/.local/bin" "$HOME/.docker/cli-plugins" "$TMP/bin"
@@ -168,4 +170,19 @@ install_registry_targets() {
   [[ "$output" == *"would remove: ~/.local/bin/claude"* ]]
   [ ! -e "$RM_LOG" ]
   [ -f "$HOME/.local/bin/claude" ]
+}
+
+@test "doctor names the phase that fixes a missing install, and den fix reruns it" {
+  install_registry_targets
+  /bin/rm -f "$HOME/.local/bin/claude"
+  run "$REPO/bin/den" doctor
+  [[ "$output" == *"den fix reruns: agents"* ]]
+  # den fix needs an earlier run; an empty one has nothing failed in it.
+  mkdir -p "$DEN_STATE_DIR"
+  printf '{"results":[]}\n' > "$DEN_STATE_DIR/last-run.json"
+  # Toggle the phase off so the test never runs a real installer.
+  mkdir -p "$HOME/.config/den"
+  printf 'DEN_AGENTS=0\n' > "$HOME/.config/den/local.env"
+  run "$REPO/bin/den" fix
+  [[ "$output" == *"doctor: agents needs a rerun"* ]]
 }

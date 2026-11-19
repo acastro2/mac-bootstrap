@@ -65,12 +65,13 @@ den_registry_row() {
 # Sets DEN_CHECK_DETAIL to the line the caller prints.
 # shellcheck disable=SC2088  # DEN_CHECK_DETAIL is display text; the tilde is literal.
 den_registry_check_fields() {
-  local name=$1 kind=$2 rel=$3 spec=$4 target resolved link
+  local name=$1 kind=$2 rel=$3 spec=$4 target resolved link appbin=""
   DEN_CHECK_DETAIL=""
   target=$HOME/$rel
   case $kind in
     app)
-      if [ ! -e "$HOME/$spec" ]; then
+      appbin=$(den_registry_app_path "$spec")
+      if [ ! -e "$appbin" ]; then
         DEN_CHECK_DETAIL="app not installed"
         return 3
       fi
@@ -94,7 +95,7 @@ den_registry_check_fields() {
   fi
   if [ "$kind" = app ]; then
     link=$(readlink "$target" 2>/dev/null) || link=""
-    if [ "$link" != "$HOME/$spec" ]; then
+    if [ "$link" != "$appbin" ]; then
       DEN_CHECK_DETAIL="~/$rel points at ${link:-nothing}"
       return 1
     fi
@@ -105,7 +106,7 @@ den_registry_check_fields() {
     return 4
   fi
   if [ "$resolved" != "$target" ]; then
-    DEN_CHECK_DETAIL="$resolved shadows ~/$rel"
+    DEN_CHECK_DETAIL="$resolved shadows ~/$rel (remove $resolved, or put ~/${rel%/*} first on PATH)"
     return 1
   fi
   DEN_CHECK_DETAIL="~${resolved#"$HOME"}"
@@ -151,13 +152,73 @@ den_registry_system_appdir() {
   printf '%s' "${SYSTEM_APPDIR:-/Applications}"
 }
 
+# ── Apps someone else manages ────────────────────────────────────────
+# On a company Mac, Jamf (or another MDM, a pkg, the App Store) puts some apps
+# in /Applications and keeps them updated. That copy is owned by root; a cask
+# always installs as the user. den leaves such a copy where it is, uses it, and
+# keeps no second one in ~/Applications. DEN_EXTERNAL_APPS ("A.app:B.app", in
+# ~/.config/den/local.env) marks more apps by name.
+
+# den_app_external <App.app>: true when /Applications holds a copy den must
+# not touch.
+den_app_external() {
+  local app=$1 path uid
+  path=$(den_registry_system_appdir)/$app
+  if [ ! -d "$path" ]; then
+    return 1
+  fi
+  case ":${DEN_EXTERNAL_APPS:-}:" in
+    *":$app:"*) return 0 ;;
+  esac
+  uid=$(stat -f %u "$path" 2>/dev/null || stat -c %u "$path" 2>/dev/null) || uid=""
+  [ "$uid" = 0 ]
+}
+
+# den_app_bundle <App.app>: the copy den uses: the managed one in /Applications
+# when there is one, else ~/Applications.
+den_app_bundle() {
+  if den_app_external "$1"; then
+    printf '%s/%s' "$(den_registry_system_appdir)" "$1"
+  else
+    printf '%s/Applications/%s' "$HOME" "$1"
+  fi
+}
+
+# den_registry_app_path <spec>: an app row's binary ("Applications/X.app/...",
+# relative to $HOME) resolved through den_app_bundle.
+den_registry_app_path() {
+  local spec=$1 app rest
+  case $spec in
+    Applications/*.app/*) ;;
+    *)
+      printf '%s/%s' "$HOME" "$spec"
+      return 0
+      ;;
+  esac
+  app=${spec#Applications/}
+  rest=${app#*.app/}
+  app=${app%%.app/*}.app
+  printf '%s/%s' "$(den_app_bundle "$app")" "$rest"
+}
+
+# Print the Brewfile cask tokens whose app is managed in /Applications: the
+# packages phase leaves them out, the appdir phase drops den's copy.
+den_registry_external_casks() {
+  local token app
+  while IFS='|' read -r token app; do
+    if [ -n "$app" ] && den_app_external "$app"; then
+      printf '%s\n' "$token"
+    fi
+  done < <(den_registry_cask_apps) | sort -u
+}
+
 # A managed app still outside ~/Applications is a doctor failure: an app there
 # needs admin for every self-update.
 den_registry_system_apps_check() {
   local sys token app found=0
   sys=$(den_registry_system_appdir)
   while IFS='|' read -r token app; do
-    if [ -z "$app" ] || [ ! -d "$sys/$app" ]; then
+    if [ -z "$app" ] || [ ! -d "$sys/$app" ] || den_app_external "$app"; then
       continue
     fi
     printf '  ✗ %s still in %s (should be in ~/Applications; run den up --only=appdir)\n' "$app" "$sys"
@@ -190,7 +251,16 @@ den_doctor_registry() {
     fi
     den_registry_print "$name" "$status"
     case $status in
-      1|2) broken=$((broken + 1)) ;;
+      1|2)
+        broken=$((broken + 1))
+        # A shadow is another tool's file earlier on PATH: no phase owns it.
+        case $DEN_CHECK_DETAIL in *shadows*) continue ;; esac
+        case $kind in
+          app) den_fix_wants app-clis ;;
+          uv) den_fix_wants browser ;;
+          *) den_fix_wants agents ;;
+        esac
+        ;;
     esac
   done < <(den_registry_rows "$(den_os)")
   if [ "$(den_os)" = macos ]; then
@@ -213,6 +283,7 @@ den_doctor_registry() {
     done < <(den_registry_rows linux)
     if ! den_registry_system_apps_check; then
       broken=$((broken + 1))
+      den_fix_wants appdir
     fi
   fi
   if [ "$broken" -eq 0 ]; then

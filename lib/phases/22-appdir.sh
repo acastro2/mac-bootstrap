@@ -20,6 +20,23 @@ phase_appdir() {
     if [ -z "$app" ] || [ ! -d "$sys/$app" ]; then
       continue
     fi
+    # Jamf/MDM owns the /Applications copy: keep it, drop den's duplicate.
+    if den_app_external "$app"; then
+      if [ ! -e "$appdir/$app" ]; then
+        continue
+      fi
+      moved=1
+      if pgrep -f "$appdir/$app/Contents/MacOS/" >/dev/null 2>&1; then
+        ui_warn "Quit ${app%.app} (the ~/Applications copy), then re-run: den up --only=appdir"
+        continue
+      fi
+      if HOMEBREW_NO_AUTOREMOVE=1 brew uninstall --cask "$token" </dev/null; then
+        ui_ok "$app: kept the managed copy in $sys; removed den's duplicate from $appdir"
+      else
+        ui_warn "could not uninstall $token; delete the duplicate $appdir/$app"
+      fi
+      continue
+    fi
     moved=1
     if [ -e "$appdir/$app" ]; then
       ui_warn "duplicate $app: $sys and $appdir; delete the $sys copy"

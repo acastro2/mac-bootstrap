@@ -46,16 +46,38 @@ phase_packages() {
     fi
   done < <(den_packages_taps "$brewfile")
 
+  # A cask whose app Jamf/MDM already keeps in /Applications is left out, so
+  # brew never installs a second copy into ~/Applications (lib/registry.sh).
+  local external="" filtered="" label=${brewfile##*/}
+  if [ "$(den_os)" = macos ]; then
+    external=$(den_registry_external_casks | tr '\n' ' ')
+  fi
+  if [ -n "${external// /}" ]; then
+    filtered=$(mktemp "${TMPDIR:-/tmp}/den-Brewfile.XXXXXX") || filtered=""
+  fi
+  if [ -n "$filtered" ]; then
+    awk -v skip=" $external " '
+      /^[[:space:]]*cask[[:space:]]+"/ {
+        t = $0; sub(/^[[:space:]]*cask[[:space:]]+"/, "", t); sub(/".*/, "", t)
+        if (index(skip, " " t " ")) next
+      }
+      { print }' "$brewfile" >"$filtered"
+    ui_info "managed in /Applications (Jamf/MDM), not installed by brew: ${external% }"
+    brewfile=$filtered
+  fi
+
   # --no-upgrade maps the machine to an installed set; upgrades stay explicit.
   # </dev/null keeps brew from reading the loop's stdin.
-  ui_step "brew bundle --file=${brewfile##*/} --no-upgrade"
+  ui_step "brew bundle --file=$label --no-upgrade"
   # One retry: on a fresh host, formulae from a just-tapped tap can fail inside
   # the first bundle and then install cleanly (seen on a new VM with
   # opentunnel and rex-agent-restore). The second pass only does what is left.
   if ! brew bundle --file="$brewfile" --no-upgrade </dev/null &&
     ! { ui_step "brew bundle again (the first pass had failures)"; brew bundle --file="$brewfile" --no-upgrade </dev/null; }; then
+    [ -z "$filtered" ] || rm -f "$filtered"
     den_fail "brew bundle had failures" \
-      "fix the failing line in ${brewfile##*/}, then run den up --only=packages"
+      "fix the failing line in $label, then run den up --only=packages"
   fi
-  ui_ok "packages from ${brewfile##*/} are installed"
+  [ -z "$filtered" ] || rm -f "$filtered"
+  ui_ok "packages from $label are installed"
 }
