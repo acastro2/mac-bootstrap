@@ -327,18 +327,23 @@ function hatch() {
   out.push(L(poly([[xF, -70.5, 29.6], [xF, -53.5, 29.6], [xF, -53.5, 38.9], [xF, -70.5, 38.9]]), { tone: "lo" }));
   const tray = { x: xF, y: -70.5, w: 9, d: 17, r: 1 };
   out.push(S(k.slabOf(tray, 29.6, 1.4, P, 2, 0.3), { tone: "mid" }));
-  // The key cartridge, half in the slot, its key pointing into the den.
-  const Kc = { x: xF, y: -66.5, w: 12, d: 9, r: 1.5 };
+  // The key cartridge, half in the slot, its key pointing into the den. The
+  // body is gold; the key is engraved in dark amber, outside the tint, so it
+  // never turns gold on gold.
+  const Kc = { x: xF, y: -67.5, w: 14, d: 11, r: 1.6 };
   const kz = 31;
-  const kh = 4.6;
-  const key = [];
-  const [cx, cy] = [Kc.x + Kc.w - 3.6, Kc.y + Kc.d / 2];
-  key.push(S(k.slabOf(Kc, kz, kh, P, 3, 0.5), { tone: "hi", crease: "lo" }));
-  key.push(L(k.ring(cx, cy, 2.2, kz + kh, P, 18), { tone: "mid" }));
-  key.push(L(k.lineOnTop([cx - 2.2, cy], [Kc.x + 2, cy], kz + kh, P), { tone: "mid", free: "end" }));
-  key.push(L(k.lineOnTop([Kc.x + 4, cy], [Kc.x + 4, cy + 2], kz + kh, P), { tone: "mid", free: "end" }));
-  key.push(L(k.lineOnTop([Kc.x + 2.4, cy], [Kc.x + 2.4, cy + 1.6], kz + kh, P), { tone: "mid", free: "end" }));
-  out.push(tint(key.join(""), COLOR.key));
+  const kh = 5;
+  const top = kz + kh;
+  const [cx, cy] = [Kc.x + Kc.w - 4.2, Kc.y + Kc.d / 2];
+  out.push(tint(S(k.slabOf(Kc, kz, kh, P, 3, 0.5), { tone: "hi", crease: "lo" }), COLOR.key));
+  const glyph = [
+    L(k.ring(cx, cy, 2.6, top, P, 20), { tone: "mid" }),
+    L(k.ring(cx, cy, 1, top, P, 12), { tone: "mid" }),
+    L(k.lineOnTop([cx - 2.6, cy], [Kc.x + 2.2, cy], top, P), { tone: "mid", free: "end" }),
+    L(k.lineOnTop([Kc.x + 4.6, cy], [Kc.x + 4.6, cy + 2.4], top, P), { tone: "mid", free: "end" }),
+    L(k.lineOnTop([Kc.x + 2.8, cy], [Kc.x + 2.8, cy + 1.8], top, P), { tone: "mid", free: "end" }),
+  ].join("");
+  out.push(`<g style="--anatomy-mid:#5c3a00;--anatomy-weight:1.15">${glyph}</g>`);
   return out.join("");
 }
 
