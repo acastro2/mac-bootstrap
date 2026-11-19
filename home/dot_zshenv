@@ -4,14 +4,16 @@
 # The den repo, so the helper functions in .zshrc work from any directory.
 # ~/.local/bin/den is a symlink into the repo. The VM has no clone: the Mac
 # streams its checkout to ~/.local/share/den. Else the default clone path.
+# Only a path that really holds den is exported: a wrong DEN_ROOT is worse
+# than none (bin/den finds its own checkout anyway).
 if [[ -L $HOME/.local/bin/den ]]; then
   DEN_ROOT=${${:-$HOME/.local/bin/den}:A:h:h}
 elif [[ -x $HOME/.local/share/den/bin/den ]]; then
   DEN_ROOT=$HOME/.local/share/den
-else
+elif [[ -x $HOME/Developer/github/acastro2/mac-bootstrap/bin/den ]]; then
   DEN_ROOT=$HOME/Developer/github/acastro2/mac-bootstrap
 fi
-export DEN_ROOT
+[[ -n ${DEN_ROOT:-} ]] && export DEN_ROOT
 
 # Homebrew: Apple Silicon, then Intel, then Linux.
 if [[ -x /opt/homebrew/bin/brew ]]; then

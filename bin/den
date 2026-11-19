@@ -23,9 +23,17 @@ den_root_from_self() {
   cd -P "$(dirname "$src")/.." && pwd
 }
 
-if [ -z "${DEN_ROOT:-}" ]; then
-  DEN_ROOT=$(den_root_from_self)
+# The checkout this script lives in wins: an inherited DEN_ROOT can point at
+# another clone path (2026-11-19: a shell exported the default path on a Mac
+# whose clone lived elsewhere, and den died with "missing lib/ui.sh").
+den_self=$(den_root_from_self 2>/dev/null) || den_self=""
+if [ -n "$den_self" ] && [ -r "$den_self/lib/ui.sh" ]; then
+  DEN_ROOT=$den_self
+elif [ -z "${DEN_ROOT:-}" ] || [ ! -r "$DEN_ROOT/lib/ui.sh" ]; then
+  printf 'den: cannot find its lib/ folder next to %s\n' "${BASH_SOURCE[0]}" >&2
+  exit 1
 fi
+unset den_self
 export DEN_ROOT
 
 # ui, core and secrets first (the rest build on them), then every other

@@ -244,3 +244,11 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" != *"0 dry-run"* ]]
 }
+
+@test "den finds its own checkout even when DEN_ROOT points somewhere else" {
+  phase 10 one true
+  DEN_ROOT="$TMP/not-a-checkout" run den phases
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"one"* ]]
+  [[ "$output" != *"den: missing"* ]]
+}
