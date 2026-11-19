@@ -9,7 +9,7 @@
 //   the server rack on the back wall    the Rex server, where the console's cable ends up
 //   the T-Rex at the console            you on the Mac: tiny arms, one lever, the whole den
 //   the cable through the gland         SSH (Rex, VS Code): the only wire, and it starts outside
-//   the feeding hatch and key cartridge the keys going in (1Password -> the VM)
+//   the key cartridge in the hatch slot the keys going in (1Password -> the VM)
 //   the beacon on the corner post       vm-up, which keeps the den alive (the one lit part)
 //   no door anywhere                    no shared folders, no SSH agent, no way out
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -302,28 +302,43 @@ const GLAND = [-17, DEN.y + DEN.d, 8];
 
 // ── Outside: the feeding hatch and the key cartridge ──────────────────
 function hatch() {
+  // A pass-through hatch outside the den: a hand wheel to open it, and above
+  // it an intake slot where the gold key cartridge is being fed in.
   const Hb = { x: DEN.x + DEN.w, y: -74, w: 16, d: 24, r: 1.5 };
+  const H = 44;
+  const xF = Hb.x + Hb.w;
   const out = [`<path class="iso-halo" d="${k.haloOf(Hb, 0, 2, P)}" style="filter:blur(3px)"/>`];
-  out.push(S(k.slabOf(Hb, 0, 30, P, 3, 0.6), { tone: "mid", inner: L(k.sideSeam(Hb, 26, P, 3), { tone: "faint" }) }));
-  out.push(D(k.corners(Hb, 1.8).map(([hx, hy]) => at([hx, hy, 30])), { size: 0.45, tone: "lo" }));
-  const C = [Hb.x + Hb.w, Hb.y + Hb.d / 2, 15];
+  out.push(S(k.slabOf(Hb, 0, H, P, 3, 0.6), { tone: "mid", inner: [27, 40].map((z) => L(k.sideSeam(Hb, z, P, 3), { tone: "faint" })).join("") }));
+  out.push(D(k.corners(Hb, 1.8).map(([hx, hy]) => at([hx, hy, H])), { size: 0.45, tone: "lo" }));
+  // The hand wheel.
+  const C = [xF, Hb.y + Hb.d / 2, 14];
   const F = G.frameOf(C, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
-  out.push(S(G.disc(0, 1.4, 9.5, F, P), { tone: "mid" }));
-  out.push(D(G.dotsOf(F, 1.4, 8.4, 10, P, { all: true }), { size: 0.4, tone: "lo" }));
-  out.push(S(G.disc(1.4, 2.6, 7, F, P), { tone: "hi", crease: "lo" }));
+  out.push(S(G.disc(0, 1.4, 9, F, P), { tone: "mid" }));
+  out.push(D(G.dotsOf(F, 1.4, 7.9, 10, P, { all: true }), { size: 0.4, tone: "lo" }));
+  out.push(S(G.disc(1.4, 2.6, 6.6, F, P), { tone: "hi", crease: "lo" }));
   out.push(S(G.disc(2.6, 6, 1.4, F, P), { tone: "mid" }));
-  out.push(S(G.ringBand(5, 6.4, 4.2, 5.4, F, P), { tone: "mid" }));
-  out.push(L(G.circleOf(F, 6.4, 4.2, P), { tone: "mid" }));
-  out.push(L(G.spokesOf(F, 6.4, 1.4, 4.2, 3, P, { phase: Math.PI / 6 }), { tone: "mid" }));
-  // The key cartridge waiting on the plate.
-  const Kc = { x: 132, y: -36, w: 18, d: 22, r: 2 };
-  out.push(`<path class="iso-halo" d="${k.haloOf(Kc, 0, 2, P)}" style="filter:blur(3px)"/>`);
-  out.push(tint(S(k.slabOf(Kc, 0, 6, P, 3, 0.5), { tone: "hi", crease: "lo" }), COLOR.key));
-  const [cx, cy] = [Kc.x + 6, Kc.y + Kc.d / 2];
-  out.push(L(k.ring(cx, cy, 3, 6, P, 20), { tone: "mid" }));
-  out.push(L(k.lineOnTop([cx + 3, cy], [Kc.x + Kc.w - 3, cy], 6, P), { tone: "mid" }));
-  out.push(L(k.lineOnTop([Kc.x + Kc.w - 6, cy], [Kc.x + Kc.w - 6, cy + 3], 6, P), { tone: "mid", free: "end" }));
-  out.push(L(k.lineOnTop([Kc.x + Kc.w - 3.5, cy], [Kc.x + Kc.w - 3.5, cy + 2.4], 6, P), { tone: "mid", free: "end" }));
+  out.push(S(G.ringBand(5, 6.4, 4, 5.2, F, P), { tone: "mid" }));
+  out.push(L(G.circleOf(F, 6.4, 4, P), { tone: "mid" }));
+  out.push(L(G.spokesOf(F, 6.4, 1.4, 4, 3, P, { phase: Math.PI / 6 }), { tone: "mid" }));
+  // The intake slot: a dark opening with a frame, and a tray under it.
+  const slot = [[xF, -69, 31], [xF, -55, 31], [xF, -55, 37.5], [xF, -69, 37.5]];
+  out.push(`<path d="${poly(slot)}" fill="var(--anatomy-shade-0)" stroke="none"/>`);
+  out.push(L(poly(slot), { tone: "mid" }));
+  out.push(L(poly([[xF, -70.5, 29.6], [xF, -53.5, 29.6], [xF, -53.5, 38.9], [xF, -70.5, 38.9]]), { tone: "lo" }));
+  const tray = { x: xF, y: -70.5, w: 9, d: 17, r: 1 };
+  out.push(S(k.slabOf(tray, 29.6, 1.4, P, 2, 0.3), { tone: "mid" }));
+  // The key cartridge, half in the slot, its key pointing into the den.
+  const Kc = { x: xF, y: -66.5, w: 12, d: 9, r: 1.5 };
+  const kz = 31;
+  const kh = 4.6;
+  const key = [];
+  const [cx, cy] = [Kc.x + Kc.w - 3.6, Kc.y + Kc.d / 2];
+  key.push(S(k.slabOf(Kc, kz, kh, P, 3, 0.5), { tone: "hi", crease: "lo" }));
+  key.push(L(k.ring(cx, cy, 2.2, kz + kh, P, 18), { tone: "mid" }));
+  key.push(L(k.lineOnTop([cx - 2.2, cy], [Kc.x + 2, cy], kz + kh, P), { tone: "mid", free: "end" }));
+  key.push(L(k.lineOnTop([Kc.x + 4, cy], [Kc.x + 4, cy + 2], kz + kh, P), { tone: "mid", free: "end" }));
+  key.push(L(k.lineOnTop([Kc.x + 2.4, cy], [Kc.x + 2.4, cy + 1.6], kz + kh, P), { tone: "mid", free: "end" }));
+  out.push(tint(key.join(""), COLOR.key));
   return out.join("");
 }
 
@@ -340,8 +355,8 @@ const tplan = (u, v, du, dv, r) => ({ x: tx(u), y: ty(v), w: du * R, d: dv * R, 
 
 const CON = { x: -76, y: 50, w: 20, d: 26, r: 2 };
 const CON_H = 34;
-const LEVER = [-69, 63];
-const KNOB = [LEVER[0], LEVER[1], CON_H + 14];
+const LEVER = [-73.5, 63];
+const KNOB = [LEVER[0], LEVER[1], CON_H + 21];
 const BOSS = [CON.x + CON.w, CON.y + 6, 7];
 
 function consoleBox() {
@@ -363,7 +378,7 @@ function consoleBox() {
   out.push(tint(S(G.disc(0, 3, 2.6, F, P), { tone: "mid" }) + S(G.disc(1, 1.8, 3.3, F, P), { tone: "mid" }), COLOR.cable));
   // The lever stalk; its knob is drawn last, over the claws.
   out.push(S(k.cylinder(LEVER[0], LEVER[1], 2.8, CON_H, 1.4, P, 20), { tone: "lo" }));
-  out.push(S(k.cylinder(LEVER[0], LEVER[1], 0.9, CON_H + 1.4, 10.6, P, 12), { tone: "mid", crease: "none" }));
+  out.push(S(k.cylinder(LEVER[0], LEVER[1], 0.9, CON_H + 1.4, 17.6, P, 12), { tone: "mid", crease: "none" }));
   return out.join("");
 }
 
@@ -440,11 +455,32 @@ function trex() {
   top.push(L(k.sideRing(eye, 3 * R, "y", P, 20), { tone: "mid" }));
   top.push(glowBall(eye, 1.4 * R, COLOR.rex, 2.6));
   top.push(D([at([tx(43), ty(-2.5), tz(HEAD_Z + 12)]), at([tx(43), ty(2.5), tz(HEAD_Z + 12)])], { size: 0.65, tone: "lo" }));
-  // Tiny arms: two short segments from the chest to the lever knob.
-  const arms = [-3.6, 3.6].map((v) => {
-    const pts = G.fillet([[tx(20), ty(v), tz(47)], [tx(24.5), ty(v * 0.8), tz(44)], [KNOB[0] - 1.5, KNOB[1] + v * 0.6, KNOB[2] + 1.2]], 3, 7, { P, tube: 1.4 * R });
-    return tube(pts, 1.4 * R, "mid") + S(G.sphereOf(pts[pts.length - 1], 1.7 * R, P), { tone: "hi" });
-  });
+  // Tiny arms: shoulder on the chest, a short upper arm down to the elbow,
+  // a forearm in to the lever, and a two-fingered hand closed on the knob.
+  const arm = (side) => {
+    const v = side * 9;
+    const shoulder = [tx(17), ty(v), tz(47)];
+    const elbow = [tx(19.5), ty(v), tz(41)];
+    const wrist = [KNOB[0] - 3, KNOB[1] + side * 2.8, KNOB[2] + 0.8];
+    const out = [];
+    if (side > 0) {
+      const SJ = G.frameAlong([tx(16.5), ty(8.5), tz(47)], [0, 1, 0]);
+      out.push(S(G.disc(0, 0.6 * R, 1.7 * R, SJ, P), { tone: "mid" }));
+    }
+    out.push(tube(G.fillet([shoulder, [tx(18.4), ty(v), tz(44)], elbow], 1.5, 6, { P, tube: 1.1 * R }), 1.1 * R, "mid"));
+    out.push(S(G.sphereOf(elbow, 1.35 * R, P), { tone: "hi" }));
+    out.push(tube([elbow, wrist], 0.95 * R, "mid"));
+    out.push(S(G.sphereOf(wrist, 1.15 * R, P), { tone: "hi" }));
+    // Two fingers curl over the knob; each ends in a claw.
+    for (const dz of [1.4, -1.2]) {
+      const tip = [KNOB[0] + 1.3, KNOB[1] + side * 1.2, KNOB[2] + dz];
+      const pts = G.fillet([wrist, [KNOB[0] - 1.2, KNOB[1] + side * 2.4, KNOB[2] + dz * 1.5], tip], 1.2, 6, { P, tube: 0.5 * R });
+      out.push(tube(pts, 0.5 * R, "mid"));
+      out.push(S(G.sphereOf(tip, 0.62 * R, P), { tone: "hi" }));
+    }
+    return out.join("");
+  };
+  const arms = [arm(-1), arm(1)];
   return { back, far: leg(-8), body: body.join(""), head: top.join(""), near: leg(8), arms };
 }
 
@@ -471,14 +507,15 @@ const body = [
   rex.head,
   rex.near,
   consoleBox(),
-  ...rex.arms,
-  S(G.sphereOf(KNOB, 2.6, P), { tone: "hi" }),
+  rex.arms[0],
+  S(G.sphereOf(KNOB, 2.8, P), { tone: "hi" }),
+  rex.arms[1],
 ];
 
 const LABEL =
   "A den on a diorama base: the anatomy of den. Inside a caged den, three wild robot animals (a wolf, a fox, and a raccoon at a crate) are the coding agents in the VM. " +
   "Outside, a robot T-Rex runs the den from a console with its tiny arms; one cable runs from the console through a sealed gland into the den. " +
-  "A feeding hatch with a hand wheel is the only way keys go in, a beacon on the corner post keeps the den alive, and there is no door.";
+  "A gold key cartridge is fed through a hatch, the only way keys go in, a beacon on the corner post keeps the den alive, and there is no door.";
 
 mkdirSync(OUT, { recursive: true });
 for (const theme of ["dark", "light"]) {

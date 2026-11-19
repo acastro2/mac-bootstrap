@@ -4,7 +4,7 @@ One command sets up a Mac and its agent VM, then keeps both healthy. You answer 
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="docs/den/img/den-light.svg">
-  <img alt="The anatomy of a den: a caged den of wild robot animals (a wolf, a fox, and a raccoon at a crate) run from outside by a robot T-Rex at a console. One blue cable runs from the console into the den, a gold key cartridge waits by a feeding hatch, and a green beacon glows on the den's back corner." src="docs/den/img/den-dark.svg">
+  <img alt="The anatomy of a den: a caged den of wild robot animals (a wolf, a fox, and a raccoon at a crate) run from outside by a robot T-Rex at a console. One blue cable runs from the console into the den, a gold key cartridge is fed into the den through a hatch, and a green beacon glows on the den's back corner." src="docs/den/img/den-dark.svg">
 </picture>
 
 The agents are wild animals: fast, strong, and not to be trusted with your Mac. So they live in a den, and you run it from the outside.
@@ -16,7 +16,7 @@ The agents are wild animals: fast, strong, and not to be trusted with your Mac. 
 | The server rack on the back wall | The Rex server, where your terminal tabs run. |
 | The robot T-Rex at the console | You, on the Mac. Huge, but it steers the whole den with tiny arms on one lever: `den`. |
 | The blue cable through the sealed gland | SSH: Rex and VS Code reaching in. The only wire, and it starts at your console. |
-| The feeding hatch and the gold key cartridge | The only way keys go in: 1Password Document `den` → `~/.config/zsh/.api-keys.zsh` in the VM. |
+| The gold key cartridge, half-way into the feeding hatch | The only way keys go in: 1Password Document `den` → `~/.config/zsh/.api-keys.zsh` in the VM. |
 | The green beacon | `vm-up`, the login agent that keeps the den alive and heals it. |
 
 Everything that does cross the boundary is in [The bridges](#the-bridges). The picture is code: `node docs/den/scenes/den/build.mjs` (needs the `anatomy` skill).
