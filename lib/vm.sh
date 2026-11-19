@@ -544,6 +544,7 @@ PROBE
         ;;
     esac
   done <<<"$out"
+  printf 'vm: Rex.app host is ssh://lima-%s (once: Cmd-Shift-P > Add Remote Host..., then Switch Host)\n' "$vm"
 }
 
 # ── Preflight hook ───────────────────────────────────────────────────

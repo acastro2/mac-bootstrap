@@ -868,7 +868,10 @@ den_dashboard_now() {
   fi
   st=$(den_vm_to 10 limactl list "$vm" --format '{{.Status}}' 2>/dev/null) || st=""
   case $st in
-    Running) ui_ok "vm $vm: running" ;;
+    Running)
+      ui_ok "vm $vm: running"
+      ui_info "Rex.app host: ssh://lima-$vm (once: Cmd-Shift-P > Add Remote Host..., then Switch Host)"
+      ;;
     '') ui_warn "vm $vm: not created (den up --only=vm)" ;;
     *) ui_warn "vm $vm: ${st} (den vm up)" ;;
   esac
