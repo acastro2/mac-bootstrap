@@ -859,7 +859,7 @@ den_cmd_update() {
 # den_dashboard_now: live state on the Mac: the VM, the browse relay, and the
 # tunnel from the VM back to the relay. Read-only; each check has a timeout.
 den_dashboard_now() {
-  local vm=${AGENT_VM:-agent} st code
+  local vm=${AGENT_VM:-agent} st code bin
   [ "$(den_os)" = macos ] || return 0
   ui_section "Now"
   if ! command -v limactl >/dev/null 2>&1; then
@@ -878,6 +878,13 @@ den_dashboard_now() {
   code=$(curl -s -o /dev/null -w '%{http_code}' -m 2 http://127.0.0.1:19988/ 2>/dev/null) || code=""
   if [ "$code" = 200 ]; then
     ui_ok "browse relay: up on 127.0.0.1:19988"
+    # Pairing codes live in a file on the computer that runs `browse pair`,
+    # and the relay reads only the Mac's file: a code made in the VM never works.
+    bin="$HOME/.local/bin/browse"
+    [ -x "$bin" ] || bin=$(command -v browse 2>/dev/null) || bin=""
+    if [ -n "$bin" ] && den_vm_to 5 "$bin" pair --list 2>/dev/null </dev/null | grep -q '^No paired browsers'; then
+      ui_warn "browse: no browser paired (run browse pair on the Mac, never in the VM: the relay reads only the Mac's codes)"
+    fi
   else
     ui_warn "browse relay: down (vm-up restarts it within a minute; den vm logs)"
   fi

@@ -41,7 +41,7 @@ The Mac and the VM touch in exactly these places. **The Mac opens every connecti
 | 1 | Rex tabs | Rex.app, over SSH to `lima-agent` | your keystrokes and the terminal | the Rex server listens only on a Unix socket in the VM (mode 600); SSH is the only way to it |
 | 2 | VS Code | VS Code Remote-SSH | files of the folder you open | the editor runs on the Mac, the files stay in the VM |
 | 3 | API keys and the browse relay token | den and vm-up, with `limactl copy` | two files | mode 600; copied by `den up`, then by vm-up only when the content changes |
-| 4 | Browser control | vm-up runs `rex forward` from the Mac into the VM | browse commands from VM agents to your browser | VM port 19988 reaches only the relay; the tunnel lives in its own Rex session `den` |
+| 4 | Browser control | vm-up runs `rex forward` from the Mac into the VM | browse commands from VM agents to your browser | VM port 19988 reaches only the relay; the tunnel lives in its own Rex session `den`. Pair the browser with `browse pair` **on the Mac**: a code made in the VM never works, because the relay reads only the Mac's codes |
 | 5 | `code .` | vm-up pulls the inbox over SSH | one folder path per line | absolute path only, 1024 characters max, no control characters, an immediate repeat of the same path within 10 s is refused, 5 opens a minute at most |
 | 6 | Lifecycle | vm-up and `den up` | start and restart, the guest heal script, a copy of this repo | one way, Mac to VM |
 | 7 | Dev servers | your Mac browser, through Lima | HTTP to `localhost:<port>` | every guest localhost port is mirrored except 19988, so a VM process can listen on a Mac loopback port: a deliberate trade for dev servers that just work |
