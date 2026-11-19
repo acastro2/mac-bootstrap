@@ -16,7 +16,7 @@ USER_NAME=${USER:-$(id -un)}
 # Homebrew at all (stage 0 never runs here), so install it unattended.
 if [ ! -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
   say "installing Homebrew (first run takes a few minutes)"
-  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null >/dev/null ||
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL --connect-timeout 15 -m 600 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null >/dev/null ||
     say "Homebrew install failed; the Linux phases will skip until it works"
 fi
 if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
@@ -31,7 +31,7 @@ if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>
   export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
   if ! {
     sudo install -m 0755 -d /etc/apt/keyrings
-    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo curl -fsSL --connect-timeout 15 -m 300 https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
     sudo chmod a+r /etc/apt/keyrings/docker.asc
     # shellcheck disable=SC1091  # os-release exists on the guest, not here.
     codename=$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-noble}")

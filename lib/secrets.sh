@@ -59,7 +59,7 @@ den_secrets_load() {
   # prompt and works (seen 2026-11-19). The timeout covers a prompt nobody answers.
   if command -v op >/dev/null 2>&1; then
     ui_info "secrets: asking 1Password for the den document (approve the prompt)"
-    if den_with_timeout "${DEN_OP_TIMEOUT:-60}" op document get den --vault "$vault" >"$doc.tmp" 2>/dev/null; then
+    if den_with_timeout "${DEN_OP_TIMEOUT:-60}" op document get den --vault "$vault" >"$doc.tmp" 2>"$DEN_RUNTIME/secrets/op.err"; then
       if den_secrets_valid "$doc.tmp"; then
         mv "$doc.tmp" "$doc"
         chmod 600 "$doc"
@@ -69,7 +69,9 @@ den_secrets_load() {
       fi
     fi
     rm -f "$doc.tmp"
-    ui_warn "secrets: could not read the 1Password document den in vault $vault (not approved, locked, missing, or invalid)"
+    ui_warn "secrets: could not read the 1Password document den in vault $vault: $(sed -n '1s/^\[ERROR\] [0-9\/]* [0-9:]* //p' "$DEN_RUNTIME/secrets/op.err" 2>/dev/null | head -c 160)"
+    ui_info "secrets: 'authorization timeout' means the prompt was not approved in time; run den fix and approve it"
+    rm -f "$DEN_RUNTIME/secrets/op.err"
   fi
   recorded=$(den_secrets_recorded_path) || recorded=""
   if [ -n "$recorded" ]; then

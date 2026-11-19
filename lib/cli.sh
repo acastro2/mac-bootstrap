@@ -377,26 +377,49 @@ den_sessions_units() {
 EOF
 }
 
-den_sessions_member_allowed() { # path members
-  local path=${1:-} members=${2:-} unit m
-  while IFS= read -r unit; do
-    case $path in
-      "$unit"|"$unit"/*) return 0 ;;
-    esac
-  done <<EOF
-$(den_sessions_units)
-EOF
-  case $path in
-    Developer/.cortex|Developer/.cortex/*|Developer/*/.cortex|Developer/*/.cortex/*) return 0 ;;
-  esac
-  while IFS= read -r m; do
-    case $m in
-      "$path"/*) return 0 ;;
-    esac
-  done <<EOF
-$members
-EOF
-  return 1
+# den_sessions_unexpected_path <norm-file>: print the first member of the
+# normalized archive list that is not a session path, and return 1; print
+# nothing and return 0 when every member is allowed. One pass over the members,
+# so a 4000-file archive stays linear. The old per-member rescan of the whole
+# list was O(N^2). A member is allowed when it is a session unit or under one,
+# when it is a parent directory of another member, or when it is a Developer
+# .cortex tree.
+den_sessions_unexpected_path() { # norm-file
+  local file=${1:-}
+  # Units go through the environment: `awk -v` would re-lex a literal newline.
+  DEN_SESSIONS_UNITS=$(den_sessions_units) awk '
+    BEGIN {
+      n = split(ENVIRON["DEN_SESSIONS_UNITS"], u, "\n")
+      for (i = 1; i <= n; i++) {
+        if (u[i] != "") unit[u[i]] = 1
+      }
+    }
+    {
+      member[++count] = $0
+      dir = $0
+      while (match(dir, /\/[^\/]+$/)) {
+        dir = substr(dir, 1, RSTART - 1)
+        parent[dir] = 1
+      }
+    }
+    END {
+      for (i = 1; i <= count; i++) {
+        path = member[i]
+        if (path in parent) continue
+        if (path ~ /^Developer\/(.*\/)?\.cortex(\/.*)?$/) continue
+        allowed = 0
+        dir = path
+        while (1) {
+          if (dir in unit) { allowed = 1; break }
+          if (!match(dir, /\/[^\/]+$/)) break
+          dir = substr(dir, 1, RSTART - 1)
+        }
+        if (allowed) continue
+        print path
+        exit 1
+      }
+    }
+  ' "$file"
 }
 
 den_sessions_has_member_under() { # members unit
@@ -420,6 +443,35 @@ $1
 "*) ;;
     *) DEN_UNITS="$DEN_UNITS$1"$'\n' ;;
   esac
+}
+
+# den_sessions_prune_snapshots: keep the newest 5 sessions-*.tar.gz in the
+# snapshots dir. Names carry the stamp, so name order is age order and ties
+# cannot happen. Everything else in that dir (dotfiles-* from the shell phase)
+# is left alone.
+den_sessions_prune_snapshots() {
+  local dir f
+  local snaps=()
+  dir=$(den_snapshots_dir)
+  if [ ! -d "$dir" ]; then
+    return 0
+  fi
+  for f in "$dir"/sessions-*.tar.gz; do
+    if [ -f "$f" ]; then
+      snaps[${#snaps[@]}]=$f
+    fi
+  done
+  if [ ${#snaps[@]} -eq 0 ]; then
+    return 0
+  fi
+  while IFS= read -r f; do
+    if [ -n "$f" ] && [ -f "$f" ]; then
+      rm -f -- "$f"
+    fi
+  done <<EOF
+$(printf '%s\n' "${snaps[@]}" | sort -r | sed -n '6,$p')
+EOF
+  return 0
 }
 
 den_cmd_sessions_export() {
@@ -514,8 +566,12 @@ EOF
     exit 1
   fi
 
-  dest="$HOME/Desktop"
-  mkdir -p "$dest"
+  dest="$HOME/.local/state/den/exports"
+  if ! mkdir -p "$dest"; then
+    ui_err "sessions export: could not create $dest"
+    exit 1
+  fi
+  chmod 700 "$dest" 2>/dev/null || true
   stamp=$(date +%Y%m%d-%H%M%S)
   out="$dest/agent-sessions-$stamp.tar.gz"
   if ! tar -czf "$out" "${tarargs[@]}"; then
@@ -525,14 +581,14 @@ EOF
   chmod 600 "$out" 2>/dev/null || true
   size=$(du -h "$out" 2>/dev/null | cut -f1) || size="?"
   ui_ok "wrote $out (${size:-?})"
-  ui_info "restore with: den sessions import $out"
+  ui_info "carry it by AirDrop or USB; restore with: den sessions import $out"
   rm -rf "$work"
   trap - EXIT
   exit 0
 }
 
 den_cmd_sessions_import() {
-  local file="" yes=0 member p unit u snap stage rc=0 target
+  local file="" yes=0 member p unit u snap stage rc=0 target bad
   while [ $# -gt 0 ]; do
     case $1 in
       --yes|-y) yes=1 ;;
@@ -588,14 +644,10 @@ den_cmd_sessions_import() {
     exit 1
   fi
   DEN_SESSIONS_MEMBERS=$(cat "$work/norm")
-  while IFS= read -r p; do
-    if ! den_sessions_member_allowed "$p" "$DEN_SESSIONS_MEMBERS"; then
-      ui_err "sessions import: unexpected path in archive: $p; current data untouched"
-      exit 1
-    fi
-  done <<EOF
-$DEN_SESSIONS_MEMBERS
-EOF
+  if ! bad=$(den_sessions_unexpected_path "$work/norm"); then
+    ui_err "sessions import: unexpected path in archive: ${bad:-?}; current data untouched"
+    exit 1
+  fi
 
   while IFS= read -r unit; do
     if den_sessions_has_member_under "$DEN_SESSIONS_MEMBERS" "$unit"; then
@@ -654,6 +706,7 @@ EOF
         ;;
     esac
   fi
+  den_sessions_prune_snapshots
 
   stage="$work/stage"
   mkdir -p "$stage"

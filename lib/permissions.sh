@@ -113,7 +113,7 @@ den_permissions_rex_json() {
   if [ "$DEN_PERM_REX_FETCHED" != 1 ]; then
     DEN_PERM_REX_FETCHED=1
     if bin=$(den_permissions_rex_bin); then
-      DEN_PERM_REX_JSON=$("$bin" api call server.apple.privacy_status 2>/dev/null) || DEN_PERM_REX_JSON=""
+      DEN_PERM_REX_JSON=$(den_with_timeout 15 "$bin" api call server.apple.privacy_status 2>/dev/null) || DEN_PERM_REX_JSON=""
     fi
   fi
   printf '%s' "$DEN_PERM_REX_JSON"
@@ -164,7 +164,7 @@ den_permissions_peekaboo_json() {
   if [ "$DEN_PERM_PEEK_FETCHED" != 1 ]; then
     DEN_PERM_PEEK_FETCHED=1
     if command -v peekaboo >/dev/null 2>&1; then
-      DEN_PERM_PEEK_JSON=$(peekaboo permissions status --all-sources --json 2>/dev/null) || DEN_PERM_PEEK_JSON=""
+      DEN_PERM_PEEK_JSON=$(den_with_timeout 15 peekaboo permissions status --all-sources --json 2>/dev/null) || DEN_PERM_PEEK_JSON=""
     fi
   fi
   printf '%s' "$DEN_PERM_PEEK_JSON"

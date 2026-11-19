@@ -17,13 +17,13 @@ agent_version() {
   printf '%s' "${out:-unknown}"
 }
 
-# agent_install <title> <url> <bash|sh>: the official curl installer.
+# agent_install <title> <url> <bash|sh>: the official installer, fetched with curl.
 # Output is kept for the failure message only; it is noisy and never a secret.
 agent_install() {
   local title=$1 url=$2 shell=$3 log=""
   log=$(mktemp "${TMPDIR:-/tmp}/den-agent.XXXXXX") || log=/dev/null
   ui_step "installing $title"
-  if { curl -fsSL "$url" | "$shell"; } >"$log" 2>&1; then
+  if { curl -fsSL --connect-timeout 15 -m 600 "$url" | "$shell"; } >"$log" 2>&1; then
     if [ "$log" != /dev/null ]; then
       rm -f "$log"
     fi
@@ -37,7 +37,7 @@ agent_install() {
   return 1
 }
 
-# tgrep ships as a plain release archive, not a curl installer.
+# tgrep ships as a plain release archive, not a shell installer.
 agent_tgrep() {
   local target="" tmp="" bin="" os_arch
   os_arch=$(uname -s)-$(uname -m)

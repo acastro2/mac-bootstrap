@@ -167,7 +167,7 @@ Rex is the terminal. Its server runs in the VM, so a tab on the `vm` host is a z
 
 ## Moving to a new Mac
 
-1. On the old Mac: `den sessions export`. It writes a mode-600 tarball to the Desktop.
+1. On the old Mac: `den sessions export`. It writes a mode-600 tarball to `~/.local/state/den/exports/`, and says to carry it by AirDrop or USB.
 2. On the new Mac: run the one-liner, then `den sessions import <file>`.
 
 Import checks every path in the archive, takes a snapshot of what it replaces, extracts to a temp folder, and only then swaps the files in. A bad archive leaves your current data untouched.

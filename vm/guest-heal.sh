@@ -40,16 +40,26 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 # 3. browse CLI: link the native binary of the current mise node. A node
-#    upgrade moves it; a missing package means a fresh guest.
+#    upgrade moves it; a missing package means a fresh guest. The install gets
+#    600s of its own and is marked before it starts, so a slow network costs
+#    one attempt an hour instead of a kill (and a retry) every 5 minutes.
 if command -v mise >/dev/null 2>&1; then
   if [ "$(uname -m)" = x86_64 ]; then arch=x64; else arch=arm64; fi
   root="$(mise exec -- npm root -g 2>/dev/null)" || root=""
   bin="$root/@opencode/browse/node_modules/@opencode/browse-linux-$arch/bin/browse"
   if [ -n "$root" ] && [ ! -x "$bin" ]; then
-    if mise exec -- npm install -g @opencode/browse >/dev/null 2>&1; then
-      say "installed browse"
-    else
-      say "browse install failed"
+    stamp="$HOME/.local/state/den/browse-install.tried"
+    now="$(date +%s)"
+    tried="$(cat "$stamp" 2>/dev/null || true)"
+    case ${tried:-} in ''|*[!0-9]*) tried=0 ;; esac
+    if [ "$((now - tried))" -ge 3600 ]; then
+      mkdir -p "${stamp%/*}" 2>/dev/null || true
+      printf '%s\n' "$now" >"$stamp" 2>/dev/null || true
+      if perl -e 'alarm shift; exec @ARGV' 600 mise exec -- npm install -g @opencode/browse >/dev/null 2>&1; then
+        say "installed browse"
+      else
+        say "browse install failed"
+      fi
     fi
   fi
   if [ -x "$bin" ] && [ "$(readlink "$HOME/.local/bin/browse" 2>/dev/null || true)" != "$bin" ]; then

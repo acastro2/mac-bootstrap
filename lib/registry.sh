@@ -289,29 +289,6 @@ den_brewfile_entries() {
   done < <(sed -E -n 's/^[[:space:]]*(brew|cask|tap) "([^"]+)".*/\1 \2/p' "$file")
 }
 
-# Delete one row's paths, or print them when dry is 1 or DEN_CLEAN_DRY_RUN=1.
-den_registry_remove() {
-  local name=${1:-} dry=${2:-0} paths path
-  if [ "${DEN_CLEAN_DRY_RUN:-0}" = 1 ]; then
-    dry=1
-  fi
-  if ! den_registry_row "$name"; then
-    ui_warn "no registry row for $name"
-    return 0
-  fi
-  paths=${DEN_ROW_REMOVE:-$DEN_ROW_TARGET}
-  for path in $paths; do
-    if [ -z "$path" ]; then
-      continue
-    fi
-    if [ "$dry" = 1 ]; then
-      printf '  would remove: ~/%s\n' "$path"
-    else
-      rm -rf "${HOME:?}/$path"
-    fi
-  done
-}
-
 den_cmd_registry() {
   local sub=${1:-list} strict=0
   if [ $# -gt 0 ]; then

@@ -18,6 +18,11 @@ purpose, in one commit with the code that needs the change.
    so in one line per phase.
 5. **No secret in logs, argv, or the repo.** Secret values move through files
    (mode 600, `umask 077`) or stdin, never command-line arguments.
+   **Known exceptions:** two CLIs take the value no other way, so the secret
+   rides argv and is exposed in the local process list (`ps`) for about a
+   second: `opencode service set password`
+   (`lib/phases/50-opencode-web.sh`) and the gated MCP URL passed to
+   `claude mcp add` (`lib/phases/52-rex.sh`). Nothing else may take this path.
 6. **Self-contained phases.** Each phase runs in a subshell. It cannot rely on a
    variable another phase set; it derives what it needs (helpers in core).
 

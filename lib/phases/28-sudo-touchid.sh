@@ -11,7 +11,7 @@ den_phase sudo-touchid \
 
 phase_sudo_touchid() {
   local target=${DEN_PAM_SUDO_LOCAL:-/etc/pam.d/sudo_local}
-  local prefix module desired current tmp
+  local prefix module desired current tmp line rest bad stamp
 
   prefix=$(brew --prefix pam-reattach 2>/dev/null) || prefix=""
   module=$prefix/lib/pam/pam_reattach.so
@@ -41,6 +41,44 @@ phase_sudo_touchid() {
 
   tmp=$(mktemp "${TMPDIR:-/tmp}/den-sudo-local.XXXXXX")
   printf '%s\n' "$desired" > "$tmp"
+
+  # visudo validates sudoers, not PAM. Every active line must be an auth rule
+  # for one of the two modules above; anything else could lock sudo out.
+  bad=""
+  while IFS= read -r line; do
+    case $line in
+      ''|'#'*) continue ;;
+    esac
+    case $line in
+      auth[[:space:]]*) ;;
+      *) bad=$line; break ;;
+    esac
+    case $line in
+      *pam_reattach.so*|*pam_tid.so*) ;;
+      *) bad=$line; break ;;
+    esac
+    rest=${line//pam_reattach.so/}
+    rest=${rest//pam_tid.so/}
+    case $rest in
+      *.so*) bad=$line; break ;;
+    esac
+  done < "$tmp"
+  if [ -n "$bad" ]; then
+    rm -f "$tmp"
+    den_fail "the sudo_local rule is not a safe PAM line: $bad" \
+      "fix den's pam_reattach and pam_tid lines, then den up --only=sudo-touchid"
+  fi
+
+  # Keep the file den replaces: a PAM typo can lock sudo out for good.
+  if [ -f "$target" ]; then
+    stamp=$(date +%Y%m%d-%H%M%S)
+    if ! sudo cp -p "$target" "$target.bak.$stamp"; then
+      rm -f "$tmp"
+      den_fail "could not back up $target" \
+        "check write access to $(dirname "$target"), then den up --only=sudo-touchid"
+    fi
+    ui_info "kept the previous $target as $target.bak.$stamp"
+  fi
   if ! sudo install -m 444 "$tmp" "$target"; then
     rm -f "$tmp"
     den_fail "could not write $target" \

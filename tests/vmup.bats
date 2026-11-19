@@ -119,3 +119,26 @@ vm_status() {
   grep -F "code --folder-uri" "$CALLS"
   [ ! -s "$TMP/stdin.txt" ]
 }
+
+@test "missing instance: the back-off is logged once per window, not every pass" {
+  vm_status ""
+  printf '#!/bin/sh\nprintf "bootstrap %%s\\n" "$*" >> "$CALLS"\n' > "$TMP/bootstrap.sh"
+  chmod +x "$TMP/bootstrap.sh"
+  export VM_UP_BOOTSTRAP="$TMP/bootstrap.sh"
+  for n in 1 2 3 4; do
+    "$REPO/vm/vm-up.sh" >>"$TMP/vmup.out" 2>&1 || true
+  done
+  [ "$(grep -c -F 'bootstrap --only=vm' "$CALLS")" -eq 1 ]
+  [ "$(grep -c 'backed off' "$TMP/vmup.out")" -le 1 ]
+}
+
+@test "tunnel: a Rex server that never answers session ls cannot hang vm-up" {
+  vm_status Running
+  printf '#!/bin/sh\nprintf "rex %%s\\n" "$*" >> "$CALLS"\ncase "$*" in *"session"*) sleep 600 ;; esac\nexit 0\n' > "$TMP/bin/rex"
+  chmod +x "$TMP/bin/rex"
+  export VM_UP_SESSION_TIMEOUT=2
+  start=$(date +%s)
+  run "$REPO/vm/vm-up.sh"
+  [ $(( $(date +%s) - start )) -lt 30 ]
+  ! grep -F "forward new" "$CALLS"
+}

@@ -48,7 +48,7 @@ install_rex_app() {
     mkdir -p "$mnt"
 
     # curl's own errors can echo a gated URL, so they are dropped.
-    if ! curl -fsSL --connect-timeout 15 -o "$appcast" "$appcast_url" 2>/dev/null; then
+    if ! curl -fsSL --connect-timeout 15 -m 300 -o "$appcast" "$appcast_url" 2>/dev/null; then
       ui_err "Rex: could not read the appcast"
       exit 1
     fi
@@ -59,7 +59,7 @@ install_rex_app() {
     fi
 
     ui_step "downloading Rex"
-    if ! curl -fsSL --connect-timeout 15 -o "$dmg" "$dmg_url" 2>/dev/null; then
+    if ! curl -fsSL --connect-timeout 15 -m 300 -o "$dmg" "$dmg_url" 2>/dev/null; then
       ui_err "Rex: the download failed"
       exit 1
     fi

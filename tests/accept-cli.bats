@@ -102,3 +102,65 @@ teardown() { /bin/rm -rf "$TMP"; }
   [[ "$output" == *"one"* ]]
   [[ "$output" == *"done"* || "$output" == *"✓"* ]]
 }
+
+@test "den sessions import of a 4000-file archive finishes in under 25 s" {
+  mkdir -p "$TMP/src/.claude/projects"
+  i=0
+  while [ "$i" -lt 40 ]; do
+    mkdir -p "$TMP/src/.claude/projects/p$i"
+    j=0
+    while [ "$j" -lt 100 ]; do
+      : > "$TMP/src/.claude/projects/p$i/c$j.jsonl"
+      j=$((j + 1))
+    done
+    i=$((i + 1))
+  done
+  tar -czf "$TMP/big.tar.gz" -C "$TMP/src" .claude
+  start=$(date +%s)
+  run "$REPO/bin/den" sessions import "$TMP/big.tar.gz" --yes
+  took=$(( $(date +%s) - start ))
+  echo "took ${took}s" >&3
+  [ "$status" -eq 0 ]
+  [ -f "$HOME/.claude/projects/p39/c99.jsonl" ]
+  [ "$took" -lt 25 ]
+}
+
+@test "den sessions import still refuses a member outside the session paths" {
+  mkdir -p "$TMP/src/.claude/projects/p" "$TMP/src/.ssh"
+  echo x > "$TMP/src/.claude/projects/p/c.jsonl"; echo key > "$TMP/src/.ssh/id_ed25519"
+  tar -czf "$TMP/mixed.tar.gz" -C "$TMP/src" .claude .ssh
+  run "$REPO/bin/den" sessions import "$TMP/mixed.tar.gz" --yes
+  [ "$status" -ne 0 ]
+  [ ! -e "$HOME/.ssh/id_ed25519" ]
+}
+
+@test "den sessions export writes a private file outside the Desktop" {
+  mkdir -p "$HOME/.claude/projects/p" "$HOME/Desktop"; echo x > "$HOME/.claude/projects/p/c.jsonl"
+  run "$REPO/bin/den" sessions export
+  [ "$status" -eq 0 ]
+  [ -z "$(ls "$HOME/Desktop")" ]
+  out="$(ls "$HOME"/.local/state/den/exports/agent-sessions-*.tar.gz | head -1)"
+  [ -n "$out" ]
+  [ "$(stat -f %Lp "$HOME/.local/state/den/exports")" = 700 ]
+  [ "$(stat -f %Lp "$out")" = 600 ]
+}
+
+@test "den help sessions does not claim credentials are left out" {
+  run "$REPO/bin/den" help sessions
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Credential files are left out"* ]]
+  [[ "$output" == *".claude.json"* ]]
+}
+
+@test "den sessions import keeps only the newest 5 snapshots" {
+  mkdir -p "$HOME/.local/state/den/snapshots"
+  for n in 1 2 3 4 5 6 7; do
+    printf x | gzip > "$HOME/.local/state/den/snapshots/sessions-2026010${n}-000000.tar.gz"
+  done
+  mkdir -p "$TMP/src/.claude/projects/p"; echo new > "$TMP/src/.claude/projects/p/c.jsonl"
+  tar -czf "$TMP/good.tar.gz" -C "$TMP/src" .claude
+  run "$REPO/bin/den" sessions import "$TMP/good.tar.gz" --yes
+  [ "$status" -eq 0 ]
+  [ "$(ls "$HOME"/.local/state/den/snapshots/*.tar.gz | wc -l | tr -d ' ')" -le 5 ]
+  [ ! -e "$HOME/.local/state/den/snapshots/sessions-20260101-000000.tar.gz" ]
+}

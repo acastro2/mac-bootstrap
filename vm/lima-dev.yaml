@@ -34,10 +34,12 @@ images:
   - location: "https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-arm64.img"
     arch: "aarch64"
 
-# Lima forwards every guest localhost port to the Mac by default. 19988 is
-# the browse relay: the Mac owns it and `rex forward -R` brings it INTO the
-# guest. Mirroring it back makes a loop that grabs the port before the Mac
-# relay can bind it.
+# Decision: Lima mirrors every guest localhost port onto the Mac's 127.0.0.1
+# on purpose, so a dev server started in the VM opens in the Mac browser with
+# no extra flag. The cost, accepted: a VM process can listen on a Mac loopback
+# port. 19988 is the browse relay and is ignored because the Mac owns it:
+# `rex forward -R` brings it INTO the guest, and mirroring it back makes a
+# loop that grabs the port before the Mac relay can bind it.
 portForwards:
   - guestPort: 19988
     ignore: true

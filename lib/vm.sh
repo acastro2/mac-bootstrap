@@ -562,20 +562,25 @@ den_preflight_hook_vm() {
     "${DEN_GUEST_ENV}command -v ob >/dev/null 2>&1 && ob sync-list-remote --json >/dev/null 2>&1 && [ ! -d \"\$HOME/vault/.obsidian\" ] && ! ob sync-status --path \"\$HOME/vault\" >/dev/null 2>&1" >/dev/null 2>&1; then
     local vault=${OBSIDIAN_SYNC_VAULT:-}
     if [ -z "$vault" ]; then
-      local remotes
+      local remotes="" line="" vaults=()
       remotes=$(den_vm_to 30 limactl shell "$AGENT_VM" -- bash -c "${DEN_GUEST_ENV}ob sync-list-remote --json" 2>/dev/null |
         jq -r '(.vaults // .)[]? | (.name // empty)' 2>/dev/null) || remotes=""
-      if [ "$(printf '%s\n' "$remotes" | grep -c .)" -eq 1 ]; then
-        vault=$remotes
-      elif [ -n "$remotes" ]; then
-        # shellcheck disable=SC2086  # one vault name per word is fine here.
-        vault=$(ui_choose "Which Obsidian vault should the VM sync?" $remotes)
+      # One name per line: a vault name may hold spaces or quotes.
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        vaults[${#vaults[@]}]=$line
+      done <<<"$remotes"
+      if [ "${#vaults[@]}" -eq 1 ]; then
+        vault=${vaults[0]}
+      elif [ "${#vaults[@]}" -gt 1 ]; then
+        vault=$(ui_choose "Which Obsidian vault should the VM sync?" "${vaults[@]}")
       fi
     fi
     if [ -n "$vault" ]; then
       ui_info "vm: setting up Obsidian Sync for vault '$vault' in ~/vault"
-      den_vm_to 600 limactl shell -t "$AGENT_VM" -- bash -c \
-        "${DEN_GUEST_ENV}ob sync-setup --vault '$vault' --path \"\$HOME/vault\" --device-name '$AGENT_VM'" ||
+      # The name travels in the environment: no quoting reaches the guest shell.
+      den_vm_to 600 limactl shell -t "$AGENT_VM" -- env OBSIDIAN_VAULT="$vault" bash -c \
+        "${DEN_GUEST_ENV}ob sync-setup --vault \"\$OBSIDIAN_VAULT\" --path \"\$HOME/vault\" --device-name '$AGENT_VM'" ||
         ui_warn "vm: ob sync-setup did not finish; run it later with: den vm shell, then ob sync-setup"
     fi
   fi

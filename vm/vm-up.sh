@@ -24,7 +24,8 @@
 # State: $VM_UP_STATE_DIR (default ~/.local/state/rex-vm).
 # Modes: (none) everything; --step one VM step; --heal one heal pass (its
 # exit code); --open-line PATH one bridge request.
-# Test seams: VM_UP_ONCE, VM_UP_WAIT, VM_UP_BOOTSTRAP, VM_UP_STATE_DIR, REX_CLI.
+# Test seams: VM_UP_ONCE, VM_UP_WAIT, VM_UP_BOOTSTRAP, VM_UP_STATE_DIR, REX_CLI,
+#             VM_UP_SESSION_TIMEOUT.
 set -u
 
 VM="${AGENT_VM:-agent}"
@@ -52,14 +53,33 @@ if command -v perl >/dev/null 2>&1; then
   HAVE_PERL=1
 fi
 
-# Bound an external call with SIGALRM; without perl, run it plainly.
+# Bound an external call with SIGALRM and kill its whole process group on
+# timeout: a killed child can otherwise leave a descendant holding the
+# caller's pipe open forever. Without perl, run it plainly.
 to_run() { # to_run SECONDS CMD...
   local secs=${1:-30}
   if [ $# -gt 0 ]; then
     shift
   fi
   if [ "$HAVE_PERL" = 1 ]; then
-    perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+    perl -e '
+      my $secs = shift;
+      my $pid = fork();
+      exit 127 unless defined $pid;
+      if ($pid == 0) { setpgrp(0, 0); exec @ARGV; exit 127; }
+      $SIG{ALRM} = sub {
+        kill "TERM", -$pid;
+        $SIG{ALRM} = sub { kill "KILL", -$pid; exit 124 };
+        alarm 2;
+        waitpid($pid, 0);
+        exit 124;
+      };
+      alarm $secs;
+      waitpid($pid, 0);
+      alarm 0;
+      my $st = $?;
+      exit(($st & 127) ? 128 + ($st & 127) : ($st >> 8));
+    ' "$secs" "$@"
   else
     "$@"
   fi
@@ -137,7 +157,11 @@ vm_step() {
     next=$(state_get bootstrap.next)
     case ${next:-} in ''|*[!0-9]*) next=0 ;; esac
     if [ "$now" -lt "$next" ]; then
-      log "rebuild of $VM backed off until the hour is up"
+      shown=$(state_get bootstrap.logged)
+      if [ "$shown" != "$next" ]; then
+        log "rebuild of $VM backed off until the hour is up"
+        state_set bootstrap.logged "$next"
+      fi
       return 1
     fi
     state_set bootstrap.next "$((now + 3600))"
@@ -251,7 +275,9 @@ heal() {
   fi
   sync_file "$HOME/.config/zsh/.api-keys.zsh" ".config/zsh/.api-keys.zsh" || rc=1
   sync_file "$HOME/.local/share/browse/relay-token" ".local/share/browse/relay-token" || rc=1
-  if ! to_run 120 limactl shell "$VM" -- bash -s <"$HERE/guest-heal.sh"; then
+  # 660s: the browse install inside the guest gets 600s of its own, so the
+  # pass that carries it must outlast that bound.
+  if ! to_run 660 limactl shell "$VM" -- bash -s <"$HERE/guest-heal.sh"; then
     log "guest heal failed"
     rc=1
   fi
@@ -408,11 +434,16 @@ fi
 # none ("session target default not found: no sessions"). Keep one named
 # session for the tunnel, so it never depends on a tab being open.
 TUNNEL_SESSION=den
+SESSION_TIMEOUT="${VM_UP_SESSION_TIMEOUT:-30}"
+# A Rex call that times out can leave a child holding the pipe it wrote to,
+# and the reader would then wait for that child. Capture to a file instead.
 tunnel_session() {
-  if "$REX_CLI" -S vm session ls 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -qx "$TUNNEL_SESSION"; then
+  local list="$STATE/tunnel-sessions"
+  if to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm session ls >"$list" 2>/dev/null &&
+    awk 'NR > 1 { print $1 }' "$list" | grep -qx "$TUNNEL_SESSION"; then
     return 0
   fi
-  if "$REX_CLI" -S vm session new "$TUNNEL_SESSION" >/dev/null 2>&1; then
+  if to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm session new "$TUNNEL_SESSION" >/dev/null 2>&1; then
     log "tunnel: created the $TUNNEL_SESSION session in the VM Rex server"
     return 0
   fi

@@ -9,7 +9,7 @@ Move your agent chats and config to a new Mac in about an hour, with one file to
    for d in ~/.config/opencode ~/.claude ~/.agents/skills; do git -C "$d" status -sb | head -1; done
    ```
    A line that says `ahead` means push it. Do the same for your project checkouts.
-2. **Export the chats.** This writes a mode-600 tarball to the Desktop. It holds Claude Code, Cortex and OpenCode history, and `~/.claude.json`, which can hold credentials, so treat it like a secret.
+2. **Export the chats.** This writes a mode-600 tarball to `~/.local/state/den/exports/`. It holds Claude Code, Cortex and OpenCode history, and `~/.claude.json`, which can hold credentials, so treat it like a secret.
    ```bash
    den sessions export
    ```
@@ -21,7 +21,7 @@ Move your agent chats and config to a new Mac in about an hour, with one file to
 1. Run the one-liner from the [README](README.md#quick-start). Answer the preflight questions, then let it run.
 2. Restore the chats. Import checks every path, takes a snapshot of what it replaces, and leaves your data untouched if the archive is bad:
    ```bash
-   den sessions import ~/Desktop/agent-sessions-*.tar.gz
+   den sessions import ~/.local/state/den/exports/agent-sessions-*.tar.gz
    ```
 3. Check the result. `den doctor` is read-only:
    ```bash

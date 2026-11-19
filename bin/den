@@ -82,7 +82,7 @@ Usage:
   den setup                 wizard: edit config.env, then offer den up
   den secrets import <path> record a validated secrets bundle path
   den secrets status        show where the secrets bundle comes from
-  den sessions export       pack agent session data into ~/Desktop
+  den sessions export       pack agent session data into ~/.local/state/den/exports
   den sessions import <file> [--yes]
                             restore agent session data (snapshot first)
   den clean [--dry-run] [--host-drift] [--yes]
@@ -166,12 +166,15 @@ EOF
       ;;
     sessions)
       cat <<'EOF'
-den sessions export          pack session data into ~/Desktop/agent-sessions-<stamp>.tar.gz
+den sessions export          pack session data into
+                             ~/.local/state/den/exports/agent-sessions-<stamp>.tar.gz
 den sessions import <file> [--yes]
                              verify the archive, snapshot current data, then swap
 
-Credential files are left out of the export. Import refuses without a terminal
-or --yes.
+The export includes ~/.claude.json, which holds account state and may hold
+credentials: carry the file by AirDrop or USB, and delete it when done. Import
+refuses without a terminal or --yes, and keeps the newest 5 snapshots in
+~/.local/state/den/snapshots.
 EOF
       ;;
     clean)
