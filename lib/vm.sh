@@ -572,11 +572,26 @@ den_preflight_hook_vm() {
     return 0
   fi
   if den_vm_to 20 limactl shell "$AGENT_VM" -- bash -c \
-    "${DEN_GUEST_ENV}command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1" >/dev/null 2>&1; then
+    "${DEN_GUEST_ENV}command -v gh >/dev/null 2>&1 && ! gh auth status --active --hostname github.com >/dev/null 2>&1" >/dev/null 2>&1; then
     ui_info "vm: gh is not signed in inside $AGENT_VM; starting gh auth login"
     if ! den_vm_to 600 limactl shell --tty=true "$AGENT_VM" -- bash -c \
       "${DEN_GUEST_ENV}gh auth login --web --git-protocol https && gh auth setup-git"; then
       ui_warn "vm: gh auth login did not finish; the guest still works without it"
+    fi
+  fi
+  # The guest's gh may hold only the work account; the private config repos
+  # need their owner's login next to it (see lib/phases/48-config-repos.sh).
+  # gh makes a new login active, so the previous account gets the slot back.
+  local owner="" q=""
+  if declare -F config_repos_gh_user >/dev/null && owner=$(config_repos_gh_user); then
+    q=$(printf '%q' "$owner")
+    if den_vm_to 20 limactl shell "$AGENT_VM" -- bash -c \
+      "${DEN_GUEST_ENV}command -v gh >/dev/null 2>&1 && gh auth status --active --hostname github.com >/dev/null 2>&1 && ! { t=\$(gh auth token --hostname github.com --user $q 2>/dev/null) && [ \"\$(GH_TOKEN=\$t gh api user -q .login 2>/dev/null)\" = $q ]; }" >/dev/null 2>&1; then
+      ui_info "vm: the guest's gh has no working $owner login (it owns the config repos); sign in as $owner"
+      if ! den_vm_to 600 limactl shell --tty=true "$AGENT_VM" -- bash -c \
+        "${DEN_GUEST_ENV}active=\$(gh api user -q .login 2>/dev/null); gh auth login --hostname github.com --web --git-protocol https || exit 1; if [ -n \"\$active\" ] && [ \"\$active\" != $q ]; then gh auth switch --hostname github.com --user \"\$active\" >/dev/null; fi"; then
+        ui_warn "vm: gh auth login as $owner did not finish; the guest's private config repos will fail"
+      fi
     fi
   fi
   if den_vm_to 20 limactl shell "$AGENT_VM" -- bash -c \
