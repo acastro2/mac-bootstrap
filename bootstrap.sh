@@ -26,8 +26,11 @@ OPENCODE_WEB_ITEM=""
 OPENCODE_WEB_PORT=""
 CLAUDE_CONFIG_REPO=""
 REA_VERSION="6.8.0"   # pinned like the Brewfile: bump deliberately, then re-run
+REX_OP_ITEM=""   # 1Password item with the Rex beta URLs (fields: appcast, mcp)
+SYSTEM_APPDIR="${SYSTEM_APPDIR:-/Applications}"   # test seam: the system Applications folder
 
-# Source personal config if present (gitignored, not committed).
+# Source personal config if present. This fork commits config.env, so it is
+# public: put no secrets in it (they come from 1Password).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/config.env" ]]; then
   # shellcheck source=/dev/null
@@ -87,6 +90,104 @@ sync_config_repo() {
   return 0
 }
 
+# find_rex_app — print the first Rex app bundle on this machine.
+# Users have either name, in either Applications folder; Sparkle then updates
+# the bundle in place, so this is a lookup, never a move.
+find_rex_app() {
+  local app
+  for app in "$HOME/Applications/Rex.app" "$HOME/Applications/Rex Beta.app" \
+             "$SYSTEM_APPDIR/Rex.app" "$SYSTEM_APPDIR/Rex Beta.app"; do
+    if [[ -d "$app" ]]; then
+      printf '%s\n' "$app"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# rex_op_field <field> — print one field of the gated Rex beta 1Password item.
+# The beta appcast and MCP URLs are not public, so they are read at run time
+# and never written into this repo or the logs.
+rex_op_field() {
+  local field="$1"
+  [[ -n "$OP_VAULT" && -n "$REX_OP_ITEM" ]] || return 1
+  command -v op >/dev/null 2>&1 || return 1
+  op read "op://${OP_VAULT}/${REX_OP_ITEM}/${field}" 2>/dev/null
+}
+
+# install_rex_app <dest_dir> <appcast_url>
+# Copy Rex.app into <dest_dir> from the newest beta on the Sparkle appcast.
+# No Homebrew cask exists and the `rex` formula is a different tool (Perl
+# Rexify), so the appcast is the only source. Verifies signature, team and
+# notarization before anything reaches <dest_dir>; any failure returns 1 with
+# a message, because a failed app install must not stop the bootstrap.
+install_rex_app() {
+  local dest="$1" appcast_url="$2"
+  (
+    set -e
+    local work mnt dmg appcast dmg_url team app
+    work="$(mktemp -d)" || { warn "Rex: could not create a temp dir."; exit 1; }
+    mnt="$work/mnt"
+    dmg="$work/Rex.dmg"
+    appcast="$work/appcast.xml"
+    trap 'hdiutil detach "$mnt" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
+    if ! mkdir -p "$mnt"; then
+      warn "Rex: could not create the mountpoint."
+      exit 1
+    fi
+
+    if ! curl -fsSL -o "$appcast" "$appcast_url"; then
+      warn "Rex: could not read the appcast."
+      exit 1
+    fi
+    # Newest release first, so the first enclosure is the one to install.
+    dmg_url="$(sed -n 's/.*<enclosure url="\([^"]*\.dmg\)".*/\1/p' "$appcast" | head -1)"
+    if [[ -z "$dmg_url" ]]; then
+      warn "Rex: the appcast lists no DMG."
+      exit 1
+    fi
+
+    # The URL is gated: name the app, never the link.
+    log "Downloading Rex"
+    if ! curl -fsSL -o "$dmg" "$dmg_url"; then
+      warn "Rex: download failed."
+      exit 1
+    fi
+    if ! hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null; then
+      warn "Rex: could not mount the DMG."
+      exit 1
+    fi
+
+    app="$mnt/Rex.app"
+    if [[ ! -d "$app" ]]; then
+      warn "Rex: the DMG contains no Rex.app."
+      exit 1
+    fi
+    if ! codesign --verify --deep --strict "$app" 2>/dev/null; then
+      warn "Rex: the code signature is broken."
+      exit 1
+    fi
+    team="$(codesign -dv "$app" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+    if [[ "$team" != "AG92C3PT77" ]]; then
+      warn "Rex: signed by ${team:-an unknown team}, not Superlogical (AG92C3PT77)."
+      exit 1
+    fi
+    if ! spctl -a -vv "$app" >/dev/null 2>&1; then
+      warn "Rex: Gatekeeper rejected the download."
+      exit 1
+    fi
+
+    if ! mkdir -p "$dest"; then
+      warn "Rex: could not create $dest."
+      exit 1
+    fi
+    if ! ditto "$app" "$dest/Rex.app"; then
+      warn "Rex: could not copy Rex.app to $dest."
+      exit 1
+    fi
+  )
+}
+
 # ── Managed install registry ─────────────────────────────────────────
 # One row per tool this script installs directly. Package managers keep their
 # own registries (Brewfile, mise config); these installs have none, so this
@@ -94,7 +195,7 @@ sync_config_repo() {
 #
 # Fields: name|kind|target|spec|remove
 #   target  path that must exist, relative to $HOME
-#   spec    kind-specific: the uv package, or the app binary a link points at
+#   spec    kind-specific: the uv package, or the app path under $HOME
 #   remove  what --clean deletes, space-separated, relative to $HOME
 #           (empty means the target)
 #
@@ -112,8 +213,8 @@ cortex|script|.local/bin/cortex||.local/bin/cortex
 tgrep|script|.local/bin/tgrep||.local/bin/tgrep
 playwright|uv|.local/bin/playwright|playwright|.local/bin/playwright .local/share/uv/tools/playwright
 browser-use|uv|.local/bin/browser-use|browser-use|.local/bin/browser-use .local/share/uv/tools/browser-use
-code-insiders|app|.local/bin/code-insiders|/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code|.local/bin/code-insiders
-zed|app|.local/bin/zed|/Applications/Zed.app/Contents/MacOS/cli|.local/bin/zed
+code-insiders|app|.local/bin/code-insiders|Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code|.local/bin/code-insiders
+zed|app|.local/bin/zed|Applications/Zed.app/Contents/MacOS/cli|.local/bin/zed
 docker-compose|plugin|.docker/cli-plugins/docker-compose||.docker/cli-plugins/docker-compose
 EOF
 }
@@ -154,7 +255,7 @@ check_managed() {
 
   case "$ROW_KIND" in
     app)
-      [[ -e "$ROW_SPEC" ]] || { CHECK_DETAIL="app not installed"; return 3; }
+      [[ -e "$HOME/$ROW_SPEC" ]] || { CHECK_DETAIL="app not installed"; return 3; }
       ;;
     plugin)
       command -v docker >/dev/null 2>&1 || { CHECK_DETAIL="docker not installed"; return 3; }
@@ -184,7 +285,7 @@ check_managed() {
 
   if [[ "$ROW_KIND" == "app" ]]; then
     link="$(readlink "$target" 2>/dev/null || true)"
-    if [[ "$link" != "$ROW_SPEC" ]]; then
+    if [[ "$link" != "$HOME/$ROW_SPEC" ]]; then
       CHECK_DETAIL="~/$ROW_TARGET points at ${link:-nothing}"
       return 1
     fi
@@ -195,6 +296,25 @@ check_managed() {
   [[ "$resolved" == "$target" ]] || { CHECK_DETAIL="$resolved shadows ~/$ROW_TARGET"; return 1; }
   CHECK_DETAIL="${resolved/#$HOME/~}"
   return 0
+}
+
+# managed_cask_apps — print "token|App.app" for every cask in the Brewfile that
+# lands in the default appdir. A cask with its own appdir: (1Password) is not
+# ours to move.
+managed_cask_apps() {
+  local token rest apps app
+  command -v brew >/dev/null 2>&1 || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  while IFS='|' read -r token rest; do
+    if [[ "$rest" == *appdir:* ]]; then
+      continue
+    fi
+    apps="$(brew info --cask --json=v2 "$token" </dev/null 2>/dev/null \
+      | jq -r '.casks[0].artifacts[] | select(.app) | .app[] | strings' 2>/dev/null || true)"
+    while IFS= read -r app; do
+      [[ -n "$app" ]] && printf '%s|%s\n' "$token" "$app"
+    done <<< "$apps"
+  done < <(sed -n 's/^[[:space:]]*cask "\([^"]*\)"\(.*\)$/\1|\2/p' "$SCRIPT_DIR/Brewfile")
 }
 
 # Warn during install, without failing the phase: a second copy on PATH does
@@ -663,16 +783,66 @@ else
 fi
 fi
 
+# ── Apps in ~/Applications ─────────────────────────────────────────────
+# Casks installed before the Brewfile set `appdir:` sit in /Applications, where
+# a self-update needs admin. `brew reinstall` leaves the old copy behind, so
+# uninstall then install. Autoremove is off for both: an uninstall otherwise
+# takes unrelated formulae with it.
+if should_run appdir && $IS_MACOS; then
+section "Apps in ~/Applications"
+NEEDS_MOVE=false
+while IFS='|' read -r token app; do
+  [[ -d "$SYSTEM_APPDIR/$app" ]] || continue
+  NEEDS_MOVE=true
+  if [[ -e "$HOME/Applications/$app" ]]; then
+    warn "Duplicate $app: $SYSTEM_APPDIR/$app and ~/Applications/$app; delete the $SYSTEM_APPDIR copy."
+  elif pgrep -f "$SYSTEM_APPDIR/$app/Contents/MacOS/" >/dev/null 2>&1; then
+    warn "Quit ${app%.app}, then re-run: ./bootstrap.sh --only=appdir"
+  else
+    log "Moving $app to ~/Applications"
+    # brew reads stdin; </dev/null keeps it from eating the rows this loop reads.
+    if ! HOMEBREW_NO_AUTOREMOVE=1 brew uninstall --cask "$token" </dev/null; then
+      warn "Could not uninstall $token; $app stays in $SYSTEM_APPDIR."
+    elif ! HOMEBREW_NO_AUTOREMOVE=1 brew install --cask --appdir="$HOME/Applications" "$token" </dev/null; then
+      warn "$token is uninstalled but the reinstall failed. Re-run: ./bootstrap.sh --only=packages"
+    else
+      log "$app moved to ~/Applications"
+    fi
+  fi
+done < <(managed_cask_apps)
+
+# Rex has no cask: move the bundle itself.
+for app in "Rex.app" "Rex Beta.app"; do
+  [[ -d "$SYSTEM_APPDIR/$app" ]] || continue
+  NEEDS_MOVE=true
+  if pgrep -f "$SYSTEM_APPDIR/$app/Contents/MacOS/" >/dev/null 2>&1; then
+    warn "Quit Rex and re-run from another terminal (Ghostty): ./bootstrap.sh --only=appdir"
+  elif [[ ! -e "$HOME/Applications/$app" ]]; then
+    if mkdir -p "$HOME/Applications" && mv "$SYSTEM_APPDIR/$app" "$HOME/Applications/$app"; then
+      log "$app moved to ~/Applications"
+    else
+      warn "Could not move $SYSTEM_APPDIR/$app to ~/Applications."
+    fi
+  fi
+done
+
+if ! $NEEDS_MOVE; then
+  log "All managed apps are in ~/Applications"
+fi
+fi
+
 # ── App CLIs (symlink into PATH) ───────────────────────────────────────
 if should_run app-clis && $IS_MACOS; then
 section "App CLI commands"
 mkdir -p "$HOME/.local/bin"
-if [[ -d "/Applications/Visual Studio Code - Insiders.app" ]]; then
-  ln -sf "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code" "$HOME/.local/bin/code-insiders"
+VSC_APP="$HOME/Applications/Visual Studio Code - Insiders.app"
+if [[ -d "$VSC_APP" ]]; then
+  ln -sf "$VSC_APP/Contents/Resources/app/bin/code" "$HOME/.local/bin/code-insiders"
   log "code-insiders → PATH"
 fi
-if [[ -d "/Applications/Zed.app" ]]; then
-  ln -sf "/Applications/Zed.app/Contents/MacOS/cli" "$HOME/.local/bin/zed"
+ZED_APP="$HOME/Applications/Zed.app"
+if [[ -d "$ZED_APP" ]]; then
+  ln -sf "$ZED_APP/Contents/MacOS/cli" "$HOME/.local/bin/zed"
   log "zed → PATH"
 fi
 fi
@@ -1213,6 +1383,64 @@ else
 fi
 fi
 
+# ── Rex (terminal multiplexer for coding agents) ──────────────────────
+# Ships as a notarized beta from Superlogical's Sparkle feed; no cask exists.
+# Runs after the auth phase because `rex skill setup` writes into
+# ~/.agents/skills, which the clone above creates. Updates come from the app's
+# own Sparkle updater, so an existing bundle is left alone.
+if should_run rex; then
+section "Rex"
+if ! $IS_MACOS; then
+  log "Skipping Rex: the app ships for macOS (arm64) only."
+else
+  REX_APP=""
+  if REX_APP="$(find_rex_app)"; then
+    log "Already installed: $REX_APP"
+  else
+    REX_APPCAST="$(rex_op_field appcast || true)"
+    if [[ -z "$REX_APPCAST" ]]; then
+      warn "Rex not installed: set REX_OP_ITEM and add the appcast URL to 1Password, or download Rex from the Discord link, then re-run ./bootstrap.sh --only=rex"
+    elif install_rex_app "$HOME/Applications" "$REX_APPCAST"; then
+      REX_APP="$HOME/Applications/Rex.app"
+      log "Rex installed: $REX_APP"
+    else
+      warn "Rex not installed. Re-run: ./bootstrap.sh --only=rex"
+    fi
+  fi
+  if [[ -n "$REX_APP" ]]; then
+    REX_CLI="$REX_APP/Contents/Helpers/Rex Server.rex/Contents/MacOS/rex"
+  else
+    REX_CLI=""
+  fi
+  if [[ -n "$REX_CLI" && -x "$REX_CLI" ]]; then
+    if "$REX_CLI" skill setup; then
+      log "rex skill installed into ~/.claude/skills and ~/.agents/skills"
+    else
+      warn "rex skill setup failed; re-run it from the app bundle."
+    fi
+  else
+    warn "Rex CLI not found in ${REX_APP:-the app bundle}. Open Rex once, then re-run: ./bootstrap.sh --only=rex"
+  fi
+  # The MCP server is Claude Code config, not app config, so it needs only the
+  # gated URL, not a working local Rex. Its output is dropped: it echoes the URL.
+  CLAUDE_BIN="$HOME/.local/bin/claude"
+  if [[ -x "$CLAUDE_BIN" ]]; then
+    if "$CLAUDE_BIN" mcp get superlogical >/dev/null 2>&1; then
+      log "superlogical MCP already registered in Claude Code"
+    else
+      SUP_MCP_URL="$(rex_op_field mcp || true)"
+      if [[ -z "$SUP_MCP_URL" ]]; then
+        warn "superlogical MCP not registered: set REX_OP_ITEM and add the mcp URL to 1Password."
+      elif "$CLAUDE_BIN" mcp add -s user --transport http superlogical "$SUP_MCP_URL" >/dev/null 2>&1; then
+        log "superlogical MCP registered in Claude Code"
+      else
+        warn "Could not register the superlogical MCP in Claude Code."
+      fi
+    fi
+  fi
+fi
+fi
+
 # ── Doctor ──────────────────────────────────────────────────────────────
 if should_run doctor; then
 section "Doctor"
@@ -1281,6 +1509,24 @@ check_file "$HOME/.zim/zimfw.zsh" "zim"
 if $IS_MACOS; then
   check_file "$HOME/.agents/skills/reverse-engineer-anything/SKILL.md" "rea skill"
   check_file "$HOME/Applications/Hopper Disassembler.app" "Hopper"
+  if REX_APP="$(find_rex_app)"; then
+    printf "  \033[1;32m✓\033[0m %-24s %s\n" "Rex" "${REX_APP/#$HOME/~}"
+    pass=$((pass + 1))
+  else
+    printf "  \033[1;31m✗\033[0m %-24s (missing)\n" "Rex"
+    fail=$((fail + 1))
+  fi
+  check_file "$HOME/.agents/skills/rex/SKILL.md" "rex skill"
+  while IFS='|' read -r _token _app; do
+    [[ -d "$SYSTEM_APPDIR/$_app" ]] || continue
+    printf "  \033[1;31m✗\033[0m %s\n" "$_app still in /Applications (run ./bootstrap.sh --only=appdir)"
+    fail=$((fail + 1))
+  done < <(managed_cask_apps)
+  for _app in "Rex.app" "Rex Beta.app"; do
+    [[ -d "$SYSTEM_APPDIR/$_app" ]] || continue
+    printf "  \033[1;31m✗\033[0m %s\n" "$_app still in /Applications (run ./bootstrap.sh --only=appdir)"
+    fail=$((fail + 1))
+  done
   ACCOUNT_SHELL="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')"
   EXPECTED_SHELL="/bin/zsh"
 else

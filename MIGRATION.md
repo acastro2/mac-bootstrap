@@ -100,17 +100,8 @@ Run these on the target MacBook.
 git clone https://github.com/acastro2/mac-bootstrap.git ~/Developer/github/acastro2/mac-bootstrap
 cd ~/Developer/github/acastro2/mac-bootstrap
 
-# Create config.env with your values:
-cat > config.env << 'EOF'
-OP_VAULT="Private"
-GIT_NAME="Alexandre Castro"
-GIT_EMAIL="alexandre.castro@outlook.com"
-REPO_URL="https://github.com/acastro2/mac-bootstrap.git"
-REPO_DIR="${HOME}/Developer/github/acastro2/mac-bootstrap"
-OPENCODE_CONFIG_REPO="acastro2/opencode_config"
-OPENCODE_SKILLS_REPO="https://github.com/acastro2/alex-skills.git"
-CLAUDE_CONFIG_REPO="acastro2/claude-config"
-EOF
+# config.env is committed with your values; check it before you run.
+cat config.env
 
 # Run bootstrap (installs everything, sets up auth)
 ./bootstrap.sh
@@ -121,8 +112,9 @@ The bootstrap will:
 2. Render and validate zsh + Zim with Starship, Carapace, and fzf, keep the login shell on zsh, then remove Nushell only after the config checks and account-shell readback succeed
 3. Install opencode, Claude Code CLI, herdr, mise toolchains
 4. Clone opencode config, Claude Code config, and skills repos
-5. Pull API keys from 1Password into `~/.config/zsh/.api-keys.zsh`, sourced by `.zshrc` at startup
-6. Run doctor checks to verify everything
+5. Install Rex, run `rex skill setup`, and register the Superlogical MCP in Claude Code
+6. Pull API keys from 1Password into `~/.config/zsh/.api-keys.zsh`, sourced by `.zshrc` at startup
+7. Run doctor checks to verify everything
 
 ### 2.2 Import session data
 
@@ -196,7 +188,7 @@ This removes all Homebrew packages, mise toolchains, opencode/claude binaries, Z
 | opencode sessions | `~/.local/share/opencode/opencode.db` | --export-sessions |
 | opencode config | `~/.config/opencode/` | git repo (acastro2/opencode_config) |
 | opencode skills | `~/.agents/skills/` | git repo (acastro2/alex-skills) |
-| Claude Code config | `~/.claude/` (CLAUDE.md, settings, hooks, pandoc) | git repo (acastro2/claude-config) |
+| Claude Code config | `~/.claude/` (CLAUDE.md, settings, hooks, pandoc) | git repo (acastro2/.claude) |
 | Claude Code conversations | `~/.claude/projects/` | --export-sessions |
 | Claude Code session index | `~/.claude/history.jsonl` | --export-sessions |
 | Claude Code account state | `~/.claude.json` | --export-sessions |
@@ -208,6 +200,8 @@ This removes all Homebrew packages, mise toolchains, opencode/claude binaries, Z
 | Cortex Code plans | `~/Developer/**/.cortex/` | --export-sessions |
 | Cortex skills/plugins | `~/.snowflake/cortex/{skills,plugins,commands}/` | --export-sessions |
 | Snowflake connections | `~/.snowflake/connections.toml` | --export-sessions |
+| Rex app | `~/Applications/Rex.app` (Sparkle self-updates) | bootstrap (rex section; URL from 1Password `REX_OP_ITEM`) |
+| Rex skill + hook | `~/.claude/skills/rex`, `~/.agents/skills/rex` | `rex skill setup` (rex section) |
 | Homebrew packages | Brewfile | git repo (mac-bootstrap) |
 | zsh config + aliases | `~/.zshrc`, `~/.zimrc`, `~/.zim/` | chezmoi (mac-bootstrap/home) |
 | Ghostty config | `~/.config/ghostty/` | chezmoi (mac-bootstrap/home) |

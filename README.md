@@ -40,6 +40,8 @@ cd ~/Developer/github/YOU/mac-bootstrap
 | `OPENCODE_SKILLS_REPO` | Public agent skills repo (leave empty to skip)                                 |
 | `OPENCODE_WEB_ITEM`    | 1Password login item holding the web UI password (leave empty to skip)         |
 | `OPENCODE_WEB_PORT`    | Fixed web UI port so the phone URL stays stable                                |
+| `CLAUDE_CONFIG_REPO`   | Private Claude Code config repo, e.g. `you/.claude` (leave empty to skip)      |
+| `REX_OP_ITEM`          | 1Password item with the Rex beta URLs, fields `appcast` and `mcp` (leave empty to skip) |
 
 Then run:
 
@@ -76,7 +78,7 @@ Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be s
 
 The packages phase runs `brew bundle --no-upgrade` on purpose: a cask desynced by its own updater (VSCode Insiders self-updates) can't fail the run. When you actually want to upgrade, run `brew upgrade` yourself.
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `claude`, `opencode-web`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `rea`, `doctor`.
+Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `appdir`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `claude`, `opencode-web`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `rea`, `rex`, `doctor`.
 
 The managed install registry is the one list of tools this script installs directly, with the path each one must resolve to. `--dump-tools` prints it. `doctor` reports it, and `--strict` makes doctor exit 1 when a managed install is shadowed or missing. `--clean --dry-run` prints the full reset plan without removing anything.
 
@@ -104,7 +106,9 @@ On a machine that still runs Nushell, the migration is fail-safe: the zsh config
 
 ### The terminal
 
-**Ghostty.** Native, GPU-accelerated, zero config to look good. It replaced iTerm2, Kitty, and WezTerm for me. The dotfiles include a Ghostty config that just works.
+**Rex**, with **Ghostty** as the fallback. Rex is Superlogical's terminal multiplexer: long-running sessions, a native macOS app, and Tailscale built in. It is a private beta, so the download URL must not land in this public repo. Bootstrap reads it from 1Password (`REX_OP_ITEM`, field `appcast`), downloads the newest DMG, and checks that it is notarized and signed by Superlogical (team `AG92C3PT77`). It then installs the app to `~/Applications/Rex.app`, where Sparkle updates it. A Rex app you already have is not downloaded again. If it is in `/Applications`, the `appdir` phase moves it. Then `rex skill setup` installs the Rex skill and hook for Claude Code and OpenCode, and the Superlogical community MCP (field `mcp`) gets registered in Claude Code. Without the 1Password item, download Rex from the beta Discord and re-run `./bootstrap.sh --only=rex`.
+
+Ghostty is native and GPU-accelerated, and it looks good with zero config. It replaced iTerm2, Kitty, and WezTerm for me. The dotfiles include a Ghostty config that just works.
 
 ### The editor(s)
 
@@ -116,6 +120,8 @@ On a machine that still runs Nushell, the migration is fail-safe: the zsh config
 
 Casks install to `~/Applications`, not `/Applications`. A standard user cannot write to `/Applications`, so apps there that update themselves (Sparkle and similar) ask for admin on every update. In a folder you own, they update with no prompt. The Brewfile sets this with `cask_args appdir:`, and `.zshrc` sets `HOMEBREW_CASK_OPTS` for ad-hoc `brew install --cask`. Exception: 1Password stays in `/Applications`, because its browser integration only works from there.
 
+`brew bundle` never moves a cask that is already installed, so the `appdir` phase moves stragglers. For each Brewfile cask still in `/Applications`, it runs `brew uninstall --cask` and then `brew install --cask --appdir=~/Applications`. Not `brew reinstall`: that leaves the old copy behind. Both run with `HOMEBREW_NO_AUTOREMOVE=1`, so the move removes no other formulae. Rex gets a plain `mv`. An app that is running is never moved. The phase tells you to quit it and re-run `./bootstrap.sh --only=appdir`; for Rex, run that from Ghostty. Doctor lists any managed app still in `/Applications`.
+
 ### The toolchain manager
 
 **mise.** Not asdf. Not nvm + pyenv + tfenv. mise is faster, supports piped installs (`npm:@playwright/test`), and doesn't require shims. It pins Go (latest), Node (LTS), pnpm 10, Python 3.12, .NET 9, OpenTofu, the Playwright CLI, and the [Context7 CLI](https://context7.com/docs/clients/cli) globally. Per-project overrides go in `.mise.toml` or `.tool-versions`.
@@ -126,7 +132,7 @@ Casks install to `~/Applications`, not `/Applications`. A standard user cannot w
 
 Skip it if you want — you'll just set up API keys yourself.
 
-Keys managed this way: opencode, anthropic, openai, context7, devto, oreilly, google, resend.
+Keys managed this way: opencode, openai, context7, devto, oreilly, google, azure devops (PAT), exa, resend.
 
 ### The dotfiles
 
@@ -146,7 +152,7 @@ Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent
 
 ### The infra tooling
 
-**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr** for macOS fleet management — version-pinning, drift detection, and one-command setups across machines.
+**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr**, a terminal multiplexer for coding agents (panes, tabs, workspaces, and driving other agents).
 
 ### The profile
 

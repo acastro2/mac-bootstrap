@@ -68,9 +68,10 @@ install_registry_targets() {
         : # the uv stub reports both packages as installed
         ;;
       app)
-        if [ -e "$spec" ]; then
+        # App specs are relative to $HOME: casks live in ~/Applications.
+        if [ -e "$HOME/$spec" ]; then
           mkdir -p "$HOME/$(dirname "$target")"
-          ln -sfn "$spec" "$HOME/$target"
+          ln -sfn "$HOME/$spec" "$HOME/$target"
         fi
         ;;
       plugin)
