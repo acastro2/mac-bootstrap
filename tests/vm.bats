@@ -51,24 +51,31 @@ macos_only() {
   [ "$(uname)" = "Darwin" ] || skip "macOS only"
 }
 
-@test "vm resources: 10 cores, 32 GiB, roomy disk" {
+@test "vm resources: 10 cores, 32 GiB, roomy disk: all cores, RAM minus 12" {
   run "$REPO/bin/den" vm resources
   [ "$status" -eq 0 ]
-  [[ "$output" == *"cpus=8 memory=16 disk=100"* ]]
+  [[ "$output" == *"cpus=10 memory=20 disk=100"* ]]
 }
 
 @test "vm resources: small Mac keeps macOS 8 GiB and floors the VM" {
   export HOST_NCPU=4 HOST_MEM_BYTES=$((8 * 1024 * 1024 * 1024))
   run "$REPO/bin/den" vm resources
   [ "$status" -eq 0 ]
-  [[ "$output" == *"cpus=2 memory=4 "* ]]
+  [[ "$output" == *"cpus=4 memory=4 "* ]]
 }
 
 @test "vm resources: 16 GiB Mac gives the VM 8" {
   export HOST_NCPU=8 HOST_MEM_BYTES=$((16 * 1024 * 1024 * 1024))
   run "$REPO/bin/den" vm resources
   [ "$status" -eq 0 ]
-  [[ "$output" == *"cpus=6 memory=8 "* ]]
+  [[ "$output" == *"cpus=8 memory=8 "* ]]
+}
+
+@test "vm resources: 64 GiB Mac keeps macOS 12 GiB" {
+  export HOST_NCPU=16 HOST_MEM_BYTES=$((64 * 1024 * 1024 * 1024))
+  run "$REPO/bin/den" vm resources
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cpus=16 memory=52 "* ]]
 }
 
 @test "vm resources: disk is half the free space, floored at 40" {
@@ -86,7 +93,7 @@ macos_only() {
   macos_only
   run "$REPO/bin/den" up --only=vm
   [ "$status" -eq 0 ]
-  grep -E -- "^create --name=agent .*--cpus=8 --memory=16 --disk=100 .*vm/lima-dev.yaml" "$LIMA_LOG"
+  grep -E -- "^create --name=agent .*--cpus=10 --memory=20 --disk=100 .*vm/lima-dev.yaml" "$LIMA_LOG"
   grep -E -- "^start agent" "$LIMA_LOG"
 }
 
@@ -95,7 +102,7 @@ macos_only() {
   export LIMA_LIST='{"name":"agent","status":"Stopped","cpus":4,"memory":8589934592,"disk":42949672960}'
   run "$REPO/bin/den" up --only=vm
   [ "$status" -eq 0 ]
-  grep -E -- "^edit agent .*--cpus=8 --memory=16" "$LIMA_LOG"
+  grep -E -- "^edit agent .*--cpus=10 --memory=20" "$LIMA_LOG"
   ! grep -E -- "^create" "$LIMA_LOG"
 }
 

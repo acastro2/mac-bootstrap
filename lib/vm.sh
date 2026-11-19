@@ -22,8 +22,11 @@ den_vm_to() { # den_vm_to SECONDS CMD...
 }
 
 # ── Sizing ───────────────────────────────────────────────────────────
-# Half the RAM (leaving 8 GiB to macOS), cores minus two, half the free disk
-# capped at 100 GiB. HOST_NCPU, HOST_MEM_BYTES and HOST_FREE_BYTES override
+# Every core: an idle vCPU costs the Mac nothing. RAM: the larger of half and
+# RAM minus 12 GiB, never above RAM minus 8 GiB, because Apple Virtualization
+# never gives RAM the guest touched back to macOS (no free page reporting;
+# measured: a guest drop_caches did not shrink the VM process). Half the free
+# disk, capped at 100 GiB. HOST_NCPU, HOST_MEM_BYTES and HOST_FREE_BYTES override
 # the facts; tests use them so sizing never reads the test machine.
 den_vm_resources() {
   local ncpu mem_bytes free_bytes mem_gib free_gib
@@ -38,8 +41,11 @@ den_vm_resources() {
   mem_gib=$((mem_bytes / 1073741824))
   free_gib=$((free_bytes / 1073741824))
 
-  VM_CPUS=$((ncpu > 2 ? ncpu - 2 : 2))
+  VM_CPUS=$ncpu
   VM_MEM_GB=$((mem_gib / 2))
+  if [ "$VM_MEM_GB" -lt $((mem_gib - 12)) ]; then
+    VM_MEM_GB=$((mem_gib - 12))
+  fi
   if [ "$VM_MEM_GB" -gt $((mem_gib - 8)) ]; then
     VM_MEM_GB=$((mem_gib - 8))
   fi
