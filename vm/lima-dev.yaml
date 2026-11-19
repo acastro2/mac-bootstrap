@@ -1,16 +1,22 @@
-# Lima VM for coding agents (opencode, Claude Code) behind a Rex server.
+# Lima VM for coding agents: this is the dev box. The Mac is the window, the
+# keys, the browser and the VM host; code runs here.
 #
-# Why this shape: agents run with few permission prompts. The VM bounds what a
-# bad command can reach: the guest has its own disk under ~/.lima/agent and
-# NO host mounts. Code lives in VM-owned clones; GitHub is the only path
-# between the Mac and the guest, so the Mac never runs a file the VM wrote.
+# Boundary, by design:
+#   - no host folders:   mounts: [] means nothing in ~/.config, ~/.ssh or
+#                        ~/Library is reachable; code lives in VM-owned clones
+#                        that travel through GitHub, so the Mac never runs a
+#                        file the VM wrote.
+#   - no SSH agent:      ssh.forwardAgent: false. The guest holds its own gh
+#                        login instead of borrowing the Mac's 1Password agent.
+#   - it does get:       every API key from den.json (mode 600) and the Mac's
+#                        browse relay through the vm-up tunnel, on purpose.
 #
 # Usage:
-#   limactl create --name=agent vm/lima-dev.yaml
-#   limactl start agent
-#   ssh lima-agent                 # ~/.ssh/config includes ~/.lima/*/ssh.config
-#   limactl stop agent             # RAM back to the Mac
-#   limactl delete agent           # throw the whole box away
+#   den up --only=vm                       # create, size, start, provision
+#   limactl start agent                    # boot by hand
+#   ssh lima-agent                         # ~/.ssh/config includes ~/.lima/*/ssh.config
+#   limactl stop agent                     # RAM back to the Mac
+#   den vm rebuild                         # throw the whole box away
 
 vmType: vz
 os: Linux
@@ -20,7 +26,7 @@ cpus: 4
 memory: 8GiB
 disk: 40GiB
 
-# No shared folders. VS Code and Zed edit the clones over Remote-SSH.
+# No shared folders. VS Code edits the clones over Remote-SSH.
 mounts: []
 
 images:
@@ -36,19 +42,29 @@ portForwards:
   - guestPort: 19988
     ignore: true
 
-# Forward the Mac's ssh-agent so git and gh reach 1Password without a key
-# file living in the VM.
+# The guest signs in to GitHub itself; the Mac's 1Password agent stays home.
 ssh:
-  forwardAgent: true
+  forwardAgent: false
   loadDotSSHPubKeys: true
+
+# Docker Engine is the container runtime (den installs it). Lima's own
+# rootless containerd + nerdctl would be a second stack on every boot.
+containerd:
+  system: false
+  user: false
 
 provision:
   - mode: system
     script: |
       #!/bin/bash
       # Lima runs provision scripts on EVERY boot. Run the apt work once:
-      # repeating it slows each start, and bootstrap.sh owns the toolchain.
+      # repeating it slows each start, and den owns the rest.
       set -eux
+      # The Rex server and vault sync are systemd --user units, so the user
+      # manager must run without a login. Linger by file, not loginctl, so
+      # this works before logind answers D-Bus.
+      mkdir -p /var/lib/systemd/linger
+      touch "/var/lib/systemd/linger/{{.User}}"
       MARKER=/var/lib/lima-agent-provisioned
       [ -f "$MARKER" ] && exit 0
       export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l

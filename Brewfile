@@ -1,20 +1,14 @@
-# Brewfile — declarative package list
-# Apply with: brew bundle --file=Brewfile
+# Brewfile — the Mac list. The VM uses Brewfile.linux.
+# Apply with: den up --only=packages
+# The Mac is the window, the keys and the browser; coding happens in the VM.
 
-# ── Shell & Toolchains ────────────────────────────────────────────────
+# ── Both: shell, repos, CLI utilities ─────────────────────────────────
 brew "git"
 brew "gh"
 brew "carapace"
 brew "starship"        # cross-shell prompt
-brew "mise"            # toolchain manager (Go, Node, Python, etc.)
-brew "llhttp"          # mise Node dep — prevent brew cleanup from breaking node
 brew "chezmoi"         # dotfiles
-brew "uv"              # fast Python package manager + uvx
 brew "fzf"
-brew "pre-commit"
-brew "gitleaks"
-
-# ── CLI Utilities ──────────────────────────────────────────────────────
 brew "jq"
 brew "yq"
 brew "ripgrep"
@@ -22,41 +16,32 @@ brew "fd"
 brew "bat"
 brew "eza"             # modern ls
 brew "mcat"            # modern cat
-brew "repomix"        # pack a repo into a single file for LLM context
 brew "neovim"
-brew "doggo"           # DNS client (dig alternative)
-brew "mas"             # Mac App Store CLI
+brew "gum"             # den's UI
+brew "uv"              # scribe's Python tools
+brew "ffmpeg"          # scribe audio
 
-# ── Platform / Infra ───────────────────────────────────────────────────
-tap "terraform-linters/tap"
-brew "kubectl"
-brew "k9s"
-brew "helm"
-brew "awscli"
-brew "colima"          # Docker runtime (no Docker Desktop)
+# ── Mac: the VM host and the shell/text tools ─────────────────────────
 brew "lima"            # VM for coding agents; sized by the vm phase from this Mac
-brew "docker"          # Docker CLI
-brew "docker-compose"  # Docker Compose CLI plugin
-brew "crane"           # inspect/copy container images without pulling
-brew "ffmpeg"          # Playwright video recording / trace viewer media
-brew "snowflake-cli"
-brew "pgcli"
-brew "postgresql@16", restart_service: false
-brew "redis", restart_service: false
+brew "shellcheck"
+brew "bats-core"
+tap "openclaw/tap"
+brew "peekaboo"        # screenshots and screen inspection
+brew "pam-reattach"    # Touch ID for sudo inside tmux and ssh
 
 # ── Apps ───────────────────────────────────────────────────────────────
 # Casks go to ~/Applications. A standard (non-admin) user cannot write to
 # /Applications, so self-updating apps there prompt for admin on every update.
 cask_args appdir: "~/Applications"
-cask "1password", args: { appdir: "/Applications" } # must live in /Applications for browser integration
+# 1Password is the one exception: it must live in /Applications for browser
+# integration. Install it with: brew install --cask --appdir=/Applications 1password
+cask "1password", args: { appdir: "/Applications" }
 cask "1password-cli"
-cask "claude"          # Claude Desktop app (CLI installed separately via native installer in bootstrap.sh)
-cask "ghostty"
 cask "visual-studio-code"
-cask "zed"
-cask "tflint"
-cask "copilot-cli"     # GitHub Copilot CLI
-cask "cursor-cli"      # Cursor agent CLI (cursor-agent)
+tap "anomalyco/tap"
+cask "obsidian"
+cask "rectangle"
+cask "hex"             # scribe's speech-to-text, on the Apple GPU
 cask "jumpcut"
 cask "beyond-compare"
 cask "keepingyouawake" # Amphetamine alternative

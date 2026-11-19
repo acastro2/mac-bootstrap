@@ -1,0 +1,420 @@
+#!/usr/bin/env bash
+# den: set up this Mac and its agent VM, and keep it healthy.
+# Contract: docs/den/CONTRACT.md. Bash 3.2.
+set -euo pipefail
+umask 077
+
+DEN_VERSION="0.1.0"
+DEN_ONLY=""
+DEN_SKIP=""
+DEN_DRY_RUN=0
+
+den_root_from_self() {
+  local src dir
+  src=${BASH_SOURCE[0]}
+  while [ -L "$src" ]; do
+    dir=$(cd -P "$(dirname "$src")" && pwd)
+    src=$(readlink "$src")
+    case $src in
+      /*) ;;
+      *) src=$dir/$src ;;
+    esac
+  done
+  cd -P "$(dirname "$src")/.." && pwd
+}
+
+if [ -z "${DEN_ROOT:-}" ]; then
+  DEN_ROOT=$(den_root_from_self)
+fi
+export DEN_ROOT
+
+# ui, core and secrets first (the rest build on them), then every other
+# lib/*.sh: each lane adds its commands as den_cmd_<name> in its own file.
+for den_lib in ui core secrets; do
+  if [ ! -r "$DEN_ROOT/lib/$den_lib.sh" ]; then
+    printf 'den: missing %s\n' "$DEN_ROOT/lib/$den_lib.sh" >&2
+    exit 1
+  fi
+  # shellcheck disable=SC1090
+  . "$DEN_ROOT/lib/$den_lib.sh"
+done
+for den_lib in "$DEN_ROOT"/lib/*.sh; do
+  case ${den_lib##*/} in ui.sh|core.sh|secrets.sh) continue ;; esac
+  # shellcheck disable=SC1090
+  . "$den_lib"
+done
+
+# Tests and local add-ons: colon-separated files sourced after every lib.
+den_load_extra_libs() {
+  local libs=${DEN_EXTRA_LIBS:-} old_ifs=$IFS lib
+  if [ -z "$libs" ]; then
+    return 0
+  fi
+  IFS=:
+  # shellcheck disable=SC2086  # DEN_EXTRA_LIBS is a colon list
+  for lib in $libs; do
+    if [ -z "$lib" ]; then
+      continue
+    fi
+    if [ ! -r "$lib" ]; then
+      printf 'den: DEN_EXTRA_LIBS: cannot read %s\n' "$lib" >&2
+      continue
+    fi
+    # shellcheck disable=SC1090
+    . "$lib"
+  done
+  IFS=$old_ifs
+  return 0
+}
+den_load_extra_libs
+
+den_usage() {
+  cat <<'EOF'
+den — set up this Mac and its agent VM, and keep it healthy.
+
+Usage:
+  den                       dashboard: last run, results, next steps
+  den up [--only a,b] [--skip a,b] [--dry-run]
+                            run phases (preflight first)
+  den fix                   rerun the phases that were skipped or failed
+  den doctor [--strict]     read-only health check; --strict exits 1 when broken
+  den phases                list phases: name, toggle, needs, about
+  den setup                 wizard: edit config.env, then offer den up
+  den secrets import <path> record a validated secrets bundle path
+  den secrets status        show where the secrets bundle comes from
+  den sessions export       pack agent session data into ~/Desktop
+  den sessions import <file> [--yes]
+                            restore agent session data (snapshot first)
+  den clean [--dry-run] [--host-drift] [--yes]
+                            remove only what den declares; snapshot first
+  den registry list | check  managed install registry (lib/registry.sh)
+  den vm up|down|shell|status|logs|rebuild
+                            the Lima agent VM (lib/vm.sh)
+  den update                git pull --ff-only, then den up
+  den help [cmd]            this help, or help for one command
+  den --version             version
+
+Environment:
+  DEN_UI=gum|ansi|plain     output mode (auto: gum, ansi, or plain)
+  DEN_CONFIG=<file>         config file (default: <repo>/config.env)
+  DEN_PHASE_DIR=<dir>       phase dir (default: <repo>/lib/phases)
+  DEN_STATE_DIR=<dir>       state dir (default: ~/.local/state/den)
+  DEN_EXTRA_LIBS=<a:b>      extra lib files to source (tests, local add-ons)
+  REPO_URL / REPO_DIR       stage 0 clone overrides (bootstrap.sh)
+
+Exit codes: 0 all done or skipped, 1 any failed or doctor broken, 2 usage error.
+Contract: docs/den/CONTRACT.md
+EOF
+}
+
+den_help() {
+  local topic=${1:-}
+  case $topic in
+    '')
+      den_usage
+      return 0
+      ;;
+    up)
+      cat <<'EOF'
+den up [--only a,b] [--skip a,b] [--dry-run]
+
+Runs preflight, then every selected phase in order. --only/--skip take
+comma-separated phase names (den phases lists them). --dry-run prints each
+selected phase and its needs, and runs nothing.
+EOF
+      ;;
+    fix)
+      cat <<'EOF'
+den fix
+
+Reruns the phases whose last recorded status was skipped or failed. No
+arguments: it reads ~/.local/state/den/last-run.json.
+EOF
+      ;;
+    doctor)
+      cat <<'EOF'
+den doctor [--strict]
+
+Runs every den_doctor_<name> check and prints a section per check, then a
+summary. --strict exits 1 when any check reports a problem; without it the
+exit code is 0.
+EOF
+      ;;
+    phases)
+      cat <<'EOF'
+den phases
+
+Lists every registered phase with its toggle, needs, OS and about line.
+EOF
+      ;;
+    setup)
+      cat <<'EOF'
+den setup
+
+With a terminal: a wizard that edits config.env values (vault, git identity,
+toggles), then offers den up. Without a terminal: prints how to edit
+config.env and exits 0.
+EOF
+      ;;
+    secrets)
+      cat <<'EOF'
+den secrets import <path>   validate a den.json bundle and record its path
+den secrets status          show where the bundle comes from (1Password, file)
+
+Secrets live in files, never argv. See lib/secrets.sh.
+EOF
+      ;;
+    sessions)
+      cat <<'EOF'
+den sessions export          pack session data into ~/Desktop/agent-sessions-<stamp>.tar.gz
+den sessions import <file> [--yes]
+                             verify the archive, snapshot current data, then swap
+
+Credential files are left out of the export. Import refuses without a terminal
+or --yes.
+EOF
+      ;;
+    clean)
+      cat <<'EOF'
+den clean [--dry-run] [--host-drift] [--yes]
+
+Removes only what den declares: managed install registry paths for this OS and
+installed Brewfile formula/cask tokens. --host-drift adds undeclared Homebrew
+leaves (never casks). It snapshots the files it will delete first, and without
+--yes it needs a terminal and the typed word clean. --dry-run prints the plan.
+EOF
+      ;;
+    registry)
+      cat <<'EOF'
+den registry list           print name|kind|target|spec|remove rows
+den registry check [--strict]  check every managed install (lib/registry.sh)
+EOF
+      ;;
+    vm)
+      cat <<'EOF'
+den vm up|down|shell|status|logs|rebuild
+
+Manages the Lima agent VM and the vm-up login agent (lib/vm.sh). `down` stops
+the login agent and Lima autostart before the VM, so nothing restarts it.
+EOF
+      ;;
+    permissions)
+      cat <<'EOF'
+den permissions           one line per macOS privacy grant (read-only)
+den permissions fix       open each missing pane, wait, then re-check
+
+Grants are never written by den: a human ticks them in System Settings.
+Grant to Rex Server.app, not Rex.app (lib/permissions.sh).
+EOF
+      ;;
+    update)
+      cat <<'EOF'
+den update
+
+git -C <repo> pull --ff-only, then den up. Stops before phases if the pull
+fails.
+EOF
+      ;;
+    *)
+      ui_err "no help for: $topic"
+      den_usage
+      return 2
+      ;;
+  esac
+  return 0
+}
+
+den_parse_run_flags() {
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --only=*) DEN_ONLY=${1#--only=} ;;
+      --only)
+        if [ $# -lt 2 ]; then
+          den_die "--only needs a value"
+        fi
+        shift
+        DEN_ONLY=$1
+        ;;
+      --skip=*) DEN_SKIP=${1#--skip=} ;;
+      --skip)
+        if [ $# -lt 2 ]; then
+          den_die "--skip needs a value"
+        fi
+        shift
+        DEN_SKIP=$1
+        ;;
+      --dry-run) DEN_DRY_RUN=1 ;;
+      -h|--help)
+        den_usage
+        exit 0
+        ;;
+      *) den_die "unknown argument: $1 (try den help)" ;;
+    esac
+    shift
+  done
+}
+
+den_run_args_from_flags() {
+  local args="up"
+  if [ -n "$DEN_ONLY" ]; then
+    args="$args --only=$DEN_ONLY"
+  fi
+  if [ -n "$DEN_SKIP" ]; then
+    args="$args --skip=$DEN_SKIP"
+  fi
+  if [ "$DEN_DRY_RUN" = 1 ]; then
+    args="$args --dry-run"
+  fi
+  DEN_RUN_ARGS=$args
+  export DEN_RUN_ARGS
+}
+
+den_finish_run() {
+  den_runtime_init
+  den_preflight
+  den_run
+  den_state_write
+  ui_summary
+  exit "$(den_run_exit_code)"
+}
+
+den_cmd_up() {
+  den_parse_run_flags "$@"
+  den_config_load
+  den_phases_load
+  den_validate_selection
+  den_run_args_from_flags
+  ui_banner
+  den_finish_run
+}
+
+den_cmd_fix() {
+  local names="" list="" name
+  if [ $# -gt 0 ]; then
+    den_die "den fix takes no arguments"
+  fi
+  den_config_load
+  den_phases_load
+  if [ ! -f "$DEN_STATE_DIR/last-run.json" ]; then
+    den_die "no earlier run in $DEN_STATE_DIR (run den up first)"
+  fi
+  names=$(den_state_fixable) || names=""
+  for name in $names; do
+    if den_phase_index "$name" >/dev/null 2>&1; then
+      if [ -z "$list" ]; then
+        list=$name
+      else
+        list="$list,$name"
+      fi
+    fi
+  done
+  if [ -z "$list" ]; then
+    ui_info "nothing to fix: the last run had no skipped or failed phases"
+    exit 0
+  fi
+  DEN_ONLY=$list
+  DEN_SKIP=""
+  DEN_DRY_RUN=0
+  DEN_RUN_ARGS="fix --only=$DEN_ONLY"
+  export DEN_RUN_ARGS
+  den_validate_selection
+  ui_banner
+  den_finish_run
+}
+
+den_cmd_phases() {
+  local i name toggle needs about os
+  if [ $# -gt 0 ]; then
+    den_die "den phases takes no arguments"
+  fi
+  den_config_load
+  den_phases_load
+  if [ "$DEN_PHASE_COUNT" -eq 0 ]; then
+    ui_info "no phases in $DEN_PHASE_DIR"
+    return 0
+  fi
+  printf '%-22s %-18s %-22s %-6s %s\n' "PHASE" "TOGGLE" "NEEDS" "OS" "ABOUT"
+  for ((i = 0; i < DEN_PHASE_COUNT; i++)); do
+    name=${DEN_PHASE_NAMES[$i]}
+    toggle=${DEN_PHASE_TOGGLES[$i]}
+    needs=${DEN_PHASE_NEEDS[$i]}
+    os=${DEN_PHASE_OSES[$i]}
+    about=${DEN_PHASE_ABOUTS[$i]}
+    if [ -z "$toggle" ]; then
+      toggle="-"
+    fi
+    if [ -z "$needs" ]; then
+      needs="-"
+    fi
+    printf '%-22s %-18s %-22s %-6s %s\n' "$name" "$toggle" "$needs" "$os" "$about"
+  done
+}
+
+den_cmd_secrets() {
+  local sub=${1:-status} path="" record="" value=""
+  if [ $# -gt 0 ]; then
+    shift
+  fi
+  den_config_load
+  case $sub in
+    import)
+      path=${1:-}
+      if [ -z "$path" ]; then
+        den_die "usage: den secrets import <path>"
+      fi
+      if [ ! -r "$path" ]; then
+        den_die "cannot read $path"
+      fi
+      if ! den_secrets_valid "$path"; then
+        den_die "$path is not a valid den bundle (want version 1 and env of strings)"
+      fi
+      value=$(cd "$(dirname "$path")" && pwd)/$(basename "$path")
+      mkdir -p "$DEN_STATE_DIR"
+      chmod 700 "$DEN_STATE_DIR" 2>/dev/null || true
+      record="$DEN_STATE_DIR/secrets.path"
+      printf '%s\n' "$value" >"$record"
+      chmod 600 "$record"
+      ui_ok "recorded $value as the secrets bundle"
+      ;;
+    status)
+      if command -v op >/dev/null 2>&1 &&
+        [ -n "$(den_with_timeout 15 op account list --format json 2>/dev/null | jq -r '.[0].url // empty' 2>/dev/null)" ]; then
+        ui_info "1Password: CLI has an account; den asks for the den document in vault ${OP_VAULT:-Private} at run time"
+      else
+        ui_info "1Password: op is missing or has no account (Settings > Developer > Integrate with 1Password CLI)"
+      fi
+      value=$(den_secrets_recorded_path) || value=""
+      if [ -n "$value" ]; then
+        ui_info "recorded file: $value"
+      elif [ -r "$HOME/den.json" ]; then
+        ui_info "file: $HOME/den.json"
+      else
+        ui_info "file: none"
+      fi
+      ;;
+    *) den_die "unknown secrets command: $sub (try den help)" ;;
+  esac
+  exit 0
+}
+
+main() {
+  local cmd=${1:-}
+  if [ $# -gt 0 ]; then
+    shift
+  fi
+  case $cmd in
+    '') den_cmd_dashboard ;;
+    help|-h|--help) den_help "$@" ;;
+    --version|-V|version) printf 'den %s\n' "$DEN_VERSION" ;;
+    *)
+      case $cmd in *[!a-z0-9-]*) den_die "unknown command: $cmd (try den help)" ;; esac
+      if declare -F "den_cmd_${cmd//-/_}" >/dev/null; then
+        "den_cmd_${cmd//-/_}" "$@"
+      else
+        den_die "unknown command: $cmd (try den help)"
+      fi
+      ;;
+  esac
+}
+
+main "$@"

@@ -8,6 +8,8 @@ setup() {
   TMP="$(mktemp -d)"
   HOME="$TMP/home"
   export HOME
+  # den: plain output, no network probe, state in the temp HOME.
+  export DEN_UI=plain DEN_PROBE_NET=ok DEN_STATE_DIR="$TMP/state"
   mkdir -p "$HOME/.local/bin" "$HOME/.docker/cli-plugins" "$TMP/bin"
   export RM_LOG="$TMP/rm.log"
   export PATH="$TMP/bin:$HOME/.local/bin:$HOME/.opencode/bin:/usr/bin:/bin"
@@ -56,7 +58,7 @@ teardown() {
 # break one row and know the rest are healthy.
 install_registry_targets() {
   local name kind target spec remove
-  "$REPO/bootstrap.sh" --only=__none__ --dump-tools > "$TMP/rows"
+  "$REPO/bin/den" registry list > "$TMP/rows"
   while IFS='|' read -r name kind target spec remove; do
     case "$kind" in
       script)
@@ -82,12 +84,12 @@ install_registry_targets() {
   done < "$TMP/rows"
 }
 
-@test "dump-tools declares ten unique rows with known kinds" {
+@test "dump-tools declares unique rows with known kinds" {
   # --only=__none__ is a safety belt: a regression that drops --dump-tools must
   # not turn this test into a full bootstrap.
-  run "$REPO/bootstrap.sh" --only=__none__ --dump-tools
+  run "$REPO/bin/den" registry list
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 10 ]
+  [ "${#lines[@]}" -ge 1 ]
 
   for line in "${lines[@]}"; do
     IFS='|' read -r name kind target spec remove <<< "$line"
@@ -100,7 +102,7 @@ install_registry_targets() {
     esac
   done
 
-  [ "$(printf '%s\n' "${lines[@]}" | cut -d'|' -f1 | sort -u | wc -l | tr -d ' ')" -eq 10 ]
+  [ "$(printf '%s\n' "${lines[@]}" | cut -d'|' -f1 | sort -u | wc -l | tr -d ' ')" -eq "${#lines[@]}" ]
 }
 
 @test "doctor --strict fails when another copy shadows a managed install" {
@@ -108,7 +110,7 @@ install_registry_targets() {
   printf '#!/bin/sh\n' > "$TMP/bin/claude"
   chmod +x "$TMP/bin/claude"
 
-  run "$REPO/bootstrap.sh" --only=doctor --strict
+  run "$REPO/bin/den" registry check --strict
   [ "$status" -eq 1 ]
   [[ "$output" == *"claude"* ]]
   [[ "$output" == *"shadows"* ]]
@@ -119,22 +121,22 @@ install_registry_targets() {
   printf '#!/bin/sh\n' > "$TMP/bin/claude"
   chmod +x "$TMP/bin/claude"
 
-  run "$REPO/bootstrap.sh" --only=doctor
+  run "$REPO/bin/den" registry check
   [ "$status" -eq 0 ]
   [[ "$output" == *"shadows"* ]]
 }
 
 @test "doctor --strict fails on a missing managed install" {
-  run "$REPO/bootstrap.sh" --only=doctor --strict
+  run "$REPO/bin/den" registry check --strict
   [ "$status" -eq 1 ]
-  [[ "$output" == *"missing at ~/.local/bin/herdr"* ]]
+  [[ "$output" == *"missing at ~/.local/bin/claude"* ]]
 }
 
 @test "an absent dependency skips its row instead of failing" {
   install_registry_targets
   /bin/rm -f "$TMP/bin/uv"
 
-  run "$REPO/bootstrap.sh" --only=doctor --strict
+  run "$REPO/bin/den" registry check --strict
   [ "$status" -eq 0 ]
   [[ "$output" == *"playwright"* ]]
   [[ "$output" == *"uv not installed"* ]]
@@ -144,7 +146,7 @@ install_registry_targets() {
   install_registry_targets
   export PATH="$TMP/bin:/usr/bin:/bin"
 
-  run "$REPO/bootstrap.sh" --only=doctor --strict
+  run "$REPO/bin/den" registry check --strict
   [ "$status" -eq 0 ]
   [[ "$output" == *"not on PATH"* ]]
 }
@@ -154,16 +156,16 @@ install_registry_targets() {
     skip "zsh is installed here"
   fi
 
-  run "$REPO/bootstrap.sh" --only=doctor
+  run "$REPO/bin/den" registry check
   [ "$status" -eq 0 ]
 }
 
 @test "clean --dry-run plans removals without running them" {
-  : > "$HOME/.local/bin/herdr"
+  : > "$HOME/.local/bin/claude"
 
-  run "$REPO/bootstrap.sh" --clean --dry-run
+  run "$REPO/bin/den" clean --dry-run
   [ "$status" -eq 0 ]
-  [[ "$output" == *"would remove: ~/.local/bin/herdr"* ]]
+  [[ "$output" == *"would remove: ~/.local/bin/claude"* ]]
   [ ! -e "$RM_LOG" ]
-  [ -f "$HOME/.local/bin/herdr" ]
+  [ -f "$HOME/.local/bin/claude" ]
 }

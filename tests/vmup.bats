@@ -29,7 +29,27 @@ vm_status() {
   run "$REPO/vm/vm-up.sh"
   [ "$status" -eq 0 ]
   ! grep -F "limactl start" "$CALLS"
-  grep -F "rex -S vm forward new -R 127.0.0.1:19988:127.0.0.1:19988" "$CALLS"
+  grep -F "rex -S vm forward new --session den -R 127.0.0.1:19988:127.0.0.1:19988" "$CALLS"
+}
+
+@test "tunnel: a fresh guest server gets the den session before the forward" {
+  vm_status Running
+  run "$REPO/vm/vm-up.sh"
+  [ "$status" -eq 0 ]
+  grep -F "rex -S vm session ls" "$CALLS"
+  grep -F "rex -S vm session new den" "$CALLS"
+  # the session is made before the forward that lives in it
+  [ "$(grep -n -F 'session new den' "$CALLS" | cut -d: -f1)" -lt "$(grep -n -F 'forward new' "$CALLS" | cut -d: -f1)" ]
+}
+
+@test "tunnel: an existing den session is reused, not created again" {
+  vm_status Running
+  printf '#!/bin/sh\nprintf "rex %%s\\n" "$*" >> "$CALLS"\ncase "$*" in *"session ls"*) printf "LABEL  ID\\nden    abc123\\n" ;; esac\nexit 0\n' > "$TMP/bin/rex"
+  chmod +x "$TMP/bin/rex"
+  run "$REPO/vm/vm-up.sh"
+  [ "$status" -eq 0 ]
+  ! grep -F "session new" "$CALLS"
+  grep -F "forward new --session den" "$CALLS"
 }
 
 @test "stopped VM: started before the tunnel" {
@@ -88,4 +108,14 @@ vm_status() {
     [ "$status" -ne 0 ]
   done
   ! grep -F "code --folder-uri" "$CALLS"
+}
+
+@test "open bridge: code never inherits the request stream as stdin" {
+  printf '#!/bin/sh\ncat > "%s/stdin.txt"\nprintf "code %%s\\n" "$*" >> "$CALLS"\n' "$TMP" > "$TMP/bin/code"
+  chmod +x "$TMP/bin/code"
+  run bash -c "printf '/next/request\n' | '$REPO/vm/vm-up.sh' --open-line /home/x/repo"
+  [ "$status" -eq 0 ]
+  sleep 1
+  grep -F "code --folder-uri" "$CALLS"
+  [ ! -s "$TMP/stdin.txt" ]
 }

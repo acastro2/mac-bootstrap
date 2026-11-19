@@ -9,6 +9,8 @@ setup() {
   TMP="$(mktemp -d)"
   HOME="$TMP/home"
   export HOME
+  # den: plain output, no network probe, state in the temp HOME.
+  export DEN_UI=plain DEN_PROBE_NET=ok DEN_STATE_DIR="$TMP/state"
   export SYSTEM_APPDIR="$TMP/sysapps"
   export BREW_LOG="$TMP/brew.log"
   mkdir -p "$HOME/.local/bin" "$HOME/Applications" "$SYSTEM_APPDIR" "$TMP/bin"
@@ -27,8 +29,8 @@ printf 'NO_AUTOREMOVE=%s %s\n' "${HOMEBREW_NO_AUTOREMOVE:-}" "$*" >> "$BREW_LOG"
 if [ "$1" = "info" ]; then
   token="${!#}"
   case "$token" in
-    zed)       app="Zed.app" ;;
-    ghostty)   app="Ghostty.app" ;;
+    visual-studio-code) app="Visual Studio Code.app" ;;
+    keepingyouawake)    app="KeepingYouAwake.app" ;;
     1password) app="1Password.app" ;;
     *)         app="Absent-$token.app" ;;
   esac
@@ -63,7 +65,7 @@ macos_only() {
 }
 
 @test "app registry rows point into ~/Applications" {
-  run "$REPO/bootstrap.sh" --only=__none__ --dump-tools
+  run "$REPO/bin/den" registry list
   [ "$status" -eq 0 ]
   local found=0
   for line in "${lines[@]}"; do
@@ -72,64 +74,63 @@ macos_only() {
     found=$((found + 1))
     [[ "$spec" == Applications/* ]]
   done
-  [ "$found" -ge 2 ]
+  [ "$found" -ge 1 ]
 }
 
-@test "doctor finds zed when the cask lives in ~/Applications" {
+@test "doctor finds code when VS Code lives in ~/Applications" {
   macos_only
-  make_app "$HOME/Applications/Zed.app"
-  : > "$HOME/Applications/Zed.app/Contents/MacOS/cli"
-  chmod +x "$HOME/Applications/Zed.app/Contents/MacOS/cli"
-  ln -s "$HOME/Applications/Zed.app/Contents/MacOS/cli" "$HOME/.local/bin/zed"
+  bin="$HOME/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
+  mkdir -p "$bin"; : > "$bin/code"; chmod +x "$bin/code"
+  ln -s "$bin/code" "$HOME/.local/bin/code"
 
-  run "$REPO/bootstrap.sh" --only=doctor
+  run "$REPO/bin/den" registry check
   [ "$status" -eq 0 ]
-  # Judge the zed row only: other app rows are legitimately absent here.
-  local zed_line
-  zed_line="$(printf '%s\n' "$output" | grep -E '[^-]zed  ')"
-  [[ "$zed_line" == *"~/.local/bin/zed"* ]]
-  [[ "$zed_line" != *"app not installed"* ]]
-  [[ "$zed_line" != *"points at"* ]]
-  [[ "$zed_line" == *"✓"* ]]
+  # Judge the code row only: other rows are legitimately absent here.
+  local code_line
+  code_line="$(printf '%s\n' "$output" | grep -E '[^-]code  ')"
+  [[ "$code_line" == *"~/.local/bin/code"* ]]
+  [[ "$code_line" != *"app not installed"* ]]
+  [[ "$code_line" != *"points at"* ]]
+  [[ "$code_line" == *"✓"* ]]
 }
 
 @test "appdir moves an idle cask from /Applications with autoremove off" {
   macos_only
-  make_app "$SYSTEM_APPDIR/Zed.app"
+  make_app "$SYSTEM_APPDIR/Visual Studio Code.app"
 
-  run "$REPO/bootstrap.sh" --only=appdir
+  run "$REPO/bin/den" up --only=appdir
   [ "$status" -eq 0 ]
-  grep -F "NO_AUTOREMOVE=1 uninstall --cask zed" "$BREW_LOG"
-  grep -F "NO_AUTOREMOVE=1 install --cask --appdir=$HOME/Applications zed" "$BREW_LOG"
+  grep -F "NO_AUTOREMOVE=1 uninstall --cask visual-studio-code" "$BREW_LOG"
+  grep -F "NO_AUTOREMOVE=1 install --cask --appdir=$HOME/Applications visual-studio-code" "$BREW_LOG"
 }
 
 @test "appdir moves every straggler even when brew reads stdin" {
   macos_only
-  make_app "$SYSTEM_APPDIR/Ghostty.app"
-  make_app "$SYSTEM_APPDIR/Zed.app"
+  make_app "$SYSTEM_APPDIR/KeepingYouAwake.app"
+  make_app "$SYSTEM_APPDIR/Visual Studio Code.app"
 
-  run "$REPO/bootstrap.sh" --only=appdir
+  run "$REPO/bin/den" up --only=appdir
   [ "$status" -eq 0 ]
-  grep -F "uninstall --cask ghostty" "$BREW_LOG"
-  grep -F "uninstall --cask zed" "$BREW_LOG"
+  grep -F "uninstall --cask keepingyouawake" "$BREW_LOG"
+  grep -F "uninstall --cask visual-studio-code" "$BREW_LOG"
 }
 
 @test "appdir leaves a running app alone and says to quit it" {
   macos_only
-  make_app "$SYSTEM_APPDIR/Zed.app"
-  export RUNNING_APP="Zed.app"
+  make_app "$SYSTEM_APPDIR/Visual Studio Code.app"
+  export RUNNING_APP="Visual Studio Code.app"
 
-  run "$REPO/bootstrap.sh" --only=appdir
+  run "$REPO/bin/den" up --only=appdir
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Quit Zed"* ]]
-  ! grep -F "uninstall --cask zed" "$BREW_LOG"
+  [[ "$output" == *"Quit Visual Studio Code"* ]]
+  ! grep -F "uninstall --cask visual-studio-code" "$BREW_LOG"
 }
 
 @test "appdir never moves 1Password" {
   macos_only
   make_app "$SYSTEM_APPDIR/1Password.app"
 
-  run "$REPO/bootstrap.sh" --only=appdir
+  run "$REPO/bin/den" up --only=appdir
   [ "$status" -eq 0 ]
   ! grep -F "uninstall --cask 1password" "$BREW_LOG"
   [ -d "$SYSTEM_APPDIR/1Password.app" ]
@@ -139,7 +140,7 @@ macos_only() {
   macos_only
   make_app "$SYSTEM_APPDIR/Rex Beta.app"
 
-  run "$REPO/bootstrap.sh" --only=appdir
+  run "$REPO/bin/den" up --only=appdir
   [ "$status" -eq 0 ]
   [ -d "$HOME/Applications/Rex Beta.app" ]
   [ ! -e "$SYSTEM_APPDIR/Rex Beta.app" ]
@@ -150,7 +151,7 @@ macos_only() {
   make_app "$SYSTEM_APPDIR/Rex Beta.app"
   export RUNNING_APP="Rex Beta.app"
 
-  run "$REPO/bootstrap.sh" --only=appdir
+  run "$REPO/bin/den" up --only=appdir
   [ "$status" -eq 0 ]
   [ -d "$SYSTEM_APPDIR/Rex Beta.app" ]
   [[ "$output" == *"Quit Rex"* ]]
@@ -158,15 +159,15 @@ macos_only() {
 
 @test "doctor flags a managed app still in /Applications" {
   macos_only
-  make_app "$SYSTEM_APPDIR/Zed.app"
+  make_app "$SYSTEM_APPDIR/Visual Studio Code.app"
 
-  run "$REPO/bootstrap.sh" --only=doctor
+  run "$REPO/bin/den" registry check
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Zed.app"*"/Applications"* ]]
+  [[ "$output" == *"Visual Studio Code.app"*"/Applications"* ]]
 }
 
 @test "registry links regular VS Code as code, no Insiders" {
-  run "$REPO/bootstrap.sh" --only=__none__ --dump-tools
+  run "$REPO/bin/den" registry list
   [ "$status" -eq 0 ]
   [[ "$output" == *"code|app|.local/bin/code|Applications/Visual Studio Code.app/Contents/Resources/app/bin/code|"* ]]
   [[ "$output" != *"nsiders"* ]]

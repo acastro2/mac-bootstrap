@@ -1,213 +1,184 @@
-# mac-bootstrap
+# den
 
-One command. Zero to a fully armed and operational macOS workstation. Shell, toolchains, dotfiles, auth, browser automation, LLM coding agents — all of it.
+One command sets up a Mac and its agent VM, then keeps both healthy. You answer every question in the first minute, walk away, and come back to a working machine.
 
-If you're the kind of engineer who treats their machine like a cattle, not a pet, this is your herd script.
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/den/img/anatomy-light.svg">
+  <img alt="A lab glovebox on a bench: the anatomy of a den. The sealed cabinet is the agent VM, worked through glove ports, fed through an airlock, with one sealed cable out." src="docs/den/img/anatomy-dark.svg">
+</picture>
 
-!!! tip
-    **On WSL2 / Ubuntu?** The script detects non-macOS and skips the Apple-specific stuff automatically — no Xcode CLT, no `defaults`, no casks. Everything else (Homebrew, zsh + Zim, mise, tools, dotfiles) runs the same. See `Brewfile.linux` for the Linux package list.
+A den works like a lab glovebox. The dangerous work happens inside a sealed box, and you work on it through gloves without ever climbing in.
 
----
+| Glovebox part | What it is in den |
+| --- | --- |
+| The sealed cabinet | The Lima VM `agent`, where Claude Code, OpenCode, Docker and the code run. |
+| The glove ports | Rex on the Mac, reaching into the VM over SSH. Your hands go in; your Mac's files never do. |
+| The airlock with the hand wheel | The only way keys go in: 1Password Document `den` → `~/.config/zsh/.api-keys.zsh` in the VM. |
+| The gauge below zero | No host mounts and no SSH agent forwarding. A leak pulls air in, never out. |
+| The one sealed cable | The only lines back to the Mac: `code .` opens VS Code on a VM folder, and the browse tunnel lets VM agents drive your browser. |
+| The lamp on the lid | `vm-up`, the login agent that restarts the VM and heals it inside. |
 
-## Before you run this
+The figure is code: `node docs/den/scenes/glovebox/build.mjs` (needs the `anatomy` skill).
 
-- **Apple ID** — signed into the App Store (for `mas` to pull apps)
-- **A functioning brain** — the script's interactive. It'll ask you things. It won't hold your hand for `sudo`.
+## Why it is built this way
 
-**1Password is optional.** If you set your vault name in `config.env`, the bootstrap pulls API keys into a private zsh file. If you don't, everything else still works — you'll just need to configure API keys yourself.
+Coding agents run with few permission prompts. On a Mac, one wrong command from an agent can break the OS install, and on a managed Mac that can mean a wipe. So the agents live in a Lima VM, and the Mac is only the window, the keys, the browser and the VM host. A bad command in the VM can only damage the VM, and `den vm rebuild` gets you a new one.
 
----
+The VM is a real dev box, not a jail: it gets every API key, its own GitHub login, Docker, and a synced copy of your vault. What it never gets is your Mac's files, your SSH agent, or a way to run code on the Mac. The one exception is `code .`, which can only ask the Mac to open a VS Code window on a VM folder.
 
-## Make It Yours
+## Quick start
 
-Fork the repo, edit `config.env` with your values, then run:
-
-```bash
-git clone https://github.com/YOU/mac-bootstrap.git ~/Developer/github/YOU/mac-bootstrap
-cd ~/Developer/github/YOU/mac-bootstrap
-# edit config.env with your values
-./bootstrap.sh
-```
-
-| Variable               | What it does                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------ |
-| `OP_VAULT`             | 1Password vault name (leave empty to skip API key setup)                       |
-| `GIT_NAME`             | Your name for `git config --global user.name`                                  |
-| `GIT_EMAIL`            | Your email for `git config --global user.email`                                |
-| `REPO_URL`             | URL of your fork                                                               |
-| `REPO_DIR`             | Where to clone your fork                                                       |
-| `OPENCODE_CONFIG_REPO` | Private opencode config repo, e.g. `you/opencode_config` (leave empty to skip) |
-| `OPENCODE_SKILLS_REPO` | Public agent skills repo (leave empty to skip)                                 |
-| `OPENCODE_WEB_ITEM`    | 1Password login item holding the web UI password (leave empty to skip)         |
-| `OPENCODE_WEB_PORT`    | Fixed web UI port so the phone URL stays stable                                |
-| `CLAUDE_CONFIG_REPO`   | Private Claude Code config repo, e.g. `you/.claude` (leave empty to skip)      |
-| `REX_OP_ITEM`          | 1Password item with the Rex beta URLs, fields `appcast` and `mcp` (leave empty to skip) |
-
-Then run:
-
-```bash
-./bootstrap.sh
-```
-
----
-
-## Run it
-
-The quick and dirty way (runs with defaults, no 1Password):
+On a fresh Mac:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/acastro2/mac-bootstrap/main/bootstrap.sh | bash
 ```
 
-That's it. Copy. Paste. Hit enter. Walk away for 10 minutes.
+Stage 0 installs the Xcode Command Line Tools (they bring git), Homebrew, gum and jq, clones this repo, then runs `den up`. If git is still missing after that, it stops and says so.
 
-If you'd rather inspect before you yeet:
-
-```bash
-git clone https://github.com/acastro2/mac-bootstrap.git ~/Developer/github/acastro2/mac-bootstrap
-cd ~/Developer/github/acastro2/mac-bootstrap
-./bootstrap.sh
-```
-
-Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be surgical:
+On a Mac that already has this repo:
 
 ```bash
-./bootstrap.sh --only=packages,zsh        # just packages + shell retrofit
-./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
+den up
 ```
 
-The packages phase runs `brew bundle --no-upgrade` on purpose: a cask desynced by its own updater (VS Code self-updates) can't fail the run. When you actually want to upgrade, run `brew upgrade` yourself.
+**What you do in the first minute.** Preflight asks everything up front, so the rest runs while you are away:
 
-Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `appdir`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `claude`, `opencode-web`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `rea`, `rex`, `doctor`.
+1. Your password once for sudo. After the Touch ID phase, sudo asks for your finger instead, in Rex tabs too.
+2. 1Password, if it is locked. den reads one Document, `den`, which holds every key.
+3. GitHub login for the Mac and for the VM (each is its own login, so the VM never borrows the Mac's SSH agent).
+4. Obsidian Sync login inside the VM, and which vault to sync.
+5. The macOS privacy clicks that no script can make (see [Permissions](#permissions)).
 
-The managed install registry is the one list of tools this script installs directly, with the path each one must resolve to. `--dump-tools` prints it. `doctor` reports it, and `--strict` makes doctor exit 1 when a managed install is shadowed or missing. `--clean --dry-run` prints the full reset plan without removing anything.
+Then every phase runs unattended. Each one ends **done**, **skipped** (with the reason and the exact command that fixes it), or **failed** (same). A failed phase never stops the run.
 
----
+![den up on a real Mac: 13 done, 2 skipped, each skip with its reason and the command that fixes it](docs/den/img/den-up.png)
 
-## Step into the Madness
+## The den command
 
-Here's the deal: this isn't a generic dotfiles repo. It's the exact setup of a platform engineer who spends their days knee-deep in Terraform, Kubernetes, AWS, and LLM-powered coding agents. Every choice here has a body count behind it.
+| Command | What it does |
+| --- | --- |
+| `den` | Dashboard: the VM, the browse relay and the tunnel right now, then the last run and what to run next. |
+| `den up [--only a,b] [--skip a,b] [--dry-run]` | Run the phases. `--dry-run` shows the plan and changes nothing. |
+| `den fix` | Run again only what was skipped or failed last time. |
+| `den doctor [--strict]` | Read-only health: managed installs, host drift, permissions, the VM. `--strict` exits 1 when something is broken. |
+| `den phases` | Every phase, its toggle, what it needs, what it does. |
+| `den setup` | A short wizard that edits `config.env`. |
+| `den secrets import <file>` / `den secrets status` | Use a `den.json` file when 1Password is not reachable. Import records the file; the next run that writes the keys deletes it. |
+| `den vm up` / `down` / `shell` / `status` / `logs` / `rebuild` | The agent VM. `down` really stops it: it turns off both login agents first, so nothing starts it again. |
+| `den permissions` / `den permissions fix` | The macOS privacy grants: check them, or walk the Settings panes. |
+| `den clean [--dry-run] [--host-drift] [--yes]` | Remove only what den installed. `--host-drift` lists undeclared Homebrew leaves. It shows the plan and asks you to type `clean`. `--yes` skips that for den's own installs, never with `--host-drift`. |
+| `den sessions export` / `import <file>` | Move agent chats to a new Mac. Import takes a snapshot first and never leaves you half-restored. |
+| `den update` | `git pull --ff-only`, then `den up`. |
 
-### The OS
+![den phases: every phase, its toggle, what it needs, and what it does](docs/den/img/den-phases.png)
 
-**macOS.** I've run Linux on the desktop. I've tried WSL2. For platform work that involves talking to every cloud, running containers locally, and needing a terminal that doesn't fight you — macOS is the least-worst option. The `macos-defaults` section sets key repeat to fast, hides the Dock, disables `.DS_Store` on network volumes, and goes dark mode with an orange accent. Fight me.
+## Mac or VM: where each tool lives
 
-### The shell
+The VM is the dev box. The Mac keeps what needs the Mac.
 
-**Zsh + Zim.** macOS ships zsh; Zim (zimfw) adds the layers on top: sane options, keybindings, cached completion, Fish-like syntax highlighting, history search, and autosuggestions. The `~/.zimrc` module list is short. Fzf binds fuzzy Ctrl-R history search, Ctrl-T file insert, and Alt-C directory jump. Starship renders the prompt; Carapace supplies structured completions for hundreds of CLIs, bridged into zsh's completion system.
+| Where | What |
+| --- | --- |
+| **Both** | Claude Code, OpenCode and their configs and skills, git, gh, the shell (zsh, Zim, starship, carapace, fzf, eza, bat, ripgrep, fd, jq, yq, neovim, gum), Rex Agent Restore, uv, ffmpeg |
+| **Mac only** | 1Password, Rex, Lima, VS Code with Remote-SSH, the browse relay, Obsidian, Hex and the scribe stack, peekaboo, Rectangle, the desktop apps, shellcheck and bats for this repo |
+| **VM only** | mise and every toolchain (Node LTS, .NET LTS, latest Go, Python, OpenTofu, pnpm), Docker Engine, kubectl, k9s, helm, awscli, the Snowflake CLI, PostgreSQL (latest), redis, Playwright, browser-use, asdf, opentunnel, the Rex server, Obsidian Headless |
 
-The Git shortcuts started from commands actually used in Fish history and now include a curated subset of the Oh My Zsh `git` plugin and Fish `plugin-git`: staging, diffs, branch views, log graphs, rebase/cherry-pick flows, stash, submodules, switch, and worktrees. Dynamic helpers include `grt` (repository root) and `gpsup` (push the current branch with upstream tracking). `git-clean` fetches and prunes `origin`, detects its default branch, and safely deletes local branches already merged into it with `git branch -d`. `git-push-acastro2` and `git-pull-acastro2` run one push or one pull (`git pull --rebase`, the `gpr` alias) as the second GitHub account, acastro2, by scoping a `GH_TOKEN` to that single command, so every other shell and agent session keeps the active `gh` account.
+`Brewfile` is the Mac list, `Brewfile.linux` is the VM list. `den doctor` on the Mac reports anything installed that the Mac `Brewfile` does not declare, with the command to remove it. A VM-only tool installed on the Mac counts as drift too. Nothing is removed until you run `den clean --host-drift` and confirm.
 
-The same research added practical Oh My Zsh-style aliases for Docker/Colima, Kubernetes, Helm, AWS, and Terraform/OpenTofu. The upstream references are [Oh My Zsh's Git](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/git/git.plugin.zsh), [Docker](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/docker/docker.plugin.zsh), [Kubernetes](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/kubectl/kubectl.plugin.zsh), [Helm](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/helm/helm.plugin.zsh), [Terraform](https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/terraform/terraform.plugin.zsh), [Fish plugin-git](https://github.com/jhillyerd/plugin-git), [fzf.fish](https://github.com/PatrickF1/fzf.fish), and [Oh My Fish bang-bang](https://github.com/oh-my-fish/plugin-bang-bang). The shortcuts intentionally leave out force-push, hard-reset/pristine, mass-prune/delete, auto-approve, and `!!`/`!$` behaviors.
+## How a run flows
 
-zsh clears inherited `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_PROFILE` values at login. Authenticate with an explicit SSO profile and scope `AWS_PROFILE` to a single command (`AWS_PROFILE=work tofu plan`); do not leave AWS credentials or account selection in the shell-wide environment.
-
-On a machine that still runs Nushell, the migration is fail-safe: the zsh config is rendered and validated first, then the login shell is switched and read back. Nushell is uninstalled and its configs wiped only after that exact readback succeeds.
-
-### The terminal
-
-**Rex**, with **Ghostty** as the fallback. Rex is Superlogical's terminal multiplexer: long-running sessions, a native macOS app, and Tailscale built in. It is a private beta, so the download URL must not land in this public repo. Bootstrap reads it from 1Password (`REX_OP_ITEM`, field `appcast`), downloads the newest DMG, and checks that it is notarized and signed by Superlogical (team `AG92C3PT77`). It then installs the app to `~/Applications/Rex.app`, where Sparkle updates it. A Rex app you already have is not downloaded again. If it is in `/Applications`, the `appdir` phase moves it. Then `rex skill setup` installs the Rex skill and hook for Claude Code and OpenCode, and the Superlogical community MCP (field `mcp`) gets registered in Claude Code. Without the 1Password item, download Rex from the beta Discord and re-run `./bootstrap.sh --only=rex`.
-
-Ghostty is native and GPU-accelerated, and it looks good with zero config. It replaced iTerm2, Kitty, and WezTerm for me. The dotfiles include a Ghostty config that just works.
-
-### The editor(s)
-
-**VS Code** and **Zed**. I live in VS Code for heavy platform work (Terraform, Go, Kubernetes manifests). Zed for quick edits, markdown, and when I want something that opens before I finish blinking. Both get CLI launchers — `code` and `zed` from anywhere.
-
-### The package manager
-
-**Homebrew** with a `Brewfile`. The list includes git, Carapace, Starship, mise, chezmoi, uv, fzf, ripgrep, bat, eza, neovim, jq, yq, kubectl, helm, k9s, awscli, colima, Docker Compose, postgresql, redis, 1password, ghostty, VS Code, Zed, and the terminal fonts. Declarative. Boring. Works.
-
-Casks install to `~/Applications`, not `/Applications`. A standard user cannot write to `/Applications`, so apps there that update themselves (Sparkle and similar) ask for admin on every update. In a folder you own, they update with no prompt. The Brewfile sets this with `cask_args appdir:`, and `.zshrc` sets `HOMEBREW_CASK_OPTS` for ad-hoc `brew install --cask`. Exception: 1Password stays in `/Applications`, because its browser integration only works from there.
-
-`brew bundle` never moves a cask that is already installed, so the `appdir` phase moves stragglers. For each Brewfile cask still in `/Applications`, it runs `brew uninstall --cask` and then `brew install --cask --appdir=~/Applications`. Not `brew reinstall`: that leaves the old copy behind. Both run with `HOMEBREW_NO_AUTOREMOVE=1`, so the move removes no other formulae. Rex gets a plain `mv`. An app that is running is never moved. The phase tells you to quit it and re-run `./bootstrap.sh --only=appdir`; for Rex, run that from Ghostty. Doctor lists any managed app still in `/Applications`.
-
-### The toolchain manager
-
-**mise.** Not asdf. Not nvm + pyenv + tfenv. mise is faster, supports piped installs (`npm:@playwright/test`), and doesn't require shims. It pins Go (latest), Node (LTS), pnpm 10, Python 3.12, .NET 9, OpenTofu, the Playwright CLI, and the [Context7 CLI](https://context7.com/docs/clients/cli) globally. Per-project overrides go in `.mise.toml` or `.tool-versions`.
-
-### The secret sauce (optional)
-
-**1Password CLI → private zsh file.** If you set `OP_VAULT` in `config.env`, every API key gets pulled from your 1Password vault into `~/.config/zsh/.api-keys.zsh` (chmod 600) as `export` lines. `.zshrc` sources it, so the keys become environment variables at shell startup.
-
-Skip it if you want — you'll just set up API keys yourself.
-
-Keys managed this way: opencode, openai, context7, devto, oreilly, google, azure devops (PAT), exa, resend.
-
-### The dotfiles
-
-**chezmoi** with the source directory inside this repo (`home/`). It ships `.zshrc` and `.zimrc`, one layout for macOS and Linux. Private files live outside the repo: bootstrap creates `~/.config/zsh/.api-keys.zsh` (secrets) and `~/.config/zsh/local.zsh` (machine-only overrides, sourced last). Ghostty settings live here too. `chezmoi diff` previews changes; `chezmoi apply` deploys them.
-
-### The LLM coding agent
-
-**OpenCode.** OpenCode is installed via its official install script. The Context7 documentation CLI (`ctx7`) is installed from its official npm package through mise. An optional private OpenCode config repo (`OPENCODE_CONFIG_REPO`) gets cloned into `~/.config/opencode` with your provider and model config. A public skills repo (`OPENCODE_SKILLS_REPO`) lands in `~/.agents/skills` — these are the [alex-skills](https://github.com/acastro2/alex-skills) that teach OpenCode how to write in my voice, review PRs, create diagrams, write ADRs, and handle browser automation.
-
-**OpenCode web UI.** The web UI is password protected, and that password lives in 1Password (`OPENCODE_WEB_ITEM`), never in the config repo — the bootstrap reads it and hands it to `opencode service set password`, so every machine ends up with the same login. When Tailscale is up, the same section binds the server to the tailnet address (`OPENCODE_WEB_PORT`) so the phone can reach it from anywhere without exposing a port on the local network. With Tailscale down the server stays on localhost, which is also the safe default.
-
-**REA.** [REA](https://github.com/morluto/rea) is a reverse-engineering MCP server: it inspects native binaries, JavaScript/Electron apps, .NET assemblies, and websites, and returns findings with their evidence. Bootstrap registers it with OpenCode and installs Hopper alongside it. Hopper, not Ghidra, because Ghidra ships no decompiler binary for macOS — you would have to build its C++ decompiler from source before it can decompile anything. Hopper is commercial; the free demo is enough to start, and its first launch asks you to pick demo mode or activate a license. The pinned version is `REA_VERSION` at the top of `bootstrap.sh`; bump it deliberately and re-run, the same way the Brewfile maps the machine to an installed set.
-
-### The browser automation stack
-
-Both Node and Python Playwright, plus `browser-use` (an LLM-driven browser agent). This is how OpenCode's `webapp-testing` and `playwright-cli` skills drive a real Chromium to test web apps, take screenshots, and fill forms. The bootstrap also opens System Settings so you can grant Accessibility and Screen Recording permissions — no, it can't grant them for you. macOS is a prison.
-
-### The infra tooling
-
-**colima** for containers (Docker Desktop is a resource hog and the licensing got weird), with Docker Compose installed as a CLI plugin and linked so `docker compose` works without Docker Desktop. **kubectl**, **k9s**, and **helm** for cluster work. **awscli** for, well, AWS. **terraform-linters/tap** and **tflint** because I don't merge Terraform without linting. **snowflake-cli** and **pgcli** for data platform work. **doggo** because `dig` output makes me sad. **herdr**, a terminal multiplexer for coding agents (panes, tabs, workspaces, and driving other agents).
-
-### The profile
-
-Who runs this? Someone who:
-
-- Spends more time in a terminal than Finder
-- Thinks workstations should be disposable and reproducible
-- Doesn't want to remember 12 `brew install` commands on a fresh machine
-- Ships infrastructure for a living (platform, SRE, DevOps, cloud)
-- Uses AI coding agents and wants them wired into their tools, not bolted on
-- Has strong opinions about prompt rendering speed and won't tolerate lag
-- Doesn't want to touch a Keychain API ever again
-
-If that's you — welcome. Run the command. Break things. Send PRs.
-
----
-
-## What happens when you run it
-
-The script runs in two phases:
-
-**Phase 1 — silent install.** Xcode CLT, Homebrew, all packages, validated zsh + Zim config and login-shell check, git config, SSH via 1Password agent, OpenCode, mise toolchains, Playwright + browser-use, and dotfiles via chezmoi. On a Nushell machine, Nushell is uninstalled only after zsh starts successfully and the account shell readback matches.
-
-**Phase 2 — interactive auth.** If `OP_VAULT` is set: 1Password sign-in and API keys written to `~/.config/zsh/.api-keys.zsh`. Always: GitHub CLI SSO login, OpenCode and Claude Code config sync (if set), agent skills clone (if set), and a doctor check that verifies critical binaries are alive.
-
-If anything fails, it tells you what and keeps going. Re-run anytime.
-
----
-
-## After bootstrap
-
-```sh
-aws sso login --profile <your-profile>
-az login --allow-no-subscriptions  # when checking Microsoft Entra app registrations
-AWS_PROFILE=<your-profile> tofu plan
-mise install      # if any tools need (re)installing
-colima start      # start the Docker runtime when you need containers
-docker compose version
-# Sign in to desktop apps (Slack, VS Code, etc.)
+```mermaid
+flowchart TD
+  A[den up] --> P[Preflight: what can this machine do?<br/>sudo · network · 1Password · gh · disk]
+  P --> H[Ask everything now<br/>sudo once · op · gh · ob · privacy panes]
+  H --> R[Phases, unattended, in order]
+  R --> D{each phase}
+  D -->|needs met| OK[done]
+  D -->|missing access| SK[skipped: reason + fix]
+  D -->|error| FL[failed: reason + fix, run continues]
+  OK & SK & FL --> S[Summary + ~/.local/state/den/last-run.json]
+  S --> F[den fix reruns only skipped and failed]
 ```
 
-Open a new terminal. You're in zsh. You're home.
+The VM phase runs the same `den` inside the guest. It streams the Mac's checkout in first, so the guest always runs the same version as the Mac, with no push and no clone.
 
----
+## Self-healing
 
-## Corporate CA / TLS inspection
+A login agent, `io.mac-bootstrap.vm-up`, keeps the VM side working with nothing to remember.
 
-The security stack (Cisco Secure Access, Cisco Umbrella, GSA) does TLS inspection, so apps that don't use the macOS keychain need the corp root trusted explicitly. The zsh config activates a bundle automatically when present:
+| What breaks | How fast | What it does |
+| --- | --- | --- |
+| The VM stops or hangs after login | within 5 minutes | Starts it, with back-off, so a broken VM is never retried in a loop. |
+| The VM is deleted | next check | Rebuilds it with the VM phase, at most once an hour. |
+| The browser relay on the Mac is down | within a minute | Starts `browse serve`. |
+| The tunnel from the VM to the relay stalls | within a minute | Probes it from the VM side and restarts it. |
+| API keys or the relay token change on the Mac | within 5 minutes | Copies them into the VM (mode 600) only when the content changed. |
+| A Node upgrade breaks the browse link, or the Rex server, Docker or vault sync stops | within 5 minutes | `vm/guest-heal.sh` repairs it inside the VM. |
 
-- Drop the CA bundle at `~/.config/corporate-ca-bundle.pem`. When it exists, `.zshrc` exports `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `PIP_CERT`, `GIT_SSL_CAINFO`, and `AWS_CA_BUNDLE` to it (covers Node, Python requests/pip, OpenSSL tools, curl, Homebrew git, AWS SDKs). Go 1.27+ and .NET read the macOS keychain, not these vars.
+`den vm down` is how you keep the VM off, because it turns the login agents off first. Logs: `den vm logs`.
 
-To trust the root at the OS level on one Mac (covers browsers, Go < 1.27, .NET, system git/curl):
+## Secrets: one Document
 
-```bash
-sudo security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain ~/.config/cisco-secure-access-root.pem
+Everything secret is in one 1Password Document named `den` (file `den.json`):
+
+```json
+{
+  "version": 1,
+  "env": { "OPENCODE_API_KEY": "...", "EXA_API_KEY": "..." },
+  "opencode_web": { "password": "..." },
+  "rex": { "appcast": "...", "mcp": "..." }
+}
 ```
 
-Run it in your terminal, not headless — macOS shows an auth dialog. Fleet-wide, prefer a Jamf computer-level configuration profile with the Certificate payload (`com.apple.security.root`, "Allow access to all applications") — that's the Apple-supported way and auto-cleans on profile removal.
+`env` becomes `~/.config/zsh/.api-keys.zsh` (mode 600, single-quoted, so a `$` in a key is never expanded). If 1Password is not reachable, put the file at `~/den.json` or run `den secrets import <file>`. den validates it and uses it. The run that writes the keys deletes the file and says so, because the keys now live in 1Password. No secret is ever written to this public repo, a log, or a command line, with one exception: `opencode service set password` only accepts the password as an argument.
+
+## Permissions
+
+macOS does not let any script grant privacy permissions without MDM, so den checks them and walks you through the panes once. Grant them to **Rex Server**, not to the Rex app, because every shell in a Rex tab belongs to the server.
+
+| Grant | For |
+| --- | --- |
+| Rex Server: Full Disk Access | scribe reading Voice Memos |
+| Rex Server: Accessibility, Screen Recording | peekaboo and browser control from a Rex tab |
+| Hex: Microphone, Accessibility | dictation |
+| Login items: vm-up, Lima | the VM starts at login |
+| Browser: "Allow JavaScript from Apple Events" | browser control through Apple Events (View > Developer) |
+
+den never enables Developer Tools mode, never calls `tccutil`, and never edits the TCC database. The research behind this, with sources: [docs/den/macos-permissions.md](docs/den/macos-permissions.md).
+
+## Configuration
+
+`config.env` is public and committed: identity, repos, and one toggle per feature. Put machine-only overrides in `~/.config/den/local.env`.
+
+| Toggle | Turns off |
+| --- | --- |
+| `DEN_MACOS_DEFAULTS` | Dock, key repeat, Finder and dark mode settings |
+| `DEN_TOUCHID_SUDO` | Touch ID for sudo |
+| `DEN_REX` | the Rex app, its skill, Rex Agent Restore |
+| `DEN_OPENCODE_WEB` | the OpenCode web UI on the tailnet |
+| `DEN_VM` | the agent VM and its login agent |
+| `DEN_BROWSE_TUNNEL` | VM agents driving the Mac browser |
+
+To fork it: change `GIT_NAME`, `GIT_EMAIL`, `OP_VAULT`, the repo URLs and the toggles, create your own `den` Document, then run the one-liner with `REPO_URL` pointing at your fork.
+
+## Rex, the window
+
+Rex is the terminal. Its server runs in the VM, so a tab on the `vm` host is a zsh in Linux. Add the host once in the Rex app: press ⌘⇧P, run **Add Remote Host…**, enter `ssh://lima-agent` (`lima-` plus `AGENT_VM` from `config.env`), then **Switch Host**. den reminds you until it is done, because the app keeps its own host list and refuses scripted actions unless Remote Control is on (it stays off, so no local process can drive the app).
+
+## Moving to a new Mac
+
+1. On the old Mac: `den sessions export`. It writes a mode-600 tarball to the Desktop.
+2. On the new Mac: run the one-liner, then `den sessions import <file>`.
+
+Import checks every path in the archive, takes a snapshot of what it replaces, extracts to a temp folder, and only then swaps the files in. A bad archive leaves your current data untouched.
+
+## When something goes wrong
+
+- **A phase was skipped.** The summary has the fix command. Run it, then `den fix`.
+- **`den doctor` shows host drift.** Something was installed outside the Brewfiles. Add it to the right Brewfile, or remove it with `den clean --host-drift`.
+- **Certificate or proxy errors.** Corporate TLS inspection (Cisco Umbrella, Secure Access, GSA). Drop the CA bundle at `~/.config/corporate-ca-bundle.pem`; the shell exports it to Node, Python, curl, git and the AWS SDKs.
+- **The VM is not coming back.** `den vm status`, then `den vm logs`. `den vm rebuild` starts over, and it asks you to type the VM name first.
+
+## Working on den
+
+Read [docs/den/CONTRACT.md](docs/den/CONTRACT.md) first: the rules every phase follows, the layout, and the hooks. Each phase is one file in `lib/phases/`. Tests: `bats tests/` (CI also runs `shellcheck` on every script and `zsh -n` on the dotfiles). The pictures are code too: the glovebox is `node docs/den/scenes/glovebox/build.mjs`, and the terminal shots are `docs/den/scenes/term/render.py` over real saved output (the file explains how to capture them).

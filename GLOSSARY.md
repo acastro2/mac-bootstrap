@@ -1,4 +1,4 @@
-# mac-bootstrap
+# den
 
 Declares and builds Alex's workstation state on macOS and Linux: packages, shell,
 dotfiles, agent CLIs, and secrets.
@@ -6,7 +6,8 @@ dotfiles, agent CLIs, and secrets.
 ## Language
 
 **Bootstrap**:
-One run of `bootstrap.sh` that brings a machine to the declared state.
+One `den up` run that brings a machine to the declared state. On a fresh Mac,
+`bootstrap.sh` (stage 0) installs what `den` needs, then starts that run.
 _Avoid_: setup, install, provisioning
 
 **Phase**:

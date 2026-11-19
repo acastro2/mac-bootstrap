@@ -1,229 +1,34 @@
-# MacBook Migration Runbook
+# Moving to a new Mac
 
-Agent-executable runbook for migrating a fully configured MacBook to another machine via AirDrop. This document is designed to be handed to opencode or Claude Code as instructions.
+Move your agent chats and config to a new Mac in about an hour, with one file to carry. Code does not travel in the file: it travels through GitHub, so push it first.
 
-## Context
+## On the old Mac
 
-- **Source machine**: the MacBook you're migrating FROM (has all the data)
-- **Target machine**: the MacBook you're migrating TO (fresh or recovered)
-- **Transfer method**: AirDrop (no network/rsync between machines)
-- **Automation repo**: `~/Developer/github/acastro2/mac-bootstrap`
+1. **Push everything that is not pushed.** den clones these again on the new Mac, so local-only commits are lost:
+   ```bash
+   for d in ~/.config/opencode ~/.claude ~/.agents/skills; do git -C "$d" status -sb | head -1; done
+   ```
+   A line that says `ahead` means push it. Do the same for your project checkouts.
+2. **Export the chats.** This writes a mode-600 tarball to the Desktop. It holds Claude Code, Cortex and OpenCode history, and `~/.claude.json`, which can hold credentials, so treat it like a secret.
+   ```bash
+   den sessions export
+   ```
+   To leave work checkouts out of the export, set `DEN_SESSIONS_EXCLUDE` (space-separated globs) in `~/.config/den/local.env`.
+3. **Carry the tarball** by AirDrop or a USB disk. Do not put it in a synced folder.
 
-## Prerequisites
+## On the new Mac
 
-The target machine needs:
-- macOS with internet access
-- A terminal open (any shell works; zsh + Zim are configured by bootstrap)
-- Git and Xcode CLI tools (bootstrap handles this if missing)
+1. Run the one-liner from the [README](README.md#quick-start). Answer the preflight questions, then let it run.
+2. Restore the chats. Import checks every path, takes a snapshot of what it replaces, and leaves your data untouched if the archive is bad:
+   ```bash
+   den sessions import ~/Desktop/agent-sessions-*.tar.gz
+   ```
+3. Check the result. `den doctor` is read-only:
+   ```bash
+   den doctor
+   ```
+4. Delete the tarball when the chats open.
 
----
+## The old Mac, after
 
-## Phase 1: Export from Source Machine
-
-Run these on the source MacBook. All outputs land on `~/Desktop` for easy AirDrop.
-
-### 1.1 Export session data (opencode + Claude Code + Cortex conversations)
-
-```bash
-cd ~/Developer/github/acastro2/mac-bootstrap
-./bootstrap.sh --export-sessions
-```
-
-This creates `~/Desktop/agent-sessions-<timestamp>.tar.gz` containing:
-- `~/.local/share/opencode/opencode.db` (all opencode sessions)
-- `~/.claude/projects/` (all Claude Code conversations)
-- `~/.claude/history.jsonl` (Claude session index)
-- `~/.claude.json` (account state, project settings)
-- `~/Library/Application Support/Claude/claude_desktop_config.json`
-- `~/Developer/**/.cortex/` (all Cortex Code plans, per-project)
-- `~/.snowflake/cortex/conversations/` (all Cortex Code sessions, 38MB+)
-- `~/.snowflake/cortex/settings.json`, `cortex.json`, `permissions.json`, `skills.json`
-- `~/.snowflake/cortex/skills/`, `plugins/`, `commands/`, `history/`
-- `~/.snowflake/cortex/thread_goals.sqlite`
-- `~/.snowflake/connections.toml` + `config.toml` (Snowflake connection config)
-
-Note: the Cortex cache (~154MB) is intentionally excluded since it rebuilds on use.
-
-### 1.2 Export workspace (personal projects)
-
-```bash
-./bootstrap.sh --export-workspace
-```
-
-This creates `~/Desktop/workspace-<timestamp>.tar.gz` containing everything in `~/Developer` except:
-- `Engineering-Attain-Finance/` (re-clone from GitHub)
-- `Data-Engineering-Attain-Finance/` (re-clone from GitHub)
-- `.venv`, `node_modules`, `.terraform`, `__pycache__` (regenerable)
-
-These repos have local work that is NOT pushed anywhere:
-- `live-check`, `grafana-improvements`, `legal-summary`, `redshift-project`
-- `snowflake-audit`, `aws-audit`, `ADRs`, `hardening_architecture`
-- `cyberark-replacement`, `digifi`, `ops-streamlit-apps`, `risk-streamlit-apps`
-- `hiring-data-engineer`, `claude-kickoff-deck`, `plans`
-
-### 1.3 Push config repos
-
-Ensure all config repos are up to date:
-
-```bash
-# opencode config
-git -C ~/.config/opencode add -A && git -C ~/.config/opencode commit -m "pre-migration snapshot" && git -C ~/.config/opencode push
-
-# Claude Code config (CLAUDE.md, settings, hooks, pandoc templates)
-git -C ~/.claude add -A && git -C ~/.claude commit -m "pre-migration snapshot" && git -C ~/.claude push
-
-# Skills
-git -C ~/.agents/skills add -A && git -C ~/.agents/skills commit -m "pre-migration snapshot" && git -C ~/.agents/skills push
-
-# mac-bootstrap itself
-git -C ~/Developer/github/acastro2/mac-bootstrap add -A && git -C ~/Developer/github/acastro2/mac-bootstrap commit -m "pre-migration snapshot" && git -C ~/Developer/github/acastro2/mac-bootstrap push
-```
-
-### 1.4 AirDrop to target
-
-Send these files via AirDrop to the target MacBook:
-- `~/Desktop/agent-sessions-<timestamp>.tar.gz` (sessions, ~721MB)
-- `~/Desktop/workspace-<timestamp>.tar.gz` (personal projects)
-
-That's it. Everything else comes from git repos or 1Password.
-
----
-
-## Phase 2: Bootstrap the Target Machine
-
-Run these on the target MacBook.
-
-### 2.1 Initial bootstrap
-
-```bash
-# If git is available (Xcode CLT already installed):
-git clone https://github.com/acastro2/mac-bootstrap.git ~/Developer/github/acastro2/mac-bootstrap
-cd ~/Developer/github/acastro2/mac-bootstrap
-
-# config.env is committed with your values; check it before you run.
-cat config.env
-
-# Run bootstrap (installs everything, sets up auth)
-./bootstrap.sh
-```
-
-The bootstrap will:
-1. Install Homebrew and all packages (Brewfile)
-2. Render and validate zsh + Zim with Starship, Carapace, and fzf, keep the login shell on zsh, then remove Nushell only after the config checks and account-shell readback succeed
-3. Install opencode, Claude Code CLI, herdr, mise toolchains
-4. Clone opencode config, Claude Code config, and skills repos
-5. Install Rex, run `rex skill setup`, and register the Superlogical MCP in Claude Code
-6. Pull API keys from 1Password into `~/.config/zsh/.api-keys.zsh`, sourced by `.zshrc` at startup
-7. Run doctor checks to verify everything
-
-### 2.2 Import session data
-
-After AirDrop delivers the tarballs (check `~/Downloads` or wherever macOS puts them):
-
-```bash
-cd ~/Developer/github/acastro2/mac-bootstrap
-
-# Restore workspace (personal projects)
-tar -xzf ~/Downloads/workspace-*.tar.gz -C $HOME
-
-# Restore sessions (all three agents)
-./bootstrap.sh --import-sessions=~/Downloads/agent-sessions-*.tar.gz
-```
-
-This automatically removes any existing session data on the target before extracting, so you get a clean replacement rather than a merge of old and new. Specifically it wipes:
-- opencode DB, Claude projects/history, `.claude.json`
-- Cortex conversations, settings, skills, plugins, history, thread goals
-- Snowflake connection config
-- Per-project `.cortex/` directories (only if the tarball contains Developer paths)
-
-### 2.3 GitHub multi-account auth
-
-```bash
-# Personal account
-gh auth login --web
-
-# Work account (if using separate auth)
-gh auth login --web --hostname github.com
-
-# Fix credential helper for multi-account pushes
-gh auth setup-git
-```
-
-### 2.5 Verify
-
-```bash
-# Run doctor to check all tools are present
-./bootstrap.sh --only=doctor
-
-# Quick smoke tests
-opencode --version
-claude --version
-```
-
----
-
-## Phase 3: Optional Cleanup of Source Machine
-
-Only after confirming the target is fully working:
-
-```bash
-# On the SOURCE machine, if you want to wipe managed tooling:
-cd ~/Developer/github/acastro2/mac-bootstrap
-./bootstrap.sh --clean
-```
-
-This removes all Homebrew packages, mise toolchains, opencode/claude binaries, Zim files (`.zim`, `.zshrc`, `.zimrc`), and legacy Nushell configs. It does NOT remove:
-- `~/Developer` (your code)
-- `~/.claude/projects` (conversations)
-- `~/.local/share/opencode` (session DB)
-- `~/.config/opencode` or `~/.claude` (config repos)
-- Homebrew itself
-
----
-
-## What Lives Where (Reference)
-
-| Data | Path | Backup method |
-|------|------|---------------|
-| opencode sessions | `~/.local/share/opencode/opencode.db` | --export-sessions |
-| opencode config | `~/.config/opencode/` | git repo (acastro2/opencode_config) |
-| opencode skills | `~/.agents/skills/` | git repo (acastro2/alex-skills) |
-| Claude Code config | `~/.claude/` (CLAUDE.md, settings, hooks, pandoc) | git repo (acastro2/.claude) |
-| Claude Code conversations | `~/.claude/projects/` | --export-sessions |
-| Claude Code session index | `~/.claude/history.jsonl` | --export-sessions |
-| Claude Code account state | `~/.claude.json` | --export-sessions |
-| Claude Desktop config | `~/Library/Application Support/Claude/` | --export-sessions |
-| Per-project Claude config | `<project>/.claude/` | lives in project repo |
-| Cortex Code CLI | `~/.local/bin/cortex` | bootstrap (cortex section) |
-| Cortex Code sessions | `~/.snowflake/cortex/conversations/` | --export-sessions |
-| Cortex Code config | `~/.snowflake/cortex/{settings,cortex,permissions,skills}.json` | --export-sessions |
-| Cortex Code plans | `~/Developer/**/.cortex/` | --export-sessions |
-| Cortex skills/plugins | `~/.snowflake/cortex/{skills,plugins,commands}/` | --export-sessions |
-| Snowflake connections | `~/.snowflake/connections.toml` | --export-sessions |
-| Rex app | `~/Applications/Rex.app` (Sparkle self-updates) | bootstrap (rex section; URL from 1Password `REX_OP_ITEM`) |
-| Rex skill + hook | `~/.claude/skills/rex`, `~/.agents/skills/rex` | `rex skill setup` (rex section) |
-| Homebrew packages | Brewfile | git repo (mac-bootstrap) |
-| zsh config + aliases | `~/.zshrc`, `~/.zimrc`, `~/.zim/` | chezmoi (mac-bootstrap/home) |
-| Ghostty config | `~/.config/ghostty/` | chezmoi (mac-bootstrap/home) |
-| API keys | 1Password + `~/.config/zsh/.api-keys.zsh` | 1Password vault |
-| Keychain secrets | macOS Keychain | manual where used; migrate remaining to 1Password |
-| SSH keys | 1Password SSH agent | 1Password vault |
-| Git credential helper | gh auth setup-git | bootstrap Phase 2 |
-
----
-
-## Troubleshooting
-
-**`gh repo clone` fails during bootstrap**: Run `gh auth login --web` manually, then re-run `./bootstrap.sh --only=auth`.
-
-**Same command, different version per shell**: you have two installs and PATH orders them differently per shell kind. Check with `which -a <tool>`. The usual culprit is a leftover `npm install -g` in a Homebrew prefix (`/opt/homebrew/bin/<tool>` + `/opt/homebrew/lib/node_modules/...`); `brew uninstall` will not touch it and `npm uninstall -g` only clears the *current* npm prefix (mise node), so remove both paths by hand. `./bootstrap.sh` now warns about this at install time and prints the resolved path for every tool in its final summary. `~/.zprofile` puts `~/.local/bin` ahead of Homebrew for every shell kind, so the two no longer disagree.
-
-**Claude Code not found after bootstrap**: The native installer drops the launcher at `~/.local/bin/claude`; make sure that dir is on PATH, then re-run `./bootstrap.sh --only=claude`. Do not `npm -g install @anthropic-ai/claude-code` under mise: a node version switch orphans the shim and `claude update` (native updater) then silently no-ops against it.
-
-**zsh was not set as the login shell**: The bootstrap keeps Nushell in place when the switch or readback fails. On macOS, run `sudo dscl . -create "/Users/$USER" UserShell /bin/zsh`, verify it with `dscl . -read "/Users/$USER" UserShell`, then rerun `./bootstrap.sh --only=zsh,shell`.
-
-**1Password CLI prompts for setup**: Open 1Password desktop app first, enable Developer settings (Integrate with CLI, SSH agent, biometric unlock), then re-run auth section.
-
-**Import fails with "file not found"**: Check the exact filename. macOS may have added a suffix or placed it in a different folder after AirDrop. Try `ls ~/Downloads/agent-sessions*`.
-
-**Cortex Code CLI not found**: Re-run `./bootstrap.sh --only=cortex`. The installer puts it at `~/.local/bin/cortex`, which the zsh config prepends to `PATH`.
+`den clean --dry-run` shows what den installed and would remove. Nothing goes until you run `den clean` and type `clean`.

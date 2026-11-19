@@ -1,21 +1,16 @@
 # Zsh login-shell config, managed by chezmoi.
-# Loaded once per new shell by login shells (Ghostty starts one per tab).
+# Loaded once per new shell by login shells (Rex starts one per tab).
 
 # Kiro CLI pre block. Keep at the top of this file.
 [[ -f "${HOME}/Library/Application Support/kiro-cli/shell/zprofile.pre.zsh" ]] && builtin source "${HOME}/Library/Application Support/kiro-cli/shell/zprofile.pre.zsh"
 
-# Single brew shellenv — was previously appended hundreds of times by
-# installers, adding seconds to every login shell. Keep exactly one.
-if [[ -x /opt/homebrew/bin/brew ]]; then
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-fi
+# Homebrew is set up once in .zshenv, which every zsh reads before this file.
+# Do not eval brew shellenv again here: a second eval duplicates PATH entries.
 
 # Local tool bins ahead of Homebrew, for *every* shell kind. .zshrc does the
 # same, but only runs when interactive; without this a non-interactive login
-# shell resolves ~/.local/bin tools (claude, cortex, herdr) to a Homebrew or
-# npm copy instead, so the same command gives a different version per shell.
+# shell resolves ~/.local/bin tools (claude, cortex) to a Homebrew or npm copy
+# instead, so the same command gives a different version per shell.
 #
 # Move to front, do not skip when already present: the kiro-cli pre block above
 # appends ~/.local/bin near the tail, and a "prepend only if missing" guard
@@ -28,9 +23,6 @@ for _local_bin in "$HOME/.opencode/bin" "$HOME/.local/bin"; do
   export PATH="$_local_bin:$PATH"
 done
 unset _local_bin
-
-# added by Snowflake SnowflakeCLI installer v1.0
-export PATH=/Applications/SnowflakeCLI.app/Contents/MacOS/:$PATH
 
 # Kiro CLI post block. Keep at the bottom of this file.
 [[ -f "${HOME}/Library/Application Support/kiro-cli/shell/zprofile.post.zsh" ]] && builtin source "${HOME}/Library/Application Support/kiro-cli/shell/zprofile.post.zsh"

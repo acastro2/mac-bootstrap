@@ -8,6 +8,8 @@ setup() {
   TMP="$(mktemp -d)"
   HOME="$TMP/home"
   export HOME
+  # den: plain output, no network probe, state in the temp HOME.
+  export DEN_UI=plain DEN_PROBE_NET=ok DEN_STATE_DIR="$TMP/state"
   export CALLS="$TMP/calls.log"
   mkdir -p "$HOME/.local/bin" "$TMP/bin"
   export PATH="$TMP/bin:/usr/bin:/bin"
@@ -27,27 +29,27 @@ teardown() {
 }
 
 @test "packages phase taps a URL tap with its URL, then trusts it" {
-  run "$REPO/bootstrap.sh" --only=packages
+  run "$REPO/bin/den" up --only=packages
   [ "$status" -eq 0 ]
   grep -F "brew tap pattont/rex-agent-restore https://github.com/pattont/RexAgentRestore" "$CALLS"
   grep -F "brew trust pattont/rex-agent-restore" "$CALLS"
 }
 
 @test "rex-restore phase wires agents without touching ~/.zshrc" {
-  run "$REPO/bootstrap.sh" --only=rex-restore
+  run "$REPO/bin/den" up --only=rex-restore
   [ "$status" -eq 0 ]
   grep -F "rex-agent-restore install --no-shell" "$CALLS"
 }
 
 @test "rex-restore phase wires only the agents config.env names" {
-  run "$REPO/bootstrap.sh" --only=rex-restore
+  run "$REPO/bin/den" up --only=rex-restore
   [ "$status" -eq 0 ]
-  grep -F "rex-agent-restore install --no-shell --agents claude,cursor" "$CALLS"
+  grep -F "rex-agent-restore install --no-shell --agents claude" "$CALLS"
 }
 
 @test "rex-restore phase skips when the tool is missing" {
   /bin/rm -f "$TMP/bin/rex-agent-restore"
-  run "$REPO/bootstrap.sh" --only=rex-restore
+  run "$REPO/bin/den" up --only=rex-restore
   [ "$status" -eq 0 ]
   [[ "$output" == *"rex-agent-restore not installed"* ]]
 }

@@ -1,0 +1,20 @@
+$ den up
+
+  phase           status  secs  reason                                       fix
+  packages        done       4s
+  appdir          done       4s
+  app-clis        done       0s
+  macos-defaults  done       1s
+  sudo-touchid    skip       0s  needs sudo: sudo needs a password            sudo -v
+  shell           done       1s
+  git             done       0s
+  ssh             done       0s
+  agents          done       0s
+  secrets         done       0s
+  config-repos    done       0s
+  opencode-web    skip       0s  the den bundle has no opencode_web.password  add opencode_web.password to the den bund...
+  rex             done       1s
+  rex-restore     done       0s
+  vm              done       5s
+
+13 done | 2 skipped | 0 failed in 16s

@@ -1,0 +1,31 @@
+# Zsh environment, managed by chezmoi. Every zsh reads this first, interactive
+# or not, so keep it cheap: no prompts, no aliases.
+
+# The den repo, so the helper functions in .zshrc work from any directory.
+# ~/.local/bin/den is a symlink into the repo. The VM has no clone: the Mac
+# streams its checkout to ~/.local/share/den. Else the default clone path.
+if [[ -L $HOME/.local/bin/den ]]; then
+  DEN_ROOT=${${:-$HOME/.local/bin/den}:A:h:h}
+elif [[ -x $HOME/.local/share/den/bin/den ]]; then
+  DEN_ROOT=$HOME/.local/share/den
+else
+  DEN_ROOT=$HOME/Developer/github/acastro2/mac-bootstrap
+fi
+export DEN_ROOT
+
+# Homebrew: Apple Silicon, then Intel, then Linux.
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /usr/local/bin/brew ]]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+# Local tool bins before anything a package manager put on PATH. .zprofile
+# repeats the move after the kiro-cli pre block appends them near the tail.
+typeset -U path
+for _den_bin in "$HOME/.opencode/bin" "$HOME/.local/bin"; do
+  [[ -d $_den_bin ]] && path=($_den_bin $path)
+done
+unset _den_bin

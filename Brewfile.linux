@@ -1,45 +1,50 @@
-# Brewfile.linux — cross-platform package list (WSL / Ubuntu)
-# Apply with: brew bundle --file=Brewfile.linux
+# Brewfile.linux — the VM list: the dev box. The Mac uses Brewfile.
+# Apply with: den up --only=packages
+# No docker, docker-compose, colima or lima here: Homebrew's docker shadows
+# /usr/bin/docker, and the guest gets Docker Engine from Docker's apt repo.
 
-# ── Shell & Toolchains ────────────────────────────────────────────────
+# ── Shell, repos, CLI utilities ───────────────────────────────────────
 brew "git"
 brew "gh"
-brew "zsh"            # macOS ships /bin/zsh; Linux distros may not
+brew "zsh"             # Linux distros may not ship zsh
 brew "carapace"
 brew "starship"        # cross-shell prompt
-brew "mise"            # toolchain manager (Go, Node, Python, etc.)
-brew "llhttp"          # mise Node dep — prevent brew cleanup from breaking node
 brew "chezmoi"         # dotfiles
-brew "uv"              # fast Python package manager + uvx
 brew "fzf"
-brew "pre-commit"
-brew "gitleaks"
-
-# ── CLI Utilities ──────────────────────────────────────────────────────
 brew "jq"
 brew "yq"
 brew "ripgrep"
 brew "fd"
 brew "bat"
 brew "eza"             # modern ls
-brew "repomix"        # pack a repo into a single file for LLM context
+brew "mcat"            # modern cat
 brew "neovim"
-brew "doggo"           # DNS client (dig alternative)
+brew "gum"
+brew "uv"              # Playwright and browser-use run as uv tools here
+brew "ffmpeg"
+brew "asdf"
 
-# ── Platform / Infra ───────────────────────────────────────────────────
+# ── Toolchains and platform ────────────────────────────────────────────
+brew "mise"            # toolchain manager (Go, Node, Python, tflint, ...)
+brew "llhttp"          # mise Node dep — prevent brew cleanup from breaking node
 brew "kubectl"
 brew "k9s"
 brew "helm"
 brew "awscli"
-brew "colima"          # Docker runtime (no Docker Desktop)
-brew "docker"          # Docker CLI
-brew "docker-compose"  # Docker Compose CLI plugin
 brew "crane"           # inspect/copy container images without pulling
-brew "ffmpeg"          # Playwright video recording / trace viewer media
 brew "snowflake-cli"
 brew "pgcli"
-brew "postgresql@16", restart_service: false
+brew "pre-commit"
+brew "gitleaks"
+brew "repomix"         # pack a repo into a single file for LLM context
+brew "doggo"           # DNS client (dig alternative)
+# Latest major, unversioned: the VM is rebuilt, so it always gets the newest.
+brew "postgresql", restart_service: false
 brew "redis", restart_service: false
+
+# ── Taps ───────────────────────────────────────────────────────────────
+tap "anomalyco/tap"
+brew "opentunnel"
 
 # Rex Agent Restore: resumes agent chats after a Rex restart (community, MIT).
 # Its repo is not homebrew-*, so the tap needs the URL.
