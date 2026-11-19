@@ -3,22 +3,23 @@
 One command sets up a Mac and its agent VM, then keeps both healthy. You answer every question in the first minute, walk away, and come back to a working machine.
 
 <picture>
-  <source media="(prefers-color-scheme: light)" srcset="docs/den/img/anatomy-light.svg">
-  <img alt="A lab glovebox on a bench: the anatomy of a den. The sealed cabinet is the agent VM, worked through glove ports, fed through an airlock, with one sealed cable out." src="docs/den/img/anatomy-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/den/img/den-light.svg">
+  <img alt="The anatomy of a den: a caged den of wild robot animals (a wolf, a fox, and a raccoon at a crate) run from outside by a robot T-Rex at a console. One blue cable runs from the console into the den, a gold key cartridge waits by a feeding hatch, and a green beacon glows on the den's back corner." src="docs/den/img/den-dark.svg">
 </picture>
 
-A den works like a lab glovebox. The dangerous work happens inside a sealed box, and you work on it through gloves without ever climbing in.
+The agents are wild animals: fast, strong, and not to be trusted with your Mac. So they live in a den, and you run it from the outside.
 
-| Glovebox part | What it is in den |
+| In the picture | What it is in den |
 | --- | --- |
-| The sealed cabinet | The Lima VM `agent`, where Claude Code, OpenCode, Docker and the code run. |
-| The glove ports | Rex on the Mac, reaching into the VM over SSH. Your hands go in; your Mac's files never do. |
-| The airlock with the hand wheel | The only way keys go in: 1Password Document `den` → `~/.config/zsh/.api-keys.zsh` in the VM. |
-| The gauge below zero | No host mounts and no SSH agent forwarding. A leak pulls air in, never out. |
-| The one sealed cable | The only lines back to the Mac: the browse tunnel lets VM agents drive your browser, `code .` asks for a VS Code window, and dev-server ports show up on the Mac. Each one is a bridge in [The bridges](#the-bridges). |
-| The lamp on the lid | `vm-up`, the login agent that restarts the VM and heals it inside. |
+| The den: thick walls, cage bars, no door | The Lima VM `agent`. You can see in; nothing gets out: no shared folders, no SSH agent, no way into the Mac. |
+| The wolf, the fox, the raccoon at its crate (orange, cyan, violet eyes) | The agents and their tools: Claude Code, OpenCode, Docker containers. |
+| The server rack on the back wall | The Rex server, where your terminal tabs run. |
+| The robot T-Rex at the console | You, on the Mac. Huge, but it steers the whole den with tiny arms on one lever: `den`. |
+| The blue cable through the sealed gland | SSH: Rex and VS Code reaching in. The only wire, and it starts at your console. |
+| The feeding hatch and the gold key cartridge | The only way keys go in: 1Password Document `den` → `~/.config/zsh/.api-keys.zsh` in the VM. |
+| The green beacon | `vm-up`, the login agent that keeps the den alive and heals it. |
 
-The figure is code: `node docs/den/scenes/glovebox/build.mjs` (needs the `anatomy` skill).
+Everything that does cross the boundary is in [The bridges](#the-bridges). The picture is code: `node docs/den/scenes/den/build.mjs` (needs the `anatomy` skill).
 
 ## Why it is built this way
 
@@ -206,4 +207,4 @@ Import checks every path in the archive, takes a snapshot of what it replaces, e
 
 ## Working on den
 
-Read [docs/den/CONTRACT.md](docs/den/CONTRACT.md) first: the rules every phase follows, the layout, and the hooks. Each phase is one file in `lib/phases/`. Tests: `bats tests/` (CI also runs `shellcheck` on every script and `zsh -n` on the dotfiles). The pictures are code too: the glovebox is `node docs/den/scenes/glovebox/build.mjs`, and the terminal shots are `docs/den/scenes/term/render.py` over real saved output (the file explains how to capture them).
+Read [docs/den/CONTRACT.md](docs/den/CONTRACT.md) first: the rules every phase follows, the layout, and the hooks. Each phase is one file in `lib/phases/`. Tests: `bats tests/` (CI also runs `shellcheck` on every script and `zsh -n` on the dotfiles). The pictures are code too: the den is `node docs/den/scenes/den/build.mjs`, the bridges are `python3 docs/den/scenes/bridges/build.py`, and the terminal shots are `docs/den/scenes/term/render.py` over real saved output (the file explains how to capture them).

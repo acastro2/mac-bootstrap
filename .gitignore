@@ -4,4 +4,4 @@ test-results/
 playwright-report/
 repomix-output.xml
 .opencode
-docs/den/scenes/glovebox/*.html
+docs/den/scenes/den/*.html
