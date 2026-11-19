@@ -65,6 +65,7 @@ macos_only() {
 }
 
 @test "app registry rows point into ~/Applications" {
+  [ "$(uname)" = "Darwin" ] || skip "macOS only"
   run "$REPO/bin/den" registry list
   [ "$status" -eq 0 ]
   local found=0
@@ -167,6 +168,7 @@ macos_only() {
 }
 
 @test "registry links regular VS Code as code, no Insiders" {
+  [ "$(uname)" = "Darwin" ] || skip "macOS only"
   run "$REPO/bin/den" registry list
   [ "$status" -eq 0 ]
   [[ "$output" == *"code|app|.local/bin/code|Applications/Visual Studio Code.app/Contents/Resources/app/bin/code|"* ]]

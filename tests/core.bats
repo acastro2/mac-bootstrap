@@ -131,7 +131,7 @@ den() { "$REPO/bin/den" "$@"; }
   phase 10 one true
   run den up
   jq -e '.version==1 and (.started|length>0) and (.finished|length>0) and (.host|length>0)' "$DEN_STATE_DIR/last-run.json"
-  [ "$(stat -f %Lp "$DEN_STATE_DIR/last-run.json" 2>/dev/null || stat -c %a "$DEN_STATE_DIR/last-run.json")" = "600" ]
+  [ "$(stat -c %a "$DEN_STATE_DIR/last-run.json" 2>/dev/null || stat -f %Lp "$DEN_STATE_DIR/last-run.json")" = "600" ]
 }
 
 @test "plain UI prints no escape codes" {
@@ -174,7 +174,7 @@ EOF
   [ "$status" -eq 0 ]
   [ ! -e "$HOME/den.json" ]
   f="$HOME/.config/zsh/.api-keys.zsh"
-  [ "$(stat -f %Lp "$f" 2>/dev/null || stat -c %a "$f")" = "600" ]
+  [ "$(stat -c %a "$f" 2>/dev/null || stat -f %Lp "$f")" = "600" ]
   out="$(zsh -fc "source '$f'; print -r -- \"\$DOLLAR|\$QUOTE|\$PLAIN\"")"
   [ "$out" = 'p$HOME$(echo PWNED)`echo X`|it'"'"'s|abc' ]
   [[ "$output" == *"den.json"* ]]

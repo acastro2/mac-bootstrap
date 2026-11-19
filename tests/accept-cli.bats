@@ -141,8 +141,8 @@ teardown() { /bin/rm -rf "$TMP"; }
   [ -z "$(ls "$HOME/Desktop")" ]
   out="$(ls "$HOME"/.local/state/den/exports/agent-sessions-*.tar.gz | head -1)"
   [ -n "$out" ]
-  [ "$(stat -f %Lp "$HOME/.local/state/den/exports")" = 700 ]
-  [ "$(stat -f %Lp "$out")" = 600 ]
+  [ "$(stat -c %a "$HOME/.local/state/den/exports" 2>/dev/null || stat -f %Lp "$HOME/.local/state/den/exports")" = 700 ]
+  [ "$(stat -c %a "$out" 2>/dev/null || stat -f %Lp "$out")" = 600 ]
 }
 
 @test "den help sessions does not claim credentials are left out" {
