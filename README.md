@@ -76,7 +76,7 @@ Re-running is safe — everything's idempotent. Use `--only` or `--skip` to be s
 ./bootstrap.sh --skip=macos-defaults,mise,auth  # skip opinionated macOS defaults, toolchains, and auth
 ```
 
-The packages phase runs `brew bundle --no-upgrade` on purpose: a cask desynced by its own updater (VSCode Insiders self-updates) can't fail the run. When you actually want to upgrade, run `brew upgrade` yourself.
+The packages phase runs `brew bundle --no-upgrade` on purpose: a cask desynced by its own updater (VS Code self-updates) can't fail the run. When you actually want to upgrade, run `brew upgrade` yourself.
 
 Gatable sections: `xcode`, `brew`, `repo`, `workspace`, `macos-defaults`, `packages`, `appdir`, `app-clis`, `zsh`, `shell`, `git`, `ssh`, `herdr`, `opencode`, `claude`, `opencode-web`, `cortex`, `tgrep`, `mise`, `browser-automation`, `dotfiles`, `secrets`, `auth`, `rea`, `rex`, `doctor`.
 
@@ -112,7 +112,7 @@ Ghostty is native and GPU-accelerated, and it looks good with zero config. It re
 
 ### The editor(s)
 
-**VS Code Insiders** and **Zed**. I live in VS Code for heavy platform work (Terraform, Go, Kubernetes manifests). Zed for quick edits, markdown, and when I want something that opens before I finish blinking. Both get CLI launchers — `code` and `zed` from anywhere.
+**VS Code** and **Zed**. I live in VS Code for heavy platform work (Terraform, Go, Kubernetes manifests). Zed for quick edits, markdown, and when I want something that opens before I finish blinking. Both get CLI launchers — `code` and `zed` from anywhere.
 
 ### The package manager
 

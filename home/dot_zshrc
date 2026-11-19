@@ -115,7 +115,18 @@ alias ll='eza -lh --icons --git --group-directories-first'
 alias la='eza -la --icons --git --group-directories-first'
 alias cat='mcat'
 alias k='kubectl'
-alias code='code-insiders'
+if [[ $OSTYPE == linux* && -d ~/.local/state/vm-open ]]; then
+  # Agent VM: VS Code's own terminal brings its `code`; anywhere else, ask
+  # the Mac (vm-up.sh) to open VS Code on this folder over Remote-SSH.
+  code() {
+    if (( $+commands[code] )); then command code "$@"; return; fi
+    local target=${1:-.}
+    target=${target:A}
+    [[ -d $target ]] || target=${target:h}
+    print -r -- "$target" >> ~/.local/state/vm-open/requests
+    print "Opening $target in VS Code on the Mac"
+  }
+fi
 alias g='git'
 
 cd-dev()       { cd ~/Developer }
@@ -422,6 +433,35 @@ alias tfws='tf workspace select'
 # AWS helpers do not mutate the shell environment; pass profiles explicitly.
 alias awsp='aws configure list-profiles'
 alias awswho='aws sts get-caller-identity'
+
+# ── Lima guest ────────────────────────────────────────────────────────
+# Lima's boot script (20-rootless-base.sh) appends a PATH block to ~/.zshrc on
+# every boot unless it finds the "Lima BEGIN" marker. chezmoi then removes it
+# and stops at a prompt on the next apply. Keeping the marker here stops both.
+# Lima BEGIN
+# Make sure iptables and mount.fuse3 are available (rootless containerd)
+[[ $OSTYPE == linux* ]] && path+=(/usr/sbin /sbin)
+# Lima END
+
+# ── Agent VM (macOS) ──────────────────────────────────────────────────
+# vm-up: bring up the agent VM, the browse relay and the tunnel now, through
+# the login agent the vm phase installs; without it, run the script directly.
+vm-up() {
+  local label=io.mac-bootstrap.vm-up
+  if launchctl print "gui/$UID/$label" &>/dev/null; then
+    launchctl kickstart -k "gui/$UID/$label" && echo "vm-up restarted; log: ~/.local/state/rex-vm/vm-up.log"
+  else
+    ~/Developer/github/acastro2/mac-bootstrap/vm/vm-up.sh
+  fi
+}
+
+# ── Rex Agent Restore ─────────────────────────────────────────────────
+# Resumes each Rex pane's agent chat after a Rex server restart. Its own
+# installer would append this to ~/.zshrc, where chezmoi would wipe it, so it
+# lives here and bootstrap runs `rex-agent-restore install --no-shell`.
+# HOMEBREW_PREFIX comes from brew shellenv in .zprofile (macOS and Linux).
+[[ -r ${HOMEBREW_PREFIX:-/opt/homebrew}/share/rex-agent-restore/rex-agent-restore.zsh ]] \
+  && source ${HOMEBREW_PREFIX:-/opt/homebrew}/share/rex-agent-restore/rex-agent-restore.zsh
 
 # ── Private files ─────────────────────────────────────────────────────
 # API keys written by bootstrap from 1Password (chmod 600).

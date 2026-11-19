@@ -27,7 +27,6 @@ brew "neovim"
 brew "doggo"           # DNS client (dig alternative)
 
 # ── Platform / Infra ───────────────────────────────────────────────────
-tap "terraform-linters/tap"
 brew "kubectl"
 brew "k9s"
 brew "helm"
@@ -41,4 +40,8 @@ brew "snowflake-cli"
 brew "pgcli"
 brew "postgresql@16", restart_service: false
 brew "redis", restart_service: false
-brew "tflint"
+
+# Rex Agent Restore: resumes agent chats after a Rex restart (community, MIT).
+# Its repo is not homebrew-*, so the tap needs the URL.
+tap "pattont/rex-agent-restore", "https://github.com/pattont/RexAgentRestore"
+brew "pattont/rex-agent-restore/rex-agent-restore"

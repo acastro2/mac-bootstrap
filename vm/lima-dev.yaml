@@ -1,0 +1,59 @@
+# Lima VM for coding agents (opencode, Claude Code) behind a Rex server.
+#
+# Why this shape: agents run with few permission prompts. The VM bounds what a
+# bad command can reach: the guest has its own disk under ~/.lima/agent and
+# NO host mounts. Code lives in VM-owned clones; GitHub is the only path
+# between the Mac and the guest, so the Mac never runs a file the VM wrote.
+#
+# Usage:
+#   limactl create --name=agent vm/lima-dev.yaml
+#   limactl start agent
+#   ssh lima-agent                 # ~/.ssh/config includes ~/.lima/*/ssh.config
+#   limactl stop agent             # RAM back to the Mac
+#   limactl delete agent           # throw the whole box away
+
+vmType: vz
+os: Linux
+arch: aarch64
+
+cpus: 4
+memory: 8GiB
+disk: 40GiB
+
+# No shared folders. VS Code and Zed edit the clones over Remote-SSH.
+mounts: []
+
+images:
+  # Ubuntu 24.04 LTS, aarch64. Lima fills in the digest on first create.
+  - location: "https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-arm64.img"
+    arch: "aarch64"
+
+# Lima forwards every guest localhost port to the Mac by default. 19988 is
+# the browse relay: the Mac owns it and `rex forward -R` brings it INTO the
+# guest. Mirroring it back makes a loop that grabs the port before the Mac
+# relay can bind it.
+portForwards:
+  - guestPort: 19988
+    ignore: true
+
+# Forward the Mac's ssh-agent so git and gh reach 1Password without a key
+# file living in the VM.
+ssh:
+  forwardAgent: true
+  loadDotSSHPubKeys: true
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      # Lima runs provision scripts on EVERY boot. Run the apt work once:
+      # repeating it slows each start, and bootstrap.sh owns the toolchain.
+      set -eux
+      MARKER=/var/lib/lima-agent-provisioned
+      [ -f "$MARKER" ] && exit 0
+      export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+      apt-get update
+      apt-get install -y git curl ca-certificates unzip jq ripgrep fd-find fzf build-essential \
+        bubblewrap socat python3 python3-pip
+      ln -sf "$(command -v fdfind)" /usr/local/bin/fd || true
+      touch "$MARKER"

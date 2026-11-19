@@ -34,6 +34,7 @@ brew "k9s"
 brew "helm"
 brew "awscli"
 brew "colima"          # Docker runtime (no Docker Desktop)
+brew "lima"            # VM for coding agents; sized by the vm phase from this Mac
 brew "docker"          # Docker CLI
 brew "docker-compose"  # Docker Compose CLI plugin
 brew "crane"           # inspect/copy container images without pulling
@@ -51,7 +52,7 @@ cask "1password", args: { appdir: "/Applications" } # must live in /Applications
 cask "1password-cli"
 cask "claude"          # Claude Desktop app (CLI installed separately via native installer in bootstrap.sh)
 cask "ghostty"
-cask "visual-studio-code@insiders"
+cask "visual-studio-code"
 cask "zed"
 cask "tflint"
 cask "copilot-cli"     # GitHub Copilot CLI
@@ -63,3 +64,8 @@ cask "keepingyouawake" # Amphetamine alternative
 # ── Fonts ──────────────────────────────────────────────────────────────
 cask "font-jetbrains-mono-nerd-font"
 cask "font-geist-mono"
+
+# Rex Agent Restore: resumes agent chats after a Rex restart (community, MIT).
+# Its repo is not homebrew-*, so the tap needs the URL.
+tap "pattont/rex-agent-restore", "https://github.com/pattont/RexAgentRestore"
+brew "pattont/rex-agent-restore/rex-agent-restore"

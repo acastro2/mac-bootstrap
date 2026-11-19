@@ -7,7 +7,9 @@
 #   ./bootstrap.sh --clean                     # remove managed artifacts before a fresh re-run
 #   ./bootstrap.sh --clean --dry-run           # print the cleanup plan, remove nothing
 #   ./bootstrap.sh --only=doctor --strict      # exit 1 when a managed install is wrong
+#   ./bootstrap.sh --only=vm                   # create or resize the Lima agent VM
 #   ./bootstrap.sh --dump-tools                # print the managed install registry
+#   ./bootstrap.sh --dump-vm-resources         # print the agent VM size this Mac allows
 #   ./bootstrap.sh --export-sessions           # pack session data to ~/Desktop for airdrop
 #   ./bootstrap.sh --export-workspace          # pack ~/Developer (minus org repos) for airdrop
 #   ./bootstrap.sh --import-sessions=<file>    # restore session data from tarball
@@ -27,6 +29,8 @@ OPENCODE_WEB_PORT=""
 CLAUDE_CONFIG_REPO=""
 REA_VERSION="6.8.0"   # pinned like the Brewfile: bump deliberately, then re-run
 REX_OP_ITEM=""   # 1Password item with the Rex beta URLs (fields: appcast, mcp)
+AGENT_VM=""   # Lima instance for agents; empty skips the vm phase
+REX_RESTORE_AGENTS=""   # agents Rex Agent Restore wires, comma list; empty = every one found
 SYSTEM_APPDIR="${SYSTEM_APPDIR:-/Applications}"   # test seam: the system Applications folder
 
 # Source personal config if present. This fork commits config.env, so it is
@@ -103,6 +107,105 @@ find_rex_app() {
     fi
   done
   return 1
+}
+
+# ── Agent VM sizing ──────────────────────────────────────────────────
+# vm_resources — size the agent VM from this Mac. Sets VM_CPUS, VM_MEM_GB,
+# VM_DISK_GB, VM_FREE_GB and VM_LOW_DISK (GiB, integer math). HOST_NCPU,
+# HOST_MEM_BYTES and HOST_FREE_BYTES override the facts; tests use them so the
+# sizing never reads the real machine.
+vm_resources() {
+  local ncpu mem_bytes free_bytes mem_gib free_gib
+  ncpu="${HOST_NCPU:-$(sysctl -n hw.ncpu 2>/dev/null || true)}"
+  mem_bytes="${HOST_MEM_BYTES:-$(sysctl -n hw.memsize 2>/dev/null || true)}"
+  free_bytes="${HOST_FREE_BYTES:-$(df -k "$HOME" 2>/dev/null | awk 'NR==2 {print $4 * 1024}' || true)}"
+  ncpu="${ncpu:-4}"
+  mem_bytes="${mem_bytes:-8589934592}"
+  free_bytes="${free_bytes:-0}"
+  mem_gib=$(( mem_bytes / 1073741824 ))
+  free_gib=$(( free_bytes / 1073741824 ))
+
+  VM_CPUS=$(( ncpu > 2 ? ncpu - 2 : 2 ))
+  VM_MEM_GB=$(( mem_gib / 2 ))
+  if (( VM_MEM_GB > mem_gib - 8 )); then VM_MEM_GB=$(( mem_gib - 8 )); fi
+  if (( VM_MEM_GB < 4 )); then VM_MEM_GB=4; fi
+  VM_DISK_GB=$(( free_gib / 2 ))
+  if (( VM_DISK_GB > 100 )); then VM_DISK_GB=100; fi
+  if (( VM_DISK_GB < 40 )); then VM_DISK_GB=40; fi
+  VM_FREE_GB=$free_gib
+  VM_LOW_DISK=false
+  if (( free_gib < VM_DISK_GB + 20 )); then VM_LOW_DISK=true; fi
+}
+
+vm_resources_line() {
+  printf 'cpus=%s memory=%s disk=%s' "$VM_CPUS" "$VM_MEM_GB" "$VM_DISK_GB"
+  if $VM_LOW_DISK; then
+    printf ' low disk: %s GiB free' "$VM_FREE_GB"
+  fi
+  printf '\n'
+}
+
+# vm_state — print the limactl JSON object for $AGENT_VM, or nothing.
+vm_state() {
+  local line
+  line="$(limactl list --format json 2>/dev/null \
+    | jq -c --arg n "$AGENT_VM" 'select(.name == $n)' 2>/dev/null \
+    | head -n 1 || true)"
+  [[ -n "$line" ]] || return 1
+  printf '%s\n' "$line"
+}
+
+vm_field() {
+  printf '%s' "$1" | jq -r --arg k "$2" '.[$k] // empty' 2>/dev/null || true
+}
+
+# vm_ssh_include — make ~/.ssh/config start with Lima's ssh include. ssh
+# applies an Include after a Host block only inside that block, so the line
+# must come first; later copies of the same line are dropped.
+vm_ssh_include() {
+  local cfg="$HOME/.ssh/config" inc='Include ~/.lima/*/ssh.config' count first stamp tmp
+  if ! mkdir -p "$HOME/.ssh" || ! chmod 700 "$HOME/.ssh"; then
+    warn "Could not prepare ~/.ssh; skipping the Lima ssh include."
+    return 0
+  fi
+  if [[ ! -e "$cfg" ]]; then
+    if printf '%s\n' "$inc" > "$cfg" && chmod 600 "$cfg"; then
+      log "Created ~/.ssh/config with the Lima include"
+    else
+      warn "Could not create ~/.ssh/config; skipping the Lima ssh include."
+    fi
+    return 0
+  fi
+  first="$(head -n 1 "$cfg" 2>/dev/null || true)"
+  count="$(grep -cxF "$inc" "$cfg" 2>/dev/null || true)"
+  count="${count:-0}"
+  if [[ "$first" == "$inc" && "$count" -eq 1 ]]; then
+    return 0
+  fi
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  if ! cp -p "$cfg" "$cfg.bak.$stamp"; then
+    warn "Could not back up ~/.ssh/config; leaving it untouched."
+    return 0
+  fi
+  if ! tmp="$(mktemp "$cfg.tmp.XXXXXX")"; then
+    warn "Could not edit ~/.ssh/config."
+    return 0
+  fi
+  if ! {
+    printf '%s\n' "$inc"
+    grep -vxF "$inc" "$cfg" || true
+  } > "$tmp"; then
+    rm -f "$tmp"
+    warn "Could not edit ~/.ssh/config."
+    return 0
+  fi
+  if ! mv "$tmp" "$cfg"; then
+    rm -f "$tmp"
+    warn "Could not replace ~/.ssh/config."
+    return 0
+  fi
+  chmod 600 "$cfg"
+  log "Added the Lima include as line 1 of ~/.ssh/config (backup: config.bak.$stamp)"
 }
 
 # rex_op_field <field> — print one field of the gated Rex beta 1Password item.
@@ -213,7 +316,7 @@ cortex|script|.local/bin/cortex||.local/bin/cortex
 tgrep|script|.local/bin/tgrep||.local/bin/tgrep
 playwright|uv|.local/bin/playwright|playwright|.local/bin/playwright .local/share/uv/tools/playwright
 browser-use|uv|.local/bin/browser-use|browser-use|.local/bin/browser-use .local/share/uv/tools/browser-use
-code-insiders|app|.local/bin/code-insiders|Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code|.local/bin/code-insiders
+code|app|.local/bin/code|Applications/Visual Studio Code.app/Contents/Resources/app/bin/code|.local/bin/code
 zed|app|.local/bin/zed|Applications/Zed.app/Contents/MacOS/cli|.local/bin/zed
 docker-compose|plugin|.docker/cli-plugins/docker-compose||.docker/cli-plugins/docker-compose
 EOF
@@ -370,6 +473,7 @@ EXPORT_WORKSPACE=false
 IMPORT_SESSIONS=""
 STRICT=false
 DUMP_TOOLS=false
+DUMP_VM_RESOURCES=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip=*) SKIP="${1#*=}"; shift ;;
@@ -380,6 +484,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) CLEAN_DRY_RUN=true; shift ;;
     --strict) STRICT=true; shift ;;
     --dump-tools) DUMP_TOOLS=true; shift ;;
+    --dump-vm-resources) DUMP_VM_RESOURCES=true; shift ;;
     --export-sessions) EXPORT_SESSIONS=true; shift ;;
     --export-workspace) EXPORT_WORKSPACE=true; shift ;;
     --import-sessions=*) IMPORT_SESSIONS="${1#*=}"; shift ;;
@@ -391,6 +496,13 @@ done
 # Read-only view of the registry. Tests and CI use it to check the table.
 if $DUMP_TOOLS; then
   managed_rows
+  exit 0
+fi
+
+# Read-only view of the VM size, for tests and for a pre-flight check.
+if $DUMP_VM_RESOURCES; then
+  vm_resources
+  vm_resources_line
   exit 0
 fi
 
@@ -745,18 +857,23 @@ if should_run packages; then
 section "Packages (Brewfile)"
 log "Installing packages (this takes a while on a fresh machine)..."
 # --no-upgrade: bootstrap maps the machine to an installed set. Upgrades (and
-# the VSCode Insiders self-update desync they trigger) happen via `brew upgrade`.
+# the VS Code self-update desync they trigger) happen via `brew upgrade`.
 BREWFILE="Brewfile"
 $IS_MACOS || BREWFILE="Brewfile.linux"
 # Homebrew refuses to load formulae/casks from third-party taps until they are
 # trusted (tflint only ships from terraform-linters/tap), so trust every tap the
 # Brewfile declares before bundling.
 if brew trust --help &>/dev/null; then
-  while IFS= read -r _tap; do
-    brew tap "$_tap" >/dev/null 2>&1 || true
+  # A tap whose repo is not named homebrew-* needs its URL (tap "a/b", "URL").
+  while IFS='|' read -r _tap _tap_url; do
+    if [[ -n "$_tap_url" ]]; then
+      brew tap "$_tap" "$_tap_url" >/dev/null 2>&1 || true
+    else
+      brew tap "$_tap" >/dev/null 2>&1 || true
+    fi
     brew trust "$_tap" >/dev/null 2>&1 || warn "Could not trust tap $_tap."
-  done < <(sed -n 's/^tap "\([^"]*\)".*/\1/p' "$BREWFILE")
-  unset _tap
+  done < <(sed -n 's/^tap "\([^"]*\)"\(, *"\([^"]*\)"\)\{0,1\}.*/\1|\3/p' "$BREWFILE")
+  unset _tap _tap_url
 fi
 if $IS_MACOS; then
   log "Using Brewfile (macOS)"
@@ -835,10 +952,10 @@ fi
 if should_run app-clis && $IS_MACOS; then
 section "App CLI commands"
 mkdir -p "$HOME/.local/bin"
-VSC_APP="$HOME/Applications/Visual Studio Code - Insiders.app"
+VSC_APP="$HOME/Applications/Visual Studio Code.app"
 if [[ -d "$VSC_APP" ]]; then
-  ln -sf "$VSC_APP/Contents/Resources/app/bin/code" "$HOME/.local/bin/code-insiders"
-  log "code-insiders → PATH"
+  ln -sf "$VSC_APP/Contents/Resources/app/bin/code" "$HOME/.local/bin/code"
+  log "code → PATH"
 fi
 ZED_APP="$HOME/Applications/Zed.app"
 if [[ -d "$ZED_APP" ]]; then
@@ -867,13 +984,20 @@ chmod 600 "$HOME/.config/zsh/.api-keys.zsh"
 touch "$HOME/.config/zsh/local.zsh"
 
 if command -v opencode &>/dev/null; then
+  OC_COMPLETIONS_BIN="$(command -v opencode)"
+elif [[ -x "$HOME/.opencode/bin/opencode" ]]; then
+  OC_COMPLETIONS_BIN="$HOME/.opencode/bin/opencode"
+else
+  OC_COMPLETIONS_BIN=""
+fi
+if [[ -n "$OC_COMPLETIONS_BIN" ]]; then
   log "Caching opencode completions"
   # V2 spells this `--completions zsh`. The old `completion zsh` exits 1 and
   # prints the help text, so write to a temp file and only accept real output:
   # a bad file here breaks every new shell, since .zshrc sources it.
   OC_COMPLETIONS="$HOME/.config/zsh/opencode-completions.zsh"
   OC_COMPLETIONS_TMP="$OC_COMPLETIONS.tmp"
-  if opencode --completions zsh > "$OC_COMPLETIONS_TMP" 2>/dev/null \
+  if "$OC_COMPLETIONS_BIN" --completions zsh > "$OC_COMPLETIONS_TMP" 2>/dev/null \
     && grep -q -- '###-begin-opencode-completions-###' "$OC_COMPLETIONS_TMP"; then
     mv "$OC_COMPLETIONS_TMP" "$OC_COMPLETIONS"
   else
@@ -1079,9 +1203,13 @@ if [[ ! -x "$HOME/.local/bin/tgrep" ]]; then
   if [[ -n "$TGREP_TARGET" ]]; then
     TGREP_TMP="$(mktemp -d)"
     if gh release download --repo microsoft/tgrep -p "*${TGREP_TARGET}*" -D "$TGREP_TMP" 2>/dev/null; then
-      tar xzf "$TGREP_TMP"/tgrep-*.tar.gz -C "$TGREP_TMP" tgrep
-      install -m 755 "$TGREP_TMP/tgrep" "$HOME/.local/bin/tgrep"
-      log "Installed tgrep: $("$HOME/.local/bin/tgrep" --version)"
+      # GNU tar and bsdtar differ on members named ./tgrep, so unpack all of it.
+      if tar xzf "$TGREP_TMP"/tgrep-*.tar.gz -C "$TGREP_TMP" \
+        && install -m 755 "$TGREP_TMP/tgrep" "$HOME/.local/bin/tgrep"; then
+        log "Installed tgrep: $("$HOME/.local/bin/tgrep" --version 2>/dev/null || echo 'unknown')"
+      else
+        warn "tgrep archive extract failed; skipping."
+      fi
     else
       warn "tgrep download failed (check gh auth); skipping."
     fi
@@ -1090,7 +1218,7 @@ if [[ ! -x "$HOME/.local/bin/tgrep" ]]; then
     warn "No tgrep release for $(uname -s)-$(uname -m); skipping."
   fi
 else
-  log "Already installed: $(tgrep --version 2>/dev/null || echo 'unknown')"
+  log "Already installed: $("$HOME/.local/bin/tgrep" --version 2>/dev/null || echo 'unknown')"
 fi
 warn_if_shadowed tgrep
 fi
@@ -1100,7 +1228,8 @@ if should_run mise; then
 section "mise"
 log "Writing mise global config"
 mkdir -p "$HOME/.config/mise"
-cat > "$HOME/.config/mise/config.toml" << 'EOF'
+{
+  cat << 'EOF'
 # Global toolchain pins. Override per-project with .mise.toml or .tool-versions.
 [tools]
 go         = "latest"
@@ -1112,11 +1241,19 @@ opentofu   = "latest"
 "npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
 "npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
 "npm:ctx7"             = "latest"   # Context7 documentation CLI
+EOF
+  # tflint has no Linux formula (the tap ships a macOS cask), so Linux gets the
+  # aqua release. Never both: doctor would see one shadow the other.
+  if ! $IS_MACOS; then
+    printf '%s\n' '"aqua:terraform-linters/tflint" = "latest"'
+  fi
+  cat << 'EOF'
 
 [settings]
 experimental = true
 python.github_attestations = false
 EOF
+} > "$HOME/.config/mise/config.toml"
 log "Trusting mise config so shells start without a prompt"
 mise trust "$HOME/.config/mise/config.toml" \
   || warn "mise trust failed; the first shell may prompt to trust the config."
@@ -1187,7 +1324,9 @@ section "Authentication"
 
 # ── 1Password ─────────────────────────────────────────────────────────
 echo ""
-if [[ -n "$OP_VAULT" ]]; then
+if [[ -n "$OP_VAULT" ]] && ! command -v op >/dev/null 2>&1; then
+  log "1Password CLI (op) not installed here — skipping 1Password setup"
+elif [[ -n "$OP_VAULT" ]]; then
   if op account list 2>/dev/null | grep . >/dev/null; then
     log "1Password CLI already configured."
   else
@@ -1441,6 +1580,230 @@ else
 fi
 fi
 
+# ── Agent VM (Lima) ─────────────────────────────────────────────────────
+# Runs coding agents in a Linux guest with its own disk and no host mounts.
+# The guest holds its own clones; GitHub is the only path between the two.
+# Every failure here warns: a VM must never fail the Mac's bootstrap.
+# vm_up_agent: install and load the login agent that runs vm/vm-up.sh (VM,
+# Mac browse relay, rex forward tunnel). KeepAlive restarts it when the
+# forward exits. Reloaded only when the plist changes.
+vm_up_agent() {
+  local label="io.mac-bootstrap.vm-up" dir="$HOME/Library/LaunchAgents" plist new
+  plist="$dir/$label.plist"
+  mkdir -p "$dir" "$HOME/.local/state/rex-vm"
+  new="$(cat <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key>
+  <array><string>$SCRIPT_DIR/vm/vm-up.sh</string></array>
+  <key>EnvironmentVariables</key>
+  <dict><key>AGENT_VM</key><string>$AGENT_VM</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>$HOME/.local/state/rex-vm/vm-up.log</string>
+  <key>StandardErrorPath</key><string>$HOME/.local/state/rex-vm/vm-up.log</string>
+</dict>
+</plist>
+PLIST
+)"
+  if [[ -f "$plist" ]] && [[ "$(cat "$plist")" == "$new" ]]; then
+    # Restart it so a changed vm-up.sh takes effect now, not at next login.
+    if launchctl kickstart -k "gui/$(id -u)/$label" >/dev/null 2>&1; then
+      log "vm-up login agent restarted"
+    else
+      log "vm-up login agent already installed"
+    fi
+    return 0
+  fi
+  launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
+  printf '%s\n' "$new" > "$plist"
+  if launchctl bootstrap "gui/$(id -u)" "$plist"; then
+    log "vm-up login agent loaded ($plist)"
+  else
+    warn "Could not load $plist; run: launchctl bootstrap gui/\$(id -u) $plist"
+  fi
+}
+
+# ── Rex Agent Restore ─────────────────────────────────────────────────
+# Resumes each pane's agent chat after a Rex server restart. Runs after auth,
+# because its installer only wires agents whose config dirs exist. The zsh
+# part lives in home/dot_zshrc (chezmoi owns ~/.zshrc), hence --no-shell.
+# Its hooks bake in this machine's absolute path, so ~/.claude/settings.json
+# and the OpenCode plugin differ between the Mac and the VM.
+if should_run rex-restore; then
+section "Rex Agent Restore"
+if command -v rex-agent-restore &>/dev/null; then
+  RAR_ARGS=(install --no-shell)
+  [[ -n "$REX_RESTORE_AGENTS" ]] && RAR_ARGS+=(--agents "$REX_RESTORE_AGENTS")
+  rex-agent-restore "${RAR_ARGS[@]}" || warn "rex-agent-restore install failed; run it by hand."
+  log "Before a Rex restart, save open chats with: rex-agent-restore capture"
+else
+  warn "rex-agent-restore not installed (Brewfile: pattont/rex-agent-restore); skipping."
+fi
+fi
+
+if should_run vm && $IS_MACOS && [[ -n "$AGENT_VM" ]]; then
+section "Agent VM (Lima)"
+if ! command -v limactl >/dev/null 2>&1; then
+  warn "limactl not found; run ./bootstrap.sh --only=packages, then ./bootstrap.sh --only=vm"
+elif ! command -v jq >/dev/null 2>&1; then
+  warn "jq not found; run ./bootstrap.sh --only=packages, then ./bootstrap.sh --only=vm"
+else
+  vm_resources
+  VM_STATE_LINE="$(vm_state || true)"
+  if [[ -z "$VM_STATE_LINE" ]]; then
+    log "Creating $AGENT_VM: $VM_CPUS CPUs, ${VM_MEM_GB}GiB RAM, ${VM_DISK_GB}GiB disk"
+    if $VM_LOW_DISK; then
+      warn "Low disk: ${VM_FREE_GB}GiB free, the VM takes ${VM_DISK_GB}GiB."
+    fi
+    if limactl create --name="$AGENT_VM" --cpus="$VM_CPUS" --memory="$VM_MEM_GB" \
+        --disk="$VM_DISK_GB" --tty=false "$SCRIPT_DIR/vm/lima-dev.yaml"; then
+      limactl start "$AGENT_VM" --tty=false \
+        || warn "Could not start $AGENT_VM; run: limactl start $AGENT_VM"
+    else
+      warn "Could not create $AGENT_VM; re-run: ./bootstrap.sh --only=vm"
+    fi
+  else
+    VM_STATUS="$(vm_field "$VM_STATE_LINE" status)"
+    VM_HAVE_CPUS="$(vm_field "$VM_STATE_LINE" cpus)"
+    VM_HAVE_MEM="$(vm_field "$VM_STATE_LINE" memory)"
+    VM_HAVE_CPUS="${VM_HAVE_CPUS:-0}"
+    VM_HAVE_MEM="${VM_HAVE_MEM:-0}"
+    if (( VM_HAVE_CPUS < VM_CPUS )) || (( VM_HAVE_MEM < VM_MEM_GB * 1073741824 )); then
+      if [[ "$VM_STATUS" == "Running" ]]; then
+        warn "VM is smaller than this Mac allows; run: limactl stop $AGENT_VM && ./bootstrap.sh --only=vm"
+      else
+        log "Resizing $AGENT_VM: $VM_CPUS CPUs, ${VM_MEM_GB}GiB RAM (disk untouched)"
+        if limactl edit "$AGENT_VM" --cpus="$VM_CPUS" --memory="$VM_MEM_GB" --tty=false; then
+          limactl start "$AGENT_VM" --tty=false \
+            || warn "Could not start $AGENT_VM; run: limactl start $AGENT_VM"
+        else
+          warn "Could not edit $AGENT_VM; run: limactl edit $AGENT_VM --cpus=$VM_CPUS --memory=$VM_MEM_GB"
+        fi
+      fi
+    else
+      log "$AGENT_VM is $VM_STATUS and sized as this Mac allows."
+      # The guest steps below need it up.
+      if [[ "$VM_STATUS" != "Running" ]]; then
+        limactl start "$AGENT_VM" --tty=false \
+          || warn "Could not start $AGENT_VM; run: limactl start $AGENT_VM"
+      fi
+    fi
+  fi
+
+  # Start the VM at login, so after a Mac restart Rex's vm host comes back
+  # without a manual `limactl start`. Re-enabling is harmless.
+  limactl autostart enable "$AGENT_VM" --tty=false \
+    || warn "Could not register $AGENT_VM for autostart; run: limactl autostart enable $AGENT_VM"
+
+  vm_ssh_include
+
+  if [[ -f "$HOME/.config/zsh/.api-keys.zsh" ]]; then
+    log "Copying API keys into $AGENT_VM"
+    # limactl shell quotes each argument, so a bare '~' reaches the guest
+    # unexpanded (it made a directory named "~"). Let the guest's bash expand
+    # $HOME instead. scp resolves the relative copy target from the guest home.
+    # shellcheck disable=SC2016  # $HOME is the guest's, expanded there.
+    limactl shell "$AGENT_VM" -- bash -c 'mkdir -p "$HOME/.config/zsh" && chmod 700 "$HOME/.config/zsh"' \
+      || warn "Could not create ~/.config/zsh in $AGENT_VM."
+    limactl copy "$HOME/.config/zsh/.api-keys.zsh" "$AGENT_VM:.config/zsh/.api-keys.zsh" \
+      || warn "Could not copy the API keys into $AGENT_VM."
+    # shellcheck disable=SC2016
+    limactl shell "$AGENT_VM" -- bash -c 'chmod 600 "$HOME/.config/zsh/.api-keys.zsh"' \
+      || warn "Could not set mode 600 on the guest API keys."
+  fi
+
+  # The VM's browse client talks to the Mac relay through the vm-up tunnel and
+  # authenticates with the relay's token.
+  if [[ -f "$HOME/.local/share/browse/relay-token" ]]; then
+    # shellcheck disable=SC2016  # $HOME is the guest's, expanded there.
+    limactl shell "$AGENT_VM" -- bash -c 'mkdir -p "$HOME/.local/share/browse" && chmod 700 "$HOME/.local/share/browse"' \
+      || warn "Could not create the browse dir in $AGENT_VM."
+    limactl copy "$HOME/.local/share/browse/relay-token" "$AGENT_VM:.local/share/browse/relay-token" \
+      || warn "Could not copy the browse relay token into $AGENT_VM."
+    # shellcheck disable=SC2016
+    limactl shell "$AGENT_VM" -- bash -c 'chmod 600 "$HOME/.local/share/browse/relay-token"' \
+      || warn "Could not set mode 600 on the guest relay token."
+  fi
+
+  GUEST_SCRIPT="$(cat <<'EOF'
+set -e
+GUEST_DIR=$HOME/Developer/github/acastro2/mac-bootstrap
+if [ ! -d "$GUEST_DIR/.git" ]; then
+  mkdir -p "$(dirname "$GUEST_DIR")"
+  git clone __REPO_URL__ "$GUEST_DIR"
+else
+  # --no-rebase: the dotfiles set pull.rebase, which refuses any local edit.
+  git -C "$GUEST_DIR" pull --ff-only --no-rebase \
+    || echo "warning: could not update $GUEST_DIR; using the local checkout"
+fi
+cd "$GUEST_DIR"
+./bootstrap.sh --skip=xcode,macos-defaults,appdir,app-clis,herdr,opencode-web,rea,ssh,secrets,auth,vm,rex,doctor
+# browse CLI for the browse MCP; it reaches the Mac relay through vm-up.
+# A bash login shell here has neither brew nor mise on PATH; load them, and
+# run npm through mise so it is the node the global config pins.
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+# Link the native binary the package ships, not its node launcher: node is
+# only on PATH where mise is active, and agents may start browse elsewhere.
+# A node upgrade moves the path; re-run ./bootstrap.sh --only=vm to relink.
+# (no `case` here: bash 3.2 misparses its ")" inside this $(cat <<EOF).)
+if [ "$(uname -m)" = x86_64 ]; then BROWSE_ARCH=x64; else BROWSE_ARCH=arm64; fi
+BROWSE_BIN="$(mise exec -- npm root -g)/@opencode/browse/node_modules/@opencode/browse-linux-$BROWSE_ARCH/bin/browse"
+mise exec -- npm install -g @opencode/browse >/dev/null \
+  && [ -x "$BROWSE_BIN" ] \
+  && mkdir -p "$HOME/.local/bin" \
+  && ln -sfn "$BROWSE_BIN" "$HOME/.local/bin/browse" \
+  || echo "warning: could not install the browse CLI"
+EOF
+)"
+  GUEST_SCRIPT="${GUEST_SCRIPT//__REPO_URL__/$REPO_URL}"
+  if limactl shell "$AGENT_VM" -- bash -lc "$GUEST_SCRIPT"; then
+    log "Guest bootstrap finished in $AGENT_VM"
+  else
+    warn "Guest bootstrap failed; run: limactl shell $AGENT_VM -- bash -lc 'cd ~/Developer/github/acastro2/mac-bootstrap && ./bootstrap.sh'"
+  fi
+
+  if REX_APP="$(find_rex_app 2>/dev/null)"; then
+    REX_CLI="$REX_APP/Contents/Helpers/Rex Server.rex/Contents/MacOS/rex"
+    # A guest that already answers keeps its Rex: `server install ssh://`
+    # would add a second rex in ~/.local/bin next to an existing one.
+    if limactl shell "$AGENT_VM" -- bash -lc 'rex server status' >/dev/null 2>&1; then
+      log "Rex server already running in $AGENT_VM"
+    elif [[ -x "$REX_CLI" ]]; then
+      if "$REX_CLI" server install "ssh://lima-$AGENT_VM" --label vm --yes; then
+        log "Rex server installed in $AGENT_VM (host label: vm)"
+      else
+        warn "Rex server install failed; run it from Rex.app."
+      fi
+    else
+      warn "Rex CLI not found in $REX_APP; open Rex once, then re-run: ./bootstrap.sh --only=vm"
+    fi
+  else
+    warn "Rex not installed; the VM has no Rex server yet (./bootstrap.sh --only=rex)."
+  fi
+
+  # `code .` in the VM opens VS Code on the Mac over Remote-SSH (vm-up.sh).
+  if [[ -x "$HOME/.local/bin/code" ]]; then
+    "$HOME/.local/bin/code" --list-extensions 2>/dev/null | grep -qx ms-vscode-remote.remote-ssh \
+      || "$HOME/.local/bin/code" --install-extension ms-vscode-remote.remote-ssh >/dev/null \
+      || warn "Could not install the VS Code Remote-SSH extension."
+  fi
+  # One pass of the self-heal now (keys, relay token, browse link, rex,
+  # code inbox); the vm-up login agent repeats it every 5 minutes.
+  "$SCRIPT_DIR/vm/vm-up.sh" --heal || warn "vm-up heal pass failed."
+  vm_up_agent
+  log "Agent VM next steps:"
+  log "  In a 'vm' tab: gh auth login"
+  log "  In the guest: ./bootstrap.sh --only=auth,rex-restore   # config repos, then agent restore hooks"
+  log "  In the guest: claude, then /login"
+fi
+fi
+
 # ── Doctor ──────────────────────────────────────────────────────────────
 if should_run doctor; then
 section "Doctor"
@@ -1565,3 +1928,11 @@ log "Next steps:"
 log "  aws sso login --profile <your-profile>"
 log "  mise install   # if any tools need (re)installing"
 log "  Sign in to desktop apps (Slack, VS Code, etc.)"
+# Rex.app keeps its own host list: `rex hosts add` from the CLI does not show
+# in the app, and the app refuses scripted actions unless Remote Control is on
+# (left off on purpose). So the one-time add is a manual step; remind it.
+if $IS_MACOS && command -v limactl &>/dev/null \
+  && limactl list --format '{{.Name}}' 2>/dev/null | grep -qx agent; then
+  log "  Rex.app, once per Mac: ⌘⇧P → Add Remote Host… → ssh://lima-agent,"
+  log "    then ⌘⇧P → Switch Host → lima-agent. New tabs then open in the VM."
+fi

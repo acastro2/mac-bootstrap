@@ -164,3 +164,10 @@ macos_only() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Zed.app"*"/Applications"* ]]
 }
+
+@test "registry links regular VS Code as code, no Insiders" {
+  run "$REPO/bootstrap.sh" --only=__none__ --dump-tools
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"code|app|.local/bin/code|Applications/Visual Studio Code.app/Contents/Resources/app/bin/code|"* ]]
+  [[ "$output" != *"nsiders"* ]]
+}
