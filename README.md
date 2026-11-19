@@ -15,7 +15,7 @@ A den works like a lab glovebox. The dangerous work happens inside a sealed box,
 | The glove ports | Rex on the Mac, reaching into the VM over SSH. Your hands go in; your Mac's files never do. |
 | The airlock with the hand wheel | The only way keys go in: 1Password Document `den` → `~/.config/zsh/.api-keys.zsh` in the VM. |
 | The gauge below zero | No host mounts and no SSH agent forwarding. A leak pulls air in, never out. |
-| The one sealed cable | The only lines back to the Mac: `code .` opens VS Code on a VM folder, and the browse tunnel lets VM agents drive your browser. |
+| The one sealed cable | The only lines back to the Mac: the browse tunnel lets VM agents drive your browser, `code .` asks for a VS Code window, and dev-server ports show up on the Mac. Each one is a bridge in [The bridges](#the-bridges). |
 | The lamp on the lid | `vm-up`, the login agent that restarts the VM and heals it inside. |
 
 The figure is code: `node docs/den/scenes/glovebox/build.mjs` (needs the `anatomy` skill).
@@ -25,6 +25,31 @@ The figure is code: `node docs/den/scenes/glovebox/build.mjs` (needs the `anatom
 Coding agents run with few permission prompts. On a Mac, one wrong command from an agent can break the OS install, and on a managed Mac that can mean a wipe. So the agents live in a Lima VM, and the Mac is only the window, the keys, the browser and the VM host. A bad command in the VM can only damage the VM, and `den vm rebuild` gets you a new one.
 
 The VM is a real dev box, not a jail: it gets every API key, its own GitHub login, Docker, and a synced copy of your vault. What it never gets is your Mac's files, your SSH agent, or a way to run code on the Mac. The one exception is `code .`, which can only ask the Mac to open a VS Code window on a VM folder.
+
+## The bridges
+
+The Mac and the VM touch in exactly these places. **The Mac opens every connection**: the VM cannot log in to the Mac, cannot read its files, and cannot start anything there except a VS Code window (bridge 5). The one thing a VM process can reach on the Mac is the browse relay, through a tunnel the Mac opened.
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/den/img/bridges-light.svg">
+  <img alt="The nine bridges between the Mac and the agent VM. Blue: the Mac sends into the VM (1 Rex SSH, 2 VS Code Remote-SSH, 3 key copy, 6 control). Amber: VM traffic that reaches the Mac through a door the Mac opened (4 browse tunnel, 5 code . inbox pulled by the Mac, 7 Lima port mirror). Grey: GitHub and Obsidian Sync, no direct link." src="docs/den/img/bridges-dark.svg">
+</picture>
+
+| # | Bridge | Who opens it | What crosses | The guard |
+| --- | --- | --- | --- | --- |
+| 1 | Rex tabs | Rex.app, over SSH to `lima-agent` | your keystrokes and the terminal | the Rex server listens only on a Unix socket in the VM (mode 600); SSH is the only way to it |
+| 2 | VS Code | VS Code Remote-SSH | files of the folder you open | the editor runs on the Mac, the files stay in the VM |
+| 3 | API keys and the browse relay token | den and vm-up, with `limactl copy` | two files | mode 600; copied by `den up`, then by vm-up only when the content changes |
+| 4 | Browser control | vm-up runs `rex forward` from the Mac into the VM | browse commands from VM agents to your browser | VM port 19988 reaches only the relay; the tunnel lives in its own Rex session `den` |
+| 5 | `code .` | vm-up pulls the inbox over SSH | one folder path per line | absolute path only, 1024 characters max, no control characters, the same path at most once in 10 s, 5 opens a minute at most |
+| 6 | Lifecycle | vm-up and `den up` | start and restart, the guest heal script, a copy of this repo | one way, Mac to VM |
+| 7 | Dev servers | your Mac browser, through Lima | HTTP to `localhost:<port>` | every guest localhost port is mirrored except 19988, so a VM process can listen on a Mac loopback port: a deliberate trade for dev servers that just work |
+| 8 | GitHub | each side on its own | code, through pushes and pulls | the VM has its own `gh` login; the Mac's SSH agent never goes in |
+| 9 | Obsidian | each side on its own | notes | config sync is off in the VM (`--configs ""`), so it can never push plugins to the Mac |
+
+The picture is code: `python3 docs/den/scenes/bridges/build.py`.
+
+**What never crosses:** your Mac's files (no shared folders), your SSH agent (no forwarding), your Mac login (the VM has no way in), and anything that runs on the Mac at the VM's request, apart from bridge 5 opening a VS Code window.
 
 ## Quick start
 
