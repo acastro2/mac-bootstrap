@@ -50,6 +50,7 @@ den_cmd_doctor() {
     shift
   done
   ui_banner
+  DEN_DOCTOR_PHASES=""
   for fn in $(declare -F | awk '{print $3}' | grep '^den_doctor_' | sort || true); do
     name=${fn#den_doctor_}
     ui_section "Doctor: $name"
@@ -66,6 +67,9 @@ den_cmd_doctor() {
   fi
   if [ "$broken" -gt 0 ]; then
     ui_warn "doctor: $total checks, $broken broken"
+    if [ -n "$DEN_DOCTOR_PHASES" ]; then
+      ui_info "den fix reruns: ${DEN_DOCTOR_PHASES// /, }"
+    fi
   else
     ui_ok "doctor: $total checks, nothing broken"
   fi

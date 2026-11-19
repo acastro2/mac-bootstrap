@@ -127,3 +127,34 @@ entries() { # entries FILE: one token per brew/cask/tap line
   jq -e '.results[] | select(.phase=="sudo-touchid") | .status == "skipped" and (.fix|length>0)' "$DEN_STATE_DIR/last-run.json"
   [[ "$output" == *"pam_smartcard"* ]]
 }
+
+# A standard user on a managed Mac: sudo is refused outright.
+refusing_sudo() {
+  printf '#!/bin/sh\nprintf "sudo %%s\\n" "$*" >> "%s"\necho "Sorry, user may not run sudo" >&2\nexit 1\n' "$CALLS" > "$TMP/bin/sudo"
+  mkdir -p "$TMP/reattach/lib/pam"; : > "$TMP/reattach/lib/pam/pam_reattach.so"
+  printf '#!/bin/sh\n[ "$1" = --prefix ] && echo "%s/reattach"\nexit 0\n' "$TMP" > "$TMP/bin/brew"
+  chmod +x "$TMP/bin/brew" "$TMP/bin/sudo"
+  export DEN_IS_ADMIN=0
+}
+
+@test "sudo-touchid: already set is done without sudo, even for a standard user" {
+  macos_only
+  export DEN_PAM_SUDO_LOCAL="$TMP/sudo_local"
+  refusing_sudo
+  printf 'auth optional %s/reattach/lib/pam/pam_reattach.so ignore_ssh\nauth sufficient pam_tid.so\n' "$TMP" > "$DEN_PAM_SUDO_LOCAL"
+  run "$REPO/bin/den" up --only=sudo-touchid
+  [ "$status" -eq 0 ]
+  jq -e '.results[] | select(.phase=="sudo-touchid") | .status == "done"' "$DEN_STATE_DIR/last-run.json"
+  [[ "$output" != *"sudo -v"* ]]
+}
+
+@test "sudo-touchid: a standard user gets an admin fix, never sudo -v" {
+  macos_only
+  export DEN_PAM_SUDO_LOCAL="$TMP/sudo_local"
+  refusing_sudo
+  run "$REPO/bin/den" up --only=sudo-touchid
+  [ ! -e "$DEN_PAM_SUDO_LOCAL" ]
+  jq -e '.results[] | select(.phase=="sudo-touchid") | .status == "skipped"' "$DEN_STATE_DIR/last-run.json"
+  [[ "$output" == *"not an admin"* ]]
+  [[ "$output" != *"fix: sudo -v"* ]]
+}

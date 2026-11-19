@@ -353,7 +353,13 @@ den_doctor_permissions() {
         if [ -n "$app_path" ] && [ -e "$app_path" ]; then
           msg="$msg; add $app_path"
         fi
-        den_permissions_line missing "$msg"
+        # ✗ only for what counts as broken; an optional grant that is off is
+        # advice, so it must not look like the failures the summary counts.
+        if [ "$required" = 1 ]; then
+          den_permissions_line missing "$msg"
+        else
+          den_permissions_line info "$msg (optional)"
+        fi
         ;;
       info)
         den_permissions_line info "$line — $detail"

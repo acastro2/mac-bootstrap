@@ -371,11 +371,33 @@ den_probe_sudo() {
   return 1
 }
 
+# den_user_is_admin: whether sudo can work at all for this user. On a managed
+# Mac a standard user is refused outright ("may not run sudo"), so asking for
+# a password, or telling them to run sudo -v, can never help. Elsewhere (the
+# VM's sudoers entry is not a group) assume yes.
+den_user_is_admin() {
+  case ${DEN_IS_ADMIN:-} in # tests: 1 or 0 pins the answer
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  if [ "$(id -u)" = 0 ]; then
+    return 0
+  fi
+  if [ "$(den_os)" = macos ]; then
+    dseditgroup -o checkmember -m "$(id -un)" admin >/dev/null 2>&1
+    return $?
+  fi
+  return 0
+}
+
 den_probe_gh() {
   if [ -z "$DEN_PROBE_GH" ]; then
     if ! command -v gh >/dev/null 2>&1; then
       DEN_PROBE_GH=missing
-    elif den_with_timeout 15 gh auth status >/dev/null 2>&1; then
+    # --active: plain `gh auth status` fails when ANY stored account has a
+    # stale token (GitHub revokes old ones after repeated logins), which read
+    # as "not signed in" and started a login nobody needed.
+    elif den_with_timeout 15 gh auth status --active --hostname github.com >/dev/null 2>&1; then
       DEN_PROBE_GH=ok
     else
       DEN_PROBE_GH=signed-out
@@ -394,6 +416,11 @@ den_need_probe() {
     sudo)
       if den_probe_sudo; then
         return 0
+      fi
+      if ! den_user_is_admin; then
+        DEN_NEED_REASON="$(id -un) is not an admin on this Mac"
+        DEN_NEED_FIX="get admin rights (e.g. Admin By Request), then den fix"
+        return 1
       fi
       DEN_NEED_REASON="sudo needs a password"
       DEN_NEED_FIX="sudo -v"
@@ -614,7 +641,7 @@ den_preflight() {
   case " $needs " in *" net "*) den_probe_net >/dev/null 2>&1 || true ;; esac
   case " $needs " in *" brew "*) den_probe_brew >/dev/null 2>&1 || true ;; esac
   if [ "$has_sudo" = 1 ]; then
-    if den_is_tty; then
+    if den_is_tty && den_user_is_admin; then
       ui_info "sudo: asking once, then keeping it alive for the run"
       sudo -v || true
       den_sudo_keepalive_start
@@ -858,6 +885,28 @@ EOF
   } >"$tmp"
   chmod 600 "$tmp"
   mv "$tmp" "$target"
+}
+
+# ── doctor → fix ─────────────────────────────────────────────────────
+# A doctor check that finds something a phase repairs names that phase with
+# den_fix_wants. den doctor prints the list and den fix reruns it, so a ✗
+# the doctor counts is always one den fix acts on.
+DEN_DOCTOR_PHASES=""
+
+den_fix_wants() {
+  case " $DEN_DOCTOR_PHASES " in
+    *" $1 "*) ;;
+    *) DEN_DOCTOR_PHASES="${DEN_DOCTOR_PHASES:+$DEN_DOCTOR_PHASES }$1" ;;
+  esac
+}
+
+# den_fix_collect: run every check quietly; leaves DEN_DOCTOR_PHASES set.
+den_fix_collect() {
+  local fn
+  DEN_DOCTOR_PHASES=""
+  for fn in $(declare -F | awk '{print $3}' | grep '^den_doctor_' | sort || true); do
+    "$fn" >/dev/null 2>&1 </dev/null || true
+  done
 }
 
 den_state_fixable() {

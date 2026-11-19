@@ -326,7 +326,16 @@ den_cmd_fix() {
   if [ ! -f "$DEN_STATE_DIR/last-run.json" ]; then
     den_die "no earlier run in $DEN_STATE_DIR (run den up first)"
   fi
-  names=$(den_state_fixable) || names=""
+  names=$(den_state_fixable | tr '\n' ' ') || names=""
+  # What den doctor finds broken is fixed here too, not only last run's rows.
+  den_fix_collect
+  for name in $DEN_DOCTOR_PHASES; do
+    case " $names " in
+      *" $name "*) continue ;;
+    esac
+    names="$names $name"
+    ui_info "doctor: $name needs a rerun"
+  done
   for name in $names; do
     idx=$(den_phase_index "$name" 2>/dev/null) || idx=""
     if [ -z "$idx" ]; then

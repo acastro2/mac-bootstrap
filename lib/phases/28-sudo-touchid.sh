@@ -7,7 +7,11 @@ den_phase sudo-touchid \
   --about "pam_tid plus pam_reattach, so a finger works inside tmux and ssh" \
   --os macos \
   --toggle DEN_TOUCHID_SUDO \
-  --needs "sudo brew"
+  --needs "brew"
+
+# sudo is asked for only when the file must change: a Mac that already has
+# den's two lines is done without it, so a standard user (sudo refused) does
+# not see this phase skip on every run.
 
 phase_sudo_touchid() {
   local target=${DEN_PAM_SUDO_LOCAL:-/etc/pam.d/sudo_local}
@@ -37,6 +41,20 @@ phase_sudo_touchid() {
   if [ "$current" = "$desired" ]; then
     ui_ok "Touch ID for sudo is already set in $target"
     return 0
+  fi
+
+  if ! den_probe_sudo && den_is_tty && den_user_is_admin; then
+    ui_info "sudo: $target needs a change"
+    sudo -v || true
+    # shellcheck disable=SC2034  # den_probe_sudo (lib/core.sh) re-probes on empty.
+    DEN_PROBE_SUDO=""
+  fi
+  if ! den_probe_sudo; then
+    if ! den_user_is_admin; then
+      den_skip "$(id -un) is not an admin on this Mac, so $target cannot change" \
+        "get admin rights (e.g. Admin By Request), then den up --only=sudo-touchid"
+    fi
+    den_skip "sudo needs a password" "sudo -v, then den up --only=sudo-touchid"
   fi
 
   tmp=$(mktemp "${TMPDIR:-/tmp}/den-sudo-local.XXXXXX")
