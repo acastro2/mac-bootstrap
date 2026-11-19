@@ -8,10 +8,15 @@ den_phase macos-defaults \
   --os macos \
   --toggle DEN_MACOS_DEFAULTS
 
+# den_defaults_write DOMAIN KEY TYPE VALUE. A failed write is named and
+# counted; the phase fails at the end if any failed, so it never says "done"
+# for settings that did not land.
+DEN_DEFAULTS_FAILED=""
 den_defaults_write() {
-  local key=$1 type=$2 value=$3
-  if ! defaults write "$key" "$type" "$value" >/dev/null 2>&1; then
-    ui_warn "could not set $key (MDM-managed or not permitted); skipped"
+  local domain=$1 key=$2 type=$3 value=$4 err
+  if ! err=$(defaults write "$domain" "$key" "$type" "$value" 2>&1); then
+    ui_warn "could not set $domain $key: ${err:-no reason given} (an MDM profile can lock it)"
+    DEN_DEFAULTS_FAILED="$DEN_DEFAULTS_FAILED $domain:$key"
   fi
 }
 
@@ -54,5 +59,8 @@ phase_macos_defaults() {
   fi
 
   killall Dock Finder SystemUIServer >/dev/null 2>&1 || true
+  if [ -n "$DEN_DEFAULTS_FAILED" ]; then
+    den_fail "these settings did not land:$DEN_DEFAULTS_FAILED" "check System Settings for an MDM lock, then den up --only=macos-defaults"
+  fi
   ui_ok "macOS defaults set (key repeat and accent colour apply after a login)"
 }

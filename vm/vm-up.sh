@@ -386,8 +386,10 @@ watch_loop() {
     if [ "$TUNNEL" = 1 ]; then
       ensure_relay || true
       # The relay answers on the Mac but not inside the guest: the tunnel is
-      # gone. Exit, and launchd starts a fresh one.
-      if [ "$tick" -ge 2 ] && relay_up && ! guest_relay_up; then
+      # gone. Exit, and launchd starts a fresh one. Only while the VM is
+      # Running: a stopped VM fails the guest probe too, and exiting then
+      # would have launchd churn the agent every pass.
+      if [ "$tick" -ge 2 ] && [ "$(vm_status)" = Running ] && relay_up && ! guest_relay_up; then
         log "relay answers on the Mac but not in $VM; restarting for launchd"
         kill -TERM "$$" 2>/dev/null || true
         exit 1

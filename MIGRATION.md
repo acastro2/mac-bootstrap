@@ -21,7 +21,7 @@ Move your agent chats and config to a new Mac in about an hour, with one file to
 1. Run the one-liner from the [README](README.md#quick-start). Answer the preflight questions, then let it run.
 2. Restore the chats. Import checks every path, takes a snapshot of what it replaces, and leaves your data untouched if the archive is bad:
    ```bash
-   den sessions import ~/.local/state/den/exports/agent-sessions-*.tar.gz
+   den sessions import ~/Downloads/agent-sessions-<stamp>.tar.gz   # the file you carried over
    ```
 3. Check the result. `den doctor` is read-only:
    ```bash

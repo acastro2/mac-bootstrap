@@ -164,3 +164,19 @@ teardown() { /bin/rm -rf "$TMP"; }
   [ "$(ls "$HOME"/.local/state/den/snapshots/*.tar.gz | wc -l | tr -d ' ')" -le 5 ]
   [ ! -e "$HOME/.local/state/den/snapshots/sessions-20260101-000000.tar.gz" ]
 }
+
+@test "den dashboard checks the VM named in config, not a default" {
+  [ "$(uname)" = "Darwin" ] || skip "macOS only"
+  mkdir -p "$HOME/.config/den"; printf 'AGENT_VM=myvm\n' > "$HOME/.config/den/local.env"
+  mkdir -p "$DEN_STATE_DIR"
+  run "$REPO/bin/den"
+  [ "$status" -eq 0 ]
+  grep -q '^limactl list myvm' "$CALLS"
+  ! grep -q '^limactl list agent' "$CALLS"
+}
+
+@test "den clean --host-drift --dry-run works even with --yes (a dry run removes nothing)" {
+  run "$REPO/bin/den" clean --host-drift --dry-run --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"dry run"* ]]
+}

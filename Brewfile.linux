@@ -39,7 +39,7 @@ brew "gitleaks"
 brew "repomix"         # pack a repo into a single file for LLM context
 brew "doggo"           # DNS client (dig alternative)
 # Latest major, unversioned: the VM is rebuilt, so it always gets the newest.
-brew "postgresql", restart_service: false
+brew "postgresql", restart_service: false, link: true  # keg-only: link it so psql and postgres are on PATH
 brew "redis", restart_service: false
 
 # ── Taps ───────────────────────────────────────────────────────────────

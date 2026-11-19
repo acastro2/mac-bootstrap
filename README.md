@@ -29,7 +29,7 @@ The VM is a real dev box, not a jail: it gets every API key, its own GitHub logi
 
 ## The bridges
 
-The Mac and the VM touch in exactly these places. **The Mac opens every connection**: the VM cannot log in to the Mac, cannot read its files, and cannot start anything there except a VS Code window (bridge 5). The one thing a VM process can reach on the Mac is the browse relay, through a tunnel the Mac opened.
+The Mac and the VM touch in exactly these places. **The Mac opens every connection**: the VM cannot log in to the Mac, cannot read its files, and cannot start anything there except two things: browser actions through the browse relay (bridge 4) and a VS Code window (bridge 5). The one thing a VM process can reach on the Mac is the browse relay, through a tunnel the Mac opened.
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="docs/den/img/bridges-light.svg">
@@ -42,7 +42,7 @@ The Mac and the VM touch in exactly these places. **The Mac opens every connecti
 | 2 | VS Code | VS Code Remote-SSH | files of the folder you open | the editor runs on the Mac, the files stay in the VM |
 | 3 | API keys and the browse relay token | den and vm-up, with `limactl copy` | two files | mode 600; copied by `den up`, then by vm-up only when the content changes |
 | 4 | Browser control | vm-up runs `rex forward` from the Mac into the VM | browse commands from VM agents to your browser | VM port 19988 reaches only the relay; the tunnel lives in its own Rex session `den` |
-| 5 | `code .` | vm-up pulls the inbox over SSH | one folder path per line | absolute path only, 1024 characters max, no control characters, the same path at most once in 10 s, 5 opens a minute at most |
+| 5 | `code .` | vm-up pulls the inbox over SSH | one folder path per line | absolute path only, 1024 characters max, no control characters, an immediate repeat of the same path within 10 s is refused, 5 opens a minute at most |
 | 6 | Lifecycle | vm-up and `den up` | start and restart, the guest heal script, a copy of this repo | one way, Mac to VM |
 | 7 | Dev servers | your Mac browser, through Lima | HTTP to `localhost:<port>` | every guest localhost port is mirrored except 19988, so a VM process can listen on a Mac loopback port: a deliberate trade for dev servers that just work |
 | 8 | GitHub | each side on its own | code, through pushes and pulls | the VM has its own `gh` login; the Mac's SSH agent never goes in |
@@ -50,7 +50,7 @@ The Mac and the VM touch in exactly these places. **The Mac opens every connecti
 
 The picture is code: `python3 docs/den/scenes/bridges/build.py`.
 
-**What never crosses:** your Mac's files (no shared folders), your SSH agent (no forwarding), your Mac login (the VM has no way in), and anything that runs on the Mac at the VM's request, apart from bridge 5 opening a VS Code window.
+**What never crosses:** your Mac's files (no shared folders), your SSH agent (no forwarding), your Mac login (the VM has no way in), and anything that runs on the Mac at the VM's request, apart from browser actions through the relay (bridge 4) and a VS Code window (bridge 5).
 
 ## Quick start
 
@@ -85,7 +85,7 @@ Then every phase runs unattended. Each one ends **done**, **skipped** (with the 
 | Command | What it does |
 | --- | --- |
 | `den` | Dashboard: the VM, the browse relay and the tunnel right now, then the last run and what to run next. |
-| `den up [--only a,b] [--skip a,b] [--dry-run]` | Run the phases. `--dry-run` shows the plan and changes nothing. |
+| `den up [--only a,b] [--skip a,b] [--dry-run]` | Run the phases. `--dry-run` still runs preflight (in a terminal it can ask for sudo and sign you in), then lists each phase and what it needs. It runs no phase and writes `last-dry-run.json`, never `last-run.json`. |
 | `den fix` | Run again only what was skipped or failed last time. |
 | `den doctor [--strict]` | Read-only health: managed installs, host drift, permissions, the VM. `--strict` exits 1 when something is broken. |
 | `den phases` | Every phase, its toggle, what it needs, what it does. |
@@ -156,11 +156,11 @@ Everything secret is in one 1Password Document named `den` (file `den.json`):
 }
 ```
 
-`env` becomes `~/.config/zsh/.api-keys.zsh` (mode 600, single-quoted, so a `$` in a key is never expanded). If 1Password is not reachable, put the file at `~/den.json` or run `den secrets import <file>`. den validates it and uses it. The run that writes the keys deletes the file and says so, because the keys now live in 1Password. No secret is ever written to this public repo, a log, or a command line, with one exception: `opencode service set password` only accepts the password as an argument.
+`env` becomes `~/.config/zsh/.api-keys.zsh` (mode 600, single-quoted, so a `$` in a key is never expanded). If 1Password is not reachable, put the file at `~/den.json` or run `den secrets import <file>`. den validates it and uses it. The run that writes the keys deletes the file and says so. den does not upload it anywhere: if 1Password does not hold the `den` Document yet, save it there before your next Mac. No secret is ever written to this public repo, a log, or a command line, with two exceptions: `opencode service set password` and the gated MCP URL passed to `claude mcp add`. Neither CLI takes the value any other way, so it shows in the process list for about a second.
 
 ## Permissions
 
-macOS does not let any script grant privacy permissions without MDM, so den checks them and walks you through the panes once. Grant them to **Rex Server**, not to the Rex app, because every shell in a Rex tab belongs to the server.
+macOS does not let any script grant privacy permissions without MDM, so den checks them and walks you through the required panes once. The browser and login-item rows are only reported, with the fix. Grant them to **Rex Server**, not to the Rex app, because every shell in a Rex tab belongs to the server.
 
 | Grant | For |
 | --- | --- |
@@ -181,6 +181,7 @@ den never enables Developer Tools mode, never calls `tccutil`, and never edits t
 | `DEN_MACOS_DEFAULTS` | Dock, key repeat, Finder and dark mode settings |
 | `DEN_TOUCHID_SUDO` | Touch ID for sudo |
 | `DEN_REX` | the Rex app, its skill, Rex Agent Restore |
+| `DEN_AGENTS` | the agent CLIs: a list (`opencode claude cortex`), or `0` to turn the phase off |
 | `DEN_OPENCODE_WEB` | the OpenCode web UI on the tailnet |
 | `DEN_VM` | the agent VM and its login agent |
 | `DEN_BROWSE_TUNNEL` | VM agents driving the Mac browser |
@@ -189,7 +190,7 @@ To fork it: change `GIT_NAME`, `GIT_EMAIL`, `OP_VAULT`, the repo URLs and the to
 
 ## Rex, the window
 
-Rex is the terminal. Its server runs in the VM, so a tab on the `vm` host is a zsh in Linux. Add the host once in the Rex app: press ⌘⇧P, run **Add Remote Host…**, enter `ssh://lima-agent` (`lima-` plus `AGENT_VM` from `config.env`), then **Switch Host**. den reminds you until it is done, because the app keeps its own host list and refuses scripted actions unless Remote Control is on (it stays off, so no local process can drive the app).
+Rex is the terminal. Its server runs in the VM, so a tab on the `vm` host is a zsh in Linux. Add the host once in the Rex app: press ⌘⇧P, run **Add Remote Host…**, enter `ssh://lima-agent` (`lima-` plus `AGENT_VM` from `config.env`), then **Switch Host**. den prints this reminder when it installs the Rex server, because the app keeps its own host list and refuses scripted actions unless Remote Control is on (it stays off, so no local process can drive the app).
 
 ## Moving to a new Mac
 

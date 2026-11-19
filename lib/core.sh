@@ -25,6 +25,8 @@ DEN_RESULT_COUNT=0
 DEN_ONLY=""
 DEN_SKIP=""
 DEN_DRY_RUN=0
+# Set by `den fix` when it runs nothing: keep the last run's rows (filtered).
+DEN_STATE_MERGE=0
 DEN_RUN_STARTED=""
 DEN_RUN_SECONDS=0
 DEN_RUN_ARGS=""
@@ -174,20 +176,10 @@ den_toggle_on() {
   return 0
 }
 
-den_phase_selected() {
-  local i=${1:-} name os
-  name=${DEN_PHASE_NAMES[$i]}
-  if [ -n "$DEN_ONLY" ]; then
-    case ",$DEN_ONLY," in
-      *",$name,"*) ;;
-      *) return 1 ;;
-    esac
-  fi
-  if [ -n "$DEN_SKIP" ]; then
-    case ",$DEN_SKIP," in
-      *",$name,"*) return 1 ;;
-    esac
-  fi
+# den_phase_available: the toggle is on and the OS matches. --only/--skip are
+# not part of it: a --only run still keeps the other phases' last rows.
+den_phase_available() {
+  local i=${1:-} os
   if ! den_toggle_on "${DEN_PHASE_TOGGLES[$i]}"; then
     return 1
   fi
@@ -202,6 +194,23 @@ den_phase_selected() {
     *) return 1 ;;
   esac
   return 0
+}
+
+den_phase_selected() {
+  local i=${1:-} name
+  name=${DEN_PHASE_NAMES[$i]}
+  if [ -n "$DEN_ONLY" ]; then
+    case ",$DEN_ONLY," in
+      *",$name,"*) ;;
+      *) return 1 ;;
+    esac
+  fi
+  if [ -n "$DEN_SKIP" ]; then
+    case ",$DEN_SKIP," in
+      *",$name,"*) return 1 ;;
+    esac
+  fi
+  den_phase_available "$i"
 }
 
 den_validate_list() {
@@ -366,7 +375,7 @@ den_probe_gh() {
   if [ -z "$DEN_PROBE_GH" ]; then
     if ! command -v gh >/dev/null 2>&1; then
       DEN_PROBE_GH=missing
-    elif gh auth status >/dev/null 2>&1; then
+    elif den_with_timeout 15 gh auth status >/dev/null 2>&1; then
       DEN_PROBE_GH=ok
     else
       DEN_PROBE_GH=signed-out
@@ -440,7 +449,7 @@ den_need_probe() {
           ;;
         *)
           DEN_NEED_REASON="no secrets bundle found"
-          DEN_NEED_FIX="sign in with \`op signin\`, or drop den.json at ~/den.json"
+          DEN_NEED_FIX="drop den.json at ~/den.json, or approve the 1Password prompt"
           return 1
           ;;
       esac
@@ -523,7 +532,7 @@ den_need_vm() {
     DEN_NEED_FIX="set AGENT_VM in config.env"
     return 1
   fi
-  out=$(limactl list 2>/dev/null) || out=""
+  out=$(den_with_timeout 15 limactl list 2>/dev/null) || out=""
   if printf '%s\n' "$out" | awk -v n="$AGENT_VM" '$1 == n && /Running/ { found = 1 } END { exit !found }'; then
     return 0
   fi
@@ -786,14 +795,16 @@ den_state_dir_init() {
 # last-run.json is what `den` and `den fix` read. A dry run changes nothing on
 # the machine, so it goes to last-dry-run.json and leaves the real record be.
 # A partial run (--only, which `den fix` uses) keeps the rows of phases it did
-# not run; a full run replaces the file.
+# not run; a full run replaces the file. A kept row whose phase is gone, whose
+# toggle is off, or whose OS no longer matches is dropped, so `den fix` stops
+# naming phases that are not selected any more.
 den_state_write() {
-  local tmp="$DEN_STATE_DIR/.last-run.json.$$" i old="" row name keep wrote=0
+  local tmp="$DEN_STATE_DIR/.last-run.json.$$" i old="" row name idx keep wrote=0
   local target="$DEN_STATE_DIR/last-run.json"
   den_state_dir_init
   if [ "$DEN_DRY_RUN" = 1 ]; then
     target="$DEN_STATE_DIR/last-dry-run.json"
-  elif [ -n "${DEN_ONLY:-}" ] && [ -f "$target" ]; then
+  elif [ -f "$target" ] && { [ -n "${DEN_ONLY:-}" ] || [ "${DEN_STATE_MERGE:-0}" = 1 ]; }; then
     old=$(grep -oE '\{"phase":"[^"]*","status":"[^"]*","seconds":[0-9]+,"reason":"([^"\\]|\\.)*","fix":"([^"\\]|\\.)*"\}' \
       "$target" 2>/dev/null) || old=""
   fi
@@ -822,6 +833,10 @@ den_state_write() {
     while IFS= read -r row; do
       [ -n "$row" ] || continue
       name=$(printf '%s\n' "$row" | sed -n 's/^{"phase":"\([^"]*\)".*/\1/p')
+      idx=$(den_phase_index "$name" 2>/dev/null) || idx=""
+      if [ -z "$idx" ] || ! den_phase_available "$idx"; then
+        continue
+      fi
       keep=1
       for ((i = 0; i < DEN_RESULT_COUNT; i++)); do
         if [ "${DEN_RESULT_PHASE[$i]}" = "$name" ]; then

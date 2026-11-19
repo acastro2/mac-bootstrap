@@ -305,12 +305,35 @@ den_vm_up() {
 # first. On 2026-11-19 that once hung in the host agent's `ssh -O exit` and
 # left the VM running under a half-dead host agent, so if it fails or the VM
 # still answers: the guest powers itself off, then `limactl stop -f` cleans up
-# only the host processes. Returns 0 when the VM is down.
+# only the host processes. Returns 0 when the VM is down; an empty status is
+# unknown (limactl could not answer), never "stopped", so it returns 1.
+# den_vm_hostagents_reap <vm>: once the VM is down, no host agent of this
+# instance may live on. A stop that timed out half-way has left one behind
+# (2026-11-19, twice), and a later start then runs next to it.
+den_vm_hostagents_reap() {
+  local vm=$1 pids
+  pids=$(pgrep -f -- "limactl hostagent --pidfile $HOME/.lima/$vm/ha.pid" 2>/dev/null) || pids=""
+  [ -n "$pids" ] || return 0
+  # shellcheck disable=SC2086  # one PID per word
+  kill $pids 2>/dev/null || true
+  sleep 2
+  pids=$(pgrep -f -- "limactl hostagent --pidfile $HOME/.lima/$vm/ha.pid" 2>/dev/null) || pids=""
+  # shellcheck disable=SC2086
+  [ -z "$pids" ] || kill -9 $pids 2>/dev/null || true
+  ui_info "cleaned up a leftover host agent of $vm"
+}
+
 den_vm_stop() {
-  local vm=$1
-  if den_vm_to 60 limactl stop "$vm" --tty=false >/dev/null 2>&1 &&
-    [ "$(den_vm_status "$vm")" != Running ]; then
-    return 0
+  local vm=$1 s=""
+  if den_vm_to 60 limactl stop "$vm" --tty=false >/dev/null 2>&1; then
+    s=$(den_vm_status "$vm") || s=""
+    if [ -z "$s" ]; then
+      return 1
+    fi
+    if [ "$s" != Running ]; then
+      den_vm_hostagents_reap "$vm"
+      return 0
+    fi
   fi
   den_vm_to 20 limactl shell "$vm" -- sudo -n systemctl poweroff </dev/null >/dev/null 2>&1 || true
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
@@ -320,8 +343,14 @@ den_vm_stop() {
     sleep 5
   done
   den_vm_to 60 limactl stop -f "$vm" --tty=false >/dev/null 2>&1 || true
-  [ "$(den_vm_status "$vm")" != Running ]
+  s=$(den_vm_status "$vm") || s=""
+  if [ -n "$s" ] && [ "$s" != Running ]; then
+    den_vm_hostagents_reap "$vm"
+    return 0
+  fi
+  return 1
 }
+
 
 # Stop the login agent and autostart BEFORE the VM, so nothing brings it back.
 den_vm_down() {
@@ -544,7 +573,7 @@ den_preflight_hook_vm() {
   if den_vm_to 20 limactl shell "$AGENT_VM" -- bash -c \
     "${DEN_GUEST_ENV}command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1" >/dev/null 2>&1; then
     ui_info "vm: gh is not signed in inside $AGENT_VM; starting gh auth login"
-    if ! den_vm_to 600 limactl shell -t "$AGENT_VM" -- bash -c \
+    if ! den_vm_to 600 limactl shell --tty=true "$AGENT_VM" -- bash -c \
       "${DEN_GUEST_ENV}gh auth login --web --git-protocol https && gh auth setup-git"; then
       ui_warn "vm: gh auth login did not finish; the guest still works without it"
     fi
@@ -552,7 +581,7 @@ den_preflight_hook_vm() {
   if den_vm_to 20 limactl shell "$AGENT_VM" -- bash -c \
     "${DEN_GUEST_ENV}command -v ob >/dev/null 2>&1 && ! ob sync-list-remote --json >/dev/null 2>&1" >/dev/null 2>&1; then
     ui_info "vm: Obsidian Headless is not signed in; starting ob login (email, password, 2FA)"
-    if ! den_vm_to 600 limactl shell -t "$AGENT_VM" -- bash -c "${DEN_GUEST_ENV}ob login"; then
+    if ! den_vm_to 600 limactl shell --tty=true "$AGENT_VM" -- bash -c "${DEN_GUEST_ENV}ob login"; then
       ui_warn "vm: ob login did not finish; vault sync is skipped"
     fi
   fi
@@ -579,7 +608,7 @@ den_preflight_hook_vm() {
     if [ -n "$vault" ]; then
       ui_info "vm: setting up Obsidian Sync for vault '$vault' in ~/vault"
       # The name travels in the environment: no quoting reaches the guest shell.
-      den_vm_to 600 limactl shell -t "$AGENT_VM" -- env OBSIDIAN_VAULT="$vault" bash -c \
+      den_vm_to 600 limactl shell --tty=true "$AGENT_VM" -- env OBSIDIAN_VAULT="$vault" bash -c \
         "${DEN_GUEST_ENV}ob sync-setup --vault \"\$OBSIDIAN_VAULT\" --path \"\$HOME/vault\" --device-name '$AGENT_VM'" ||
         ui_warn "vm: ob sync-setup did not finish; run it later with: den vm shell, then ob sync-setup"
     fi

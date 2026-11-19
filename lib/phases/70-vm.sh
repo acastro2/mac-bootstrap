@@ -41,27 +41,57 @@ phase_vm() {
   fi
 }
 
-# vm_restart_if_requested <vm>: the guest asks for one restart when a group
-# was added after its user manager and SSH master started (docker). Stop with
-# den_vm_stop (never hangs), start, and drop the request only once docker
-# answers as the user; else it stays for the next den up.
+# vm_restart_if_requested <vm>: the guest asks for one restart when its
+# systemd user manager (started before the docker group was added) has no
+# docker group. Stop with den_vm_stop (never hangs), start, and drop the
+# request only when the same /proc check now passes. At most 2 attempts per
+# request: a restart that cannot fix it must not loop.
 vm_restart_if_requested() {
   # shellcheck disable=SC2016  # $HOME expands in the guest
-  local vm=$1 flag='$HOME/.local/state/den/restart-requested'
+  local vm=$1 flag='$HOME/.local/state/den/restart-requested' n=""
+  # shellcheck disable=SC2016
+  local tries='$HOME/.local/state/den/restart-attempts' started=0
   if ! den_vm_to 20 limactl shell "$vm" -- bash -c "test -f $flag" </dev/null >/dev/null 2>&1; then
     return 0
   fi
-  ui_step "restarting $vm once so new sessions get the docker group"
+  n=$(den_vm_to 20 limactl shell "$vm" -- bash -c "cat $tries 2>/dev/null || echo 0" </dev/null 2>/dev/null |
+    tr -d '\r ' | head -n 1) || n=""
+  case ${n:-} in ''|*[!0-9]*) n=0 ;; esac
+  if [ "$n" -ge 2 ]; then
+    den_vm_to 20 limactl shell "$vm" -- bash -c "rm -f $flag $tries" </dev/null >/dev/null 2>&1 || true
+    ui_warn "$vm was restarted twice and its user manager still lacks the docker group; run: den vm shell, then sudo reboot"
+    return 0
+  fi
+  n=$((n + 1))
+  den_vm_to 20 limactl shell "$vm" -- bash -c "printf '%s\n' $n > $tries" </dev/null >/dev/null 2>&1 || true
+  ui_step "restarting $vm (attempt $n of 2) so new sessions get the docker group"
+  # vm-up must not start the VM again while den stops it on purpose. Inside
+  # the agent there is no separate vm-up to race: this process is it.
+  if [ "${VM_UP_AGENT:-}" != 1 ]; then
+    launchctl bootout "gui/$(id -u)/$DEN_VM_LABEL" >/dev/null 2>&1 || true
+  fi
   den_vm_stop "$vm" || ui_warn "could not stop $vm cleanly"
-  if ! den_vm_to 300 limactl start "$vm" --tty=false >/dev/null 2>&1; then
+  if den_vm_to 300 limactl start "$vm" --tty=false >/dev/null 2>&1; then
+    started=1
+  fi
+  if [ "${VM_UP_AGENT:-}" != 1 ]; then
+    den_vm_up_agent
+  fi
+  if [ "$started" = 0 ]; then
     ui_warn "could not start $vm after the restart; run: den vm up"
     return 0
   fi
-  if den_vm_to 30 limactl shell "$vm" -- docker info </dev/null >/dev/null 2>&1; then
-    den_vm_to 20 limactl shell "$vm" -- bash -c "rm -f $flag" </dev/null >/dev/null 2>&1 || true
-    ui_ok "$vm restarted; docker works without sudo"
+  # The flag means "the user manager has no docker group": drop it only when
+  # that same /proc check passes. A fresh `docker info` proves nothing, since
+  # the ssh command is a new process that already has the group.
+  # shellcheck disable=SC2016  # expands in the guest
+  if den_vm_to 60 limactl shell "$vm" -- bash -c \
+    'mgr=$(pgrep -u "$(id -un)" -f "systemd --user" | head -n 1 || true); gid=$(getent group docker | cut -d: -f3); [ -n "$mgr" ] && [ -n "$gid" ] && awk -v g="$gid" "/^Groups:/ { for (i = 2; i <= NF; i++) if (\$i == g) f = 1 } END { exit !f }" "/proc/$mgr/status"' \
+    </dev/null >/dev/null 2>&1; then
+    den_vm_to 20 limactl shell "$vm" -- bash -c "rm -f $flag $tries" </dev/null >/dev/null 2>&1 || true
+    ui_ok "$vm restarted; its user manager has the docker group"
   else
-    ui_warn "$vm restarted but docker still needs sudo; den up --only=vm tries again"
+    ui_warn "$vm restarted but its user manager still lacks the docker group; den up --only=vm tries again"
   fi
 }
 
@@ -221,15 +251,21 @@ vm_browse_cli() {
 # On a fresh VM's first boot systemd-logind can spin at 100% CPU and stop
 # answering D-Bus (seen 2026-11-18 on Ubuntu 24.04 under VZ; a normal boot is
 # fine). Then every `systemctl --user` fails with "No medium found" and the
-# Rex server cannot install. A logind restart clears it.
+# Rex server cannot install. A logind restart clears it, but it drops every
+# session in the guest, so it runs only for that fault and once per boot.
 vm_user_bus() {
   local vm=$1
   # shellcheck disable=SC2016  # expands in the guest
   if den_vm_to 60 limactl shell "$vm" -- bash -c '
     uid=$(id -u); export XDG_RUNTIME_DIR=/run/user/$uid
     systemctl --user show-environment >/dev/null 2>&1 && exit 0
-    sudo -n systemctl restart systemd-logind >/dev/null 2>&1
-    sudo -n systemctl start "user@$uid.service" >/dev/null 2>&1
+    pcpu=$(ps -o pcpu= -C systemd-logind 2>/dev/null | awk "{ if (\$1 + 0 > m) m = \$1 + 0 } END { print m + 0 }") || pcpu=0
+    if awk -v c="${pcpu:-0}" "BEGIN { exit !(c >= 80) }" &&
+      ! sudo -n test -e /run/den-logind-restarted >/dev/null 2>&1 &&
+      sudo -n touch /run/den-logind-restarted >/dev/null 2>&1; then
+      sudo -n systemctl restart systemd-logind >/dev/null 2>&1
+      sudo -n systemctl start "user@$uid.service" >/dev/null 2>&1
+    fi
     systemctl --user show-environment >/dev/null 2>&1
   ' </dev/null >/dev/null 2>&1; then
     return 0
@@ -266,10 +302,11 @@ vm_code_ssh() {
     ui_info "VS Code is not on PATH; Remote-SSH skipped"
     return 0
   fi
-  if "$code_bin" --list-extensions 2>/dev/null | grep -qx ms-vscode-remote.remote-ssh; then
+  # Both calls can hang on a VS Code that wants a window: bound them.
+  if den_with_timeout 60 "$code_bin" --list-extensions 2>/dev/null | grep -qx ms-vscode-remote.remote-ssh; then
     return 0
   fi
-  if "$code_bin" --install-extension ms-vscode-remote.remote-ssh >/dev/null 2>&1; then
+  if den_with_timeout 60 "$code_bin" --install-extension ms-vscode-remote.remote-ssh >/dev/null 2>&1; then
     ui_ok "VS Code Remote-SSH extension installed"
   else
     ui_warn "could not install the VS Code Remote-SSH extension"

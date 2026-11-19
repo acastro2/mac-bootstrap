@@ -209,3 +209,38 @@ EOF
   [ -e "$HOME/den.json" ]
   jq -e '.results[0].status=="skipped"' "$DEN_STATE_DIR/last-run.json"
 }
+
+@test "den fix drops a phase that is no longer selected, and stops asking for it" {
+  phase 10 one false --toggle DEN_ONE
+  phase 20 two true
+  run den up
+  [ "$status" -eq 1 ]
+  printf 'DEN_ONE=0\n' > "$DEN_CONFIG"
+  : > "$RAN"
+  run den fix
+  [ "$status" -eq 0 ]
+  [ ! -s "$RAN" ]
+  ! jq -e '.results[] | select(.phase=="one")' "$DEN_STATE_DIR/last-run.json"
+  run den
+  [[ "$output" != *"den fix"* ]]
+}
+
+@test "secrets: a ~/den.json you put there wins over 1Password, which is not asked" {
+  printf '#!/bin/sh\nprintf "op %%s\\n" "$*" >> "%s/op.calls"\nsleep 30\nexit 1\n' "$TMP" > "$TMP/bin/op"; chmod +x "$TMP/bin/op"
+  printf '{"version":1,"env":{"A_KEY":"v"}}' > "$HOME/den.json"
+  phase 10 render 'den_render_env "$HOME/x.zsh"' --needs secrets
+  start=$(date +%s)
+  run den up
+  [ "$status" -eq 0 ]
+  [ $(( $(date +%s) - start )) -lt 20 ]
+  [ ! -s "$TMP/op.calls" ]
+  grep -q "A_KEY='v'" "$HOME/x.zsh"
+}
+
+@test "the dashboard summary never prints '0 dry-run'" {
+  phase 10 one true
+  run den up
+  run den
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"0 dry-run"* ]]
+}

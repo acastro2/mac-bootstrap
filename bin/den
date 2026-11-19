@@ -292,7 +292,7 @@ den_cmd_up() {
 }
 
 den_cmd_fix() {
-  local names="" list="" name
+  local names="" list="" name idx dropped=0
   if [ $# -gt 0 ]; then
     den_die "den fix takes no arguments"
   fi
@@ -303,16 +303,32 @@ den_cmd_fix() {
   fi
   names=$(den_state_fixable) || names=""
   for name in $names; do
-    if den_phase_index "$name" >/dev/null 2>&1; then
-      if [ -z "$list" ]; then
-        list=$name
-      else
-        list="$list,$name"
-      fi
+    idx=$(den_phase_index "$name" 2>/dev/null) || idx=""
+    if [ -z "$idx" ]; then
+      dropped=1
+      continue
+    fi
+    if ! den_phase_selected "$idx"; then
+      ui_info "$name: not selected now (toggle or OS); dropped from the last run"
+      dropped=1
+      continue
+    fi
+    if [ -z "$list" ]; then
+      list=$name
+    else
+      list="$list,$name"
     fi
   done
   if [ -z "$list" ]; then
-    ui_info "nothing to fix: the last run had no skipped or failed phases"
+    if [ "$dropped" = 1 ]; then
+      ui_info "nothing to fix: no skipped or failed phase is selected now"
+      # Rewrite the record so the dropped rows stop showing up in the dashboard.
+      export DEN_STATE_MERGE=1
+      DEN_RUN_ARGS="fix"
+      den_state_write
+    else
+      ui_info "nothing to fix: the last run had no skipped or failed phases"
+    fi
     exit 0
   fi
   DEN_ONLY=$list

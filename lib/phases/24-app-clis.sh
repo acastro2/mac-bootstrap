@@ -17,6 +17,13 @@ app_clis_browse() {
     ui_ok "browse $("$dest" --version 2>/dev/null | head -n 1) is in ~/.local/bin"
     return 0
   fi
+  # The registry answer is JSON. Without jq it cannot be read, and the package
+  # phase installs jq, so that is the fix to report.
+  if ! command -v jq >/dev/null 2>&1; then
+    app_clis_browse_fix="den up --only=packages"
+    ui_warn "browse: jq is missing, so the npm registry answer cannot be read; fix: den up --only=packages"
+    return 1
+  fi
   case $(uname -m) in
     arm64) arch=arm64 ;;
     *) arch=x64 ;;
@@ -56,6 +63,7 @@ app_clis_browse() {
 
 phase_app_clis() {
   local vsc="$HOME/Applications/Visual Studio Code.app" failed=0
+  app_clis_browse_fix="den up --only=app-clis"
   app_clis_browse || failed=1
   if [ ! -x "$vsc/Contents/Resources/app/bin/code" ]; then
     den_skip "VS Code is not in ~/Applications" \
@@ -65,6 +73,6 @@ phase_app_clis() {
   ln -sfn "$vsc/Contents/Resources/app/bin/code" "$HOME/.local/bin/code"
   ui_ok "code -> ~/.local/bin/code"
   if [ "$failed" = 1 ]; then
-    den_fail "the browse CLI did not install" "den up --only=app-clis"
+    den_fail "the browse CLI did not install" "$app_clis_browse_fix"
   fi
 }

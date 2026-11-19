@@ -38,7 +38,7 @@ lib/core.sh           config, phase registry, runner, needs, state (see "Core").
 lib/secrets.sh        den.json load/render/purge (see "Secrets").
 lib/registry.sh       managed install registry (moved as is from bootstrap.sh).
 lib/phases/<NN>-<name>.sh   one file per phase; NN sets run order.
-vm/                   lima-dev.yaml, vm-up.sh, guest-heal.sh (VM lane).
+vm/                   lima-dev.yaml, vm-up.sh, guest-heal.sh, guest-provision.sh, README.md (VM lane).
 config.env            public config (committed). Toggles live here.
 ```
 
@@ -119,8 +119,9 @@ any selected phase:
    brew, TTY.
 2. sudo: if any selected phase needs `sudo` and a TTY exists, `sudo -v` once
    and keep it alive (background `sudo -n -v` every 50 s, killed on exit).
-3. Secrets: `den_secrets_load` (see Secrets). In a TTY, if 1Password is
-   installed but signed out, offer `op signin` once.
+3. Secrets: `den_secrets_load` (see Secrets). No `op signin` offer: a recorded
+   file or `~/den.json` is used without asking 1Password, and otherwise
+   `op document get` may show the 1Password approval prompt on each run.
 4. gh: if any selected phase needs `gh` and a TTY exists and `gh auth status`
    fails, run `gh auth login --web --git-protocol https` once.
 5. Print a short preflight table (what is available, what will be skipped).
@@ -158,7 +159,8 @@ built with `printf` + escaping — jq may not exist yet):
 ## Secrets (lib/secrets.sh)
 
 Source of truth: the 1Password **Document** titled `den` (file `den.json`) in
-`$OP_VAULT`:
+`$OP_VAULT`. A file at `~/den.json`, or one recorded with
+`den secrets import <path>`, works without asking 1Password:
 
 ```json
 {"version":1,
@@ -169,14 +171,22 @@ Source of truth: the 1Password **Document** titled `den` (file `den.json`) in
 
 `den_secrets_load`, first match wins:
 
-1. `op document get den --vault "$OP_VAULT"` (when `op whoami` succeeds).
-2. `~/den.json`, or the path given to `den secrets import <path>`.
+1. A recorded import path (from `den secrets import <path>`), else `~/den.json`.
+   When a file exists it is used as it is and 1Password is not asked. An
+   invalid file is rejected and kept for the user to fix.
+2. Only when there is no file: `op document get den --vault "$OP_VAULT"` (no
+   `op whoami` gate, because under the 1Password app integration it says "not
+   signed in" while reads work). The 1Password app may show an approval prompt
+   on each run; a prompt nobody answers is killed after `DEN_OP_TIMEOUT`
+   seconds (default 60).
 3. Neither: phases that need `secrets` are skipped with fix
-   "sign in with `op signin`, or drop den.json at ~/den.json".
+   "drop den.json at ~/den.json, or approve the 1Password prompt".
+
+No `op signin` is offered at any point.
 
 The JSON is validated (`version` 1, `env` an object of strings). It is held in
 a mode-600 file under `$DEN_RUNTIME` (`mktemp -d`, removed on exit), never in
-argv. After derived files are written, a source file from step 2 is deleted
+argv. After derived files are written, a source file from step 1 is deleted
 and the run says so.
 
 `den_secret <jq path>` prints one value (e.g. `.rex.appcast`). Empty string
@@ -198,7 +208,7 @@ den phases              list phases: name, toggle, needs, about
 den setup               wizard: writes config.env values, then offers den up
 den secrets import <path> | status
 den vm up|down|shell|status|logs|rebuild
-den clean [--dry-run]   safe: only registry/Brewfile items, snapshot, typed confirm
+den clean [--dry-run] [--host-drift] [--yes]   safe: only registry/Brewfile items, snapshot, typed confirm (--host-drift never takes --yes)
 den sessions export|import <file>   safe import: snapshot, temp extract, verify, swap
 den update              git pull --ff-only, then den up
 den help [cmd] / den --version
@@ -217,7 +227,7 @@ host. Coding happens in the VM.
 | **Both** | Claude Code, OpenCode, their config repos (`~/.claude`, `~/.config/opencode`), skills (`~/.agents/skills`), git, gh, chezmoi, zsh + Zim, starship, carapace, fzf, eza, bat, ripgrep, fd, jq, yq, neovim, gum, rex-agent-restore, uv, ffmpeg (Mac: for scribe only) |
 | **Mac only** | 1Password app + `op`, Rex.app, Lima, VS Code (+ Remote-SSH), browse relay, fonts, shellcheck, bats-core, desktop apps (Jumpcut, Beyond Compare, KeepingYouAwake) |
 | **VM only** | mise and every toolchain it pins (go, node, pnpm, python, dotnet, opentofu, Playwright, ctx7), Docker Engine, kubectl, k9s, helm, awscli, snowflake-cli, pgcli, crane, tflint, pre-commit, gitleaks, repomix, doggo, PostgreSQL (latest major), redis, asdf, opentunnel, cortex, tgrep, Playwright + browser-use (uv), the Rex server |
-| **Nowhere** | Zed, Ghostty, Claude desktop, Cursor CLI, pi, herdr, REA/Hopper, Copilot CLI, mas, Colima/docker/docker-compose on the Mac |
+| **Nowhere** | Zed, Ghostty, Claude desktop, Cursor CLI, pi, herdr, reverse-engineer-anything (REA) and Hopper, Copilot CLI, mas, Colima/docker/docker-compose on the Mac |
 
 Additions decided 2026-11-18:
 
@@ -233,9 +243,9 @@ Additions decided 2026-11-18:
   the newest `postgresql@NN`), not `@16`. Verify each mise selector (`lts`,
   `latest`) against current mise docs before writing it.
 - **`cat` alias:** `alias cat=mcat` only when `mcat` is on PATH.
-- **Host drift** (reported by `den doctor`, removed only via
-  `den clean --host-drift` after a typed confirmation of the exact list):
-  every Homebrew leaf and mise tool on the Mac that the Mac Brewfile does not
+- **Host drift** (reported by `den doctor`; `den clean --host-drift` removes
+  the Homebrew leaves after a typed confirmation of the exact list, and mise
+  tools are reported only): every Homebrew leaf and mise tool on the Mac that the Mac Brewfile does not
   declare, e.g. `asdf nvm pyenv go dog gcx pi-coding-agent qemu mosh aria2
   coreutils bash p7zip unar scrcpy ideviceinstaller xcodegen xdelta rsync
   opentunnel` and everything in the VM-only row. Undeclared **casks** (apps) are
@@ -258,8 +268,7 @@ The VM is the dev box: it gets every key in `den.json`, its own `gh` login
   sandbox. The group is added **before** the Rex server and the systemd user
   manager start, or tabs lack it until the VM restarts.
 - `Brewfile.linux` carries no `docker`, `docker-compose`, `colima` or `lima`:
-  Homebrew's `docker` shadows `/usr/bin/docker`. The `docker-compose` registry
-  row is macOS only.
+  Homebrew's `docker` shadows `/usr/bin/docker`.
 - `den doctor` checks, in the guest: `docker info` works as the user, and
   `docker compose version`.
 - **Obsidian vault**: Obsidian Headless (`npm i -g obsidian-headless`, `ob`,

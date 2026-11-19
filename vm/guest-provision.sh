@@ -52,16 +52,21 @@ sudo groupadd -f docker || say "could not create the docker group"
 sudo usermod -aG docker "$USER_NAME" || say "could not add $USER_NAME to the docker group"
 
 # A systemd user manager that started before the group was added does not
-# have it; only a reboot of the guest gives it one.
+# have it; only a restart of the guest gives it one.
 mgr=$(pgrep -u "$USER_NAME" -f 'systemd --user' | head -n 1 || true)
-if [ -n "$mgr" ] && ! grep -q '^Groups:.*\bdocker\b' "/proc/$mgr/status" 2>/dev/null; then
+# /proc lists numeric group IDs, never names: compare the docker GID.
+gid=$(getent group docker | cut -d: -f3)
+if [ -n "$mgr" ] && [ -n "$gid" ] &&
+  ! awk -v g="$gid" '/^Groups:/ { for (i = 2; i <= NF; i++) if ($i == g) f = 1 } END { exit !f }' "/proc/$mgr/status" 2>/dev/null; then
   marker="$HOME/.local/state/den/docker-group-noted"
   if [ ! -f "$marker" ]; then
     mkdir -p "$(dirname "$marker")"
     : >"$marker"
     # The Mac's vm phase sees this file and restarts the VM once, so nobody
-    # has to remember that docker needs it.
+    # has to remember that docker needs it. A fresh request starts at 0
+    # attempts; the Mac caps itself at 2 and then drops both files.
     : >"$HOME/.local/state/den/restart-requested"
+    rm -f "$HOME/.local/state/den/restart-attempts"
     say "the user systemd manager predates the docker group; the vm phase restarts the VM once"
   fi
 fi

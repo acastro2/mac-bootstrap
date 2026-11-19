@@ -166,7 +166,11 @@ ui_input() {
     return 0
   fi
   if [ "$DEN_UI" = gum ]; then
-    gum input --prompt "$prompt " --value "$default"
+    # Esc or Ctrl-C exits nonzero with no value; the default is the answer.
+    if ! value=$(gum input --prompt "$prompt " --value "$default"); then
+      value=$default
+    fi
+    printf '%s\n' "$value"
     return 0
   fi
   printf '%s [%s]: ' "$prompt" "$default" >&2

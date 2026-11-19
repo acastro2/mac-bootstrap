@@ -6,6 +6,38 @@
 set -euo pipefail
 say() { printf 'guest-heal: %s\n' "$*"; }
 
+# Restarting systemd-logind drops every session in the guest, so it earns one
+# only for its real fault (the daemon itself spinning) and only once per boot.
+logind_pcpu() {
+  ps -o pcpu= -C systemd-logind 2>/dev/null |
+    awk '{ if ($1 + 0 > m) m = $1 + 0 } END { print m + 0 }'
+}
+
+logind_fault() { # logind_fault PCPU: 0 when logind burns 80% CPU or more
+  awk -v c="${1:-0}" 'BEGIN { exit !(c >= 80) }'
+}
+
+logind_restart_once() { # restart logind for that fault, once per boot; 0 when it did
+  local pcpu
+  pcpu=$(logind_pcpu) || pcpu=0
+  if ! logind_fault "$pcpu"; then
+    say "systemd-logind is not spinning (${pcpu}% CPU); not restarting it"
+    return 1
+  fi
+  if sudo -n test -e /run/den-logind-restarted 2>/dev/null; then
+    say "systemd-logind was restarted earlier this boot; not restarting it again"
+    return 1
+  fi
+  if ! sudo -n touch /run/den-logind-restarted 2>/dev/null; then
+    say "cannot write /run/den-logind-restarted; not restarting systemd-logind"
+    return 1
+  fi
+  say "systemd-logind is spinning at ${pcpu}% CPU; restarting it once this boot"
+  sudo -n systemctl restart systemd-logind >/dev/null 2>&1 || say "could not restart systemd-logind"
+  sudo -n systemctl start "user@$(id -u).service" >/dev/null 2>&1 || say "could not start user@$(id -u)"
+  return 0
+}
+
 # A bash -s shell has neither brew nor mise on PATH.
 if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" || say "brew shellenv failed"
@@ -21,13 +53,16 @@ fi
 
 # 2. Rex server: the socket unit starts it on demand. First the user bus: a
 #    `bash -s` over limactl shell may lack XDG_RUNTIME_DIR, and on a fresh VM's
-#    first boot systemd-logind can spin and stop answering; a restart clears it.
+#    first boot systemd-logind can spin and stop answering. Restarting it drops
+#    every session, so logind_restart_once does it only for that fault, once a boot.
 if command -v systemctl >/dev/null 2>&1; then
   export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
   if ! systemctl --user show-environment >/dev/null 2>&1; then
-    say "systemd user manager not answering; restarting systemd-logind"
-    sudo -n systemctl restart systemd-logind >/dev/null 2>&1 || say "could not restart systemd-logind"
-    sudo -n systemctl start "user@$(id -u).service" >/dev/null 2>&1 || say "could not start user@$(id -u)"
+    # Not the logind fault: starting the user manager is harmless (it drops
+    # no sessions), so try that instead.
+    logind_restart_once ||
+      sudo -n systemctl start "user@$(id -u).service" >/dev/null 2>&1 ||
+      say "could not start user@$(id -u)"
   fi
   systemctl --user is-active --quiet rex.socket ||
     systemctl --user start rex.socket >/dev/null 2>&1 || say "rex.socket did not start"

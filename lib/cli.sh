@@ -248,7 +248,10 @@ den_clean_snapshot() {
   fi
   snap=$(den_snapshot_paths clean "${DEN_CLEAN_PATHS[@]}") || rc=$?
   case $rc in
-    0) ui_info "snapshot: $snap" ;;
+    0)
+      ui_info "snapshot: $snap"
+      den_snapshots_prune clean
+      ;;
     1) : ;;
     *)
       ui_err "clean: could not snapshot the paths it would delete; nothing removed"
@@ -320,15 +323,17 @@ den_cmd_clean() {
   done
   # Host drift is everything installed outside the Brewfile: removing it is a
   # human decision every time (CONTRACT: typed confirmation of the exact list).
-  if [ "$host_drift" = 1 ] && [ "$yes" = 1 ]; then
-    den_die "den clean --host-drift always asks you to type clean; --yes is refused"
-  fi
+  # The check sits below the dry-run branch: a dry run removes nothing, so it
+  # never needs the typed confirmation.
   den_clean_plan_build "$host_drift"
   ui_section "Clean"
   if [ "$dry" = 1 ]; then
     ui_info "dry run: printing the plan, removing nothing"
     den_clean_print_plan
     exit 0
+  fi
+  if [ "$host_drift" = 1 ] && [ "$yes" = 1 ]; then
+    den_die "den clean --host-drift always asks you to type clean; --yes is refused"
   fi
   if [ "$yes" = 0 ] && ! den_is_tty; then
     ui_err "den clean needs a terminal to confirm, or --yes; nothing removed"
@@ -445,18 +450,18 @@ $1
   esac
 }
 
-# den_sessions_prune_snapshots: keep the newest 5 sessions-*.tar.gz in the
+# den_snapshots_prune <prefix>: keep the newest 5 <prefix>-*.tar.gz in the
 # snapshots dir. Names carry the stamp, so name order is age order and ties
-# cannot happen. Everything else in that dir (dotfiles-* from the shell phase)
-# is left alone.
-den_sessions_prune_snapshots() {
-  local dir f
+# cannot happen. Everything else in that dir (other prefixes, dotfiles-* from
+# the shell phase) is left alone.
+den_snapshots_prune() {
+  local prefix=${1:-snapshot} dir f
   local snaps=()
   dir=$(den_snapshots_dir)
   if [ ! -d "$dir" ]; then
     return 0
   fi
-  for f in "$dir"/sessions-*.tar.gz; do
+  for f in "$dir/$prefix"-*.tar.gz; do
     if [ -f "$f" ]; then
       snaps[${#snaps[@]}]=$f
     fi
@@ -472,6 +477,10 @@ den_sessions_prune_snapshots() {
 $(printf '%s\n' "${snaps[@]}" | sort -r | sed -n '6,$p')
 EOF
   return 0
+}
+
+den_sessions_prune_snapshots() {
+  den_snapshots_prune sessions
 }
 
 den_cmd_sessions_export() {
@@ -830,7 +839,6 @@ den_cmd_setup() {
   if ui_confirm "run den up now?"; then
     den_cmd_up
   fi
-  ui_info "next: den up"
   exit 0
 }
 
@@ -884,6 +892,7 @@ den_cmd_dashboard() {
   local file="$DEN_STATE_DIR/last-run.json" line phase status seconds
   local started host os done_n=0 skip_n=0 fail_n=0 dry_n=0
   ui_banner
+  den_config_load
   den_dashboard_now
   if [ ! -f "$file" ]; then
     ui_info "no run recorded yet"
@@ -911,7 +920,11 @@ den_cmd_dashboard() {
 $(grep -o '{"phase":"[^"]*","status":"[^"]*","seconds":[0-9]*' "$file" 2>/dev/null || true)
 EOF
   ui_section "Summary"
-  ui_info "$done_n done, $skip_n skipped, $fail_n failed${dry_n:+, $dry_n dry-run}"
+  if [ "$dry_n" -gt 0 ]; then
+    ui_info "$done_n done, $skip_n skipped, $fail_n failed, $dry_n dry-run"
+  else
+    ui_info "$done_n done, $skip_n skipped, $fail_n failed"
+  fi
   if [ "$skip_n" -gt 0 ] || [ "$fail_n" -gt 0 ]; then
     ui_info "rerun those: den fix"
   fi

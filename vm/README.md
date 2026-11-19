@@ -70,7 +70,7 @@ so a healthy Mac stays quiet.
 ## What the vm phase does
 
 1. Sizes the VM from the Mac: cores − 2, half the RAM (macOS keeps 8 GiB),
-   half the free disk capped at 100 GiB. Creates it, or resizes a **stopped**
+   half the free disk, at least 40 GiB and at most 100 GiB. Creates it, or resizes a **stopped**
    VM that is too small; a running VM is left alone with the fix command. A
    disk below target is reported, never shrunk.
 2. Registers it for autostart and puts the Lima ssh include first in
@@ -91,7 +91,7 @@ so a healthy Mac stays quiet.
    `Restart=on-failure`). No vault name: only this step is skipped, with the
    reason. Without the empty `--configs`, the VM would push plugins (code) to
    the Mac.
-6. Installs the Rex server when the guest does not answer `rex server status`,
+6. Installs the Rex server when the guest's `rex.socket` user unit is not active,
    installs the VS Code Remote-SSH extension when missing, runs one heal
    pass, and installs/loads the vm-up login agent.
 
@@ -120,8 +120,8 @@ was **requested**; the Mac opens it over Remote-SSH.
 
 The bridge accepts one thing: an absolute path, passed as one request. It
 resumes from a persisted byte offset (never replays old requests), refuses a
-path that is not absolute or holds control characters, dedupes the same path
-within 10 s, and opens at most 5 a minute. Every accepted and rejected request
+path that is not absolute or holds control characters, refuses an immediate
+repeat of the same path within 10 s, and opens at most 5 a minute. Every accepted and rejected request
 is logged.
 
 ## Limits

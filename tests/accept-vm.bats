@@ -108,3 +108,18 @@ macos_only() { [ "$(uname)" = "Darwin" ] || skip "macOS only"; }
   grep -q '^limactl autostart enable' "$CALLS"
   grep -q '^launchctl bootstrap' "$CALLS"
 }
+
+@test "guest logins never use limactl shell -t (Lima has no such flag)" {
+  ! grep -rn 'limactl shell -t' "$REPO/lib" "$REPO/vm" "$REPO/bin"
+  grep -q 'limactl shell --tty=true' "$REPO/lib/vm.sh"
+}
+
+@test "the docker-group check compares the numeric GID: /proc never lists group names" {
+  ! grep -n 'Groups:.*docker' "$REPO/vm/guest-provision.sh" "$REPO/lib/phases/70-vm.sh"
+  grep -q 'getent group docker' "$REPO/vm/guest-provision.sh"
+  grep -q 'getent group docker' "$REPO/lib/phases/70-vm.sh"
+  # The same awk, on a status line like the guest's: GID 988 is found, 4242 is not.
+  printf 'Name:\tsystemd\nGroups:\t988 999 1000 \n' > "$TMP/status"
+  awk -v g=988 '/^Groups:/ { for (i = 2; i <= NF; i++) if ($i == g) f = 1 } END { exit !f }' "$TMP/status"
+  ! awk -v g=4242 '/^Groups:/ { for (i = 2; i <= NF; i++) if ($i == g) f = 1 } END { exit !f }' "$TMP/status"
+}

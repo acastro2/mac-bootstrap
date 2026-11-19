@@ -11,7 +11,7 @@ den_phase sudo-touchid \
 
 phase_sudo_touchid() {
   local target=${DEN_PAM_SUDO_LOCAL:-/etc/pam.d/sudo_local}
-  local prefix module desired current tmp line rest bad stamp
+  local prefix module desired current tmp line rest bad stamp foreign fix
 
   prefix=$(brew --prefix pam-reattach 2>/dev/null) || prefix=""
   module=$prefix/lib/pam/pam_reattach.so
@@ -67,6 +67,28 @@ phase_sudo_touchid() {
     rm -f "$tmp"
     den_fail "the sudo_local rule is not a safe PAM line: $bad" \
       "fix den's pam_reattach and pam_tid lines, then den up --only=sudo-touchid"
+  fi
+
+  # An active line den does not own: replacing the file would drop that rule,
+  # so keep the file and ask for den's two lines by hand instead.
+  foreign=""
+  if [ -f "$target" ]; then
+    while IFS= read -r line; do
+      case $line in
+        ''|'#'*) continue ;;
+      esac
+      case $line in
+        *pam_reattach.so*|*pam_tid.so*) ;;
+        *) foreign="$foreign${foreign:+, }$line" ;;
+      esac
+    done < "$target"
+  fi
+  if [ -n "$foreign" ]; then
+    rm -f "$tmp"
+    ui_info "add den's two lines to $target by hand:"
+    printf '%s\n' "$desired"
+    fix="keep $target as it is and append by hand: auth optional $module ignore_ssh; auth sufficient pam_tid.so"
+    den_skip "$target already has rules den does not own: $foreign" "$fix"
   fi
 
   # Keep the file den replaces: a PAM typo can lock sudo out for good.

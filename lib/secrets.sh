@@ -47,32 +47,15 @@ den_with_timeout() {
 }
 
 den_secrets_load() {
-  local doc="$DEN_RUNTIME/secrets/den.json"
-  local candidate="" recorded="" vault=${OP_VAULT:-Private}
+  local doc="" candidate="" recorded="" vault=${OP_VAULT:-Private}
   if [ -z "${DEN_RUNTIME:-}" ]; then
     den_die "secrets: no runtime directory"
   fi
+  doc="$DEN_RUNTIME/secrets/den.json"
   mkdir -p "$DEN_RUNTIME/secrets"
   den_secrets_set missing "" "" ""
-  # No `op whoami` gate: with the 1Password app integration, whoami says "not
-  # signed in" and shows no prompt, while `op document get` raises the approval
-  # prompt and works (seen 2026-11-19). The timeout covers a prompt nobody answers.
-  if command -v op >/dev/null 2>&1; then
-    ui_info "secrets: asking 1Password for the den document (approve the prompt)"
-    if den_with_timeout "${DEN_OP_TIMEOUT:-60}" op document get den --vault "$vault" >"$doc.tmp" 2>"$DEN_RUNTIME/secrets/op.err"; then
-      if den_secrets_valid "$doc.tmp"; then
-        mv "$doc.tmp" "$doc"
-        chmod 600 "$doc"
-        den_secrets_set ok "$doc" op ""
-        ui_info "secrets: loaded the den document from 1Password"
-        return 0
-      fi
-    fi
-    rm -f "$doc.tmp"
-    ui_warn "secrets: could not read the 1Password document den in vault $vault: $(sed -n '1s/^\[ERROR\] [0-9\/]* [0-9:]* //p' "$DEN_RUNTIME/secrets/op.err" 2>/dev/null | head -c 160)"
-    ui_info "secrets: 'authorization timeout' means the prompt was not approved in time; run den fix and approve it"
-    rm -f "$DEN_RUNTIME/secrets/op.err"
-  fi
+  # A file the user put there, or recorded with `den secrets import`, is the
+  # source they chose: it wins, and 1Password is not even asked.
   recorded=$(den_secrets_recorded_path) || recorded=""
   if [ -n "$recorded" ]; then
     candidate=$recorded
@@ -90,6 +73,26 @@ den_secrets_load() {
     den_secrets_set ok "$doc" file "$candidate"
     ui_info "secrets: loaded $candidate"
     return 0
+  fi
+  # No file: ask 1Password. No `op whoami` gate: with the app integration, whoami
+  # says "not signed in" and shows no prompt, while `op document get` raises the
+  # approval prompt and works (seen 2026-11-19). The timeout covers a prompt
+  # nobody answers (the app may ask on every run).
+  if command -v op >/dev/null 2>&1; then
+    ui_info "secrets: asking 1Password for the den document (approve the prompt)"
+    if den_with_timeout "${DEN_OP_TIMEOUT:-60}" op document get den --vault "$vault" >"$doc.tmp" 2>"$DEN_RUNTIME/secrets/op.err"; then
+      if den_secrets_valid "$doc.tmp"; then
+        mv "$doc.tmp" "$doc"
+        chmod 600 "$doc"
+        den_secrets_set ok "$doc" op ""
+        ui_info "secrets: loaded the den document from 1Password"
+        return 0
+      fi
+    fi
+    rm -f "$doc.tmp"
+    ui_warn "secrets: could not read the 1Password document den in vault $vault: $(sed -n '1s/^\[ERROR\] [0-9\/]* [0-9:]* //p' "$DEN_RUNTIME/secrets/op.err" 2>/dev/null | head -c 160)"
+    ui_info "secrets: 'authorization timeout' means the prompt was not approved in time; run den fix and approve it"
+    rm -f "$DEN_RUNTIME/secrets/op.err"
   fi
   den_secrets_set missing "" "" ""
   ui_info "secrets: none found; phases that need secrets will be skipped"
@@ -110,7 +113,7 @@ den_render_env() {
     den_fail "den_render_env needs an output path" "fix the phase that calls it"
   fi
   if [ -z "$file" ] || [ ! -r "$file" ]; then
-    den_skip "no secrets bundle loaded" "sign in with \`op signin\`, or drop den.json at ~/den.json"
+    den_skip "no secrets bundle loaded" "drop den.json at ~/den.json, or approve the 1Password prompt"
   fi
   den_secrets_valid "$file" || den_skip "the secrets bundle is invalid" "fix ~/den.json, then run den fix"
   count=$(jq -r '.env | length' "$file" 2>/dev/null) || count=0

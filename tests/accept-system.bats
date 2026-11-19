@@ -90,3 +90,40 @@ entries() { # entries FILE: one token per brew/cask/tap line
   [ "$(cat "$DEN_PAM_SUDO_LOCAL")" = "$before" ]
   ! grep -q '^sudo .*tee\|^sudo .*install\|^sudo .*cp' "$CALLS"
 }
+
+@test "macos-defaults: every write passes domain, key, type and value" {
+  macos_only
+  printf '#!/bin/sh\nprintf "defaults %%s\\n" "$*" >> "$CALLS"\n[ "$1" = write ] && [ $# -ne 5 ] && exit 1\nexit 0\n' > "$TMP/bin/defaults"
+  for c in osascript killall; do printf '#!/bin/sh\nexit 0\n' > "$TMP/bin/$c"; done
+  chmod +x "$TMP/bin/defaults" "$TMP/bin/osascript" "$TMP/bin/killall"
+  run "$REPO/bin/den" up --only=macos-defaults
+  [ "$status" -eq 0 ]
+  grep -qx 'defaults write -g KeyRepeat -int 2' "$CALLS"
+  grep -qx 'defaults write com.apple.dock autohide -bool true' "$CALLS"
+  [[ "$output" != *"could not set"* ]]
+}
+
+@test "macos-defaults: a write that fails fails the phase, with the key named" {
+  macos_only
+  printf '#!/bin/sh\n[ "$1" = write ] && [ "$2" = com.apple.dock ] && exit 1\nexit 0\n' > "$TMP/bin/defaults"
+  for c in osascript killall; do printf '#!/bin/sh\nexit 0\n' > "$TMP/bin/$c"; done
+  chmod +x "$TMP/bin/defaults" "$TMP/bin/osascript" "$TMP/bin/killall"
+  run "$REPO/bin/den" up --only=macos-defaults
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"com.apple.dock"* ]]
+  jq -e '.results[] | select(.phase=="macos-defaults") | .status == "failed"' "$DEN_STATE_DIR/last-run.json"
+}
+
+@test "sudo-touchid: a sudo_local with other auth rules is kept, the phase skips with the fix" {
+  macos_only
+  export DEN_PAM_SUDO_LOCAL="$TMP/sudo_local"
+  printf 'auth sufficient pam_smartcard.so\n' > "$DEN_PAM_SUDO_LOCAL"
+  mkdir -p "$TMP/reattach/lib/pam"; : > "$TMP/reattach/lib/pam/pam_reattach.so"
+  printf '#!/bin/sh\n[ "$1" = --prefix ] && echo "%s/reattach"\nexit 0\n' "$TMP" > "$TMP/bin/brew"
+  printf '#!/bin/bash\nprintf "sudo %%s\\n" "$*" >> "%s"\nwhile [[ "$1" == -* ]]; do shift; done\nexec "$@"\n' "$CALLS" > "$TMP/bin/sudo"
+  chmod +x "$TMP/bin/brew" "$TMP/bin/sudo"
+  run "$REPO/bin/den" up --only=sudo-touchid
+  [ "$(cat "$DEN_PAM_SUDO_LOCAL")" = "auth sufficient pam_smartcard.so" ]
+  jq -e '.results[] | select(.phase=="sudo-touchid") | .status == "skipped" and (.fix|length>0)' "$DEN_STATE_DIR/last-run.json"
+  [[ "$output" == *"pam_smartcard"* ]]
+}
