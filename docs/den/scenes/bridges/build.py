@@ -38,7 +38,7 @@ BRIDGES = [
     (4, ["browse relay", ":19988"], ["agents call", ":19988"], "tunnel", "up"),
     (5, ["VS Code", "window"], ["code .", "inbox"], "pulled", "pulled"),
     (6, ["vm-up", "den up"], ["start · heal", "den copy"], "control", "down"),
-    (7, ["Mac browser"], ["dev servers", "1024-9999"], "port mirror", "up"),
+    (7, ["Mac browser"], ["dev servers", "1024-9999"], "port mirror", "down"),
     (8, ["git"], ["own gh login"], "GitHub", "net"),
     (9, ["Obsidian"], ["~/Developer/obsidian", "notes only"], "Obsidian Sync", "net"),
 ]
