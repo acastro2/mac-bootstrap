@@ -212,7 +212,12 @@ den_permissions_agent_probe() {
     return 0
   fi
   if [ -f "$HOME/Library/LaunchAgents/$label.plist" ]; then
-    printf 'unknown|the plist is there but the agent is not loaded; approve it in Login Items'
+    # Not loaded is normal mid-session: macOS loads a registered agent at login.
+    if launchctl print-disabled "gui/$(id -u)" 2>/dev/null | grep -Fq "\"$label\" => disabled"; then
+      printf 'unknown|the agent is switched off; approve it in Login Items'
+    else
+      printf 'granted|registered; loads at next login'
+    fi
   else
     printf 'unknown|not installed yet (den up installs it)'
   fi
