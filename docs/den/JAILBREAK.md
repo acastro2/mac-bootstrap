@@ -27,13 +27,13 @@ flowchart LR
 
 | Path | Today | Fix | Who |
 | --- | --- | --- | --- |
-| Mac loopback (U1) | open | Lima setting, code done, test on the Mac | den, then Alex runs it |
+| Mac loopback (U1) | **closed** | Lima setting, live on the Mac 2026-11-20 (`den doctor`: host loopback blocked) | done |
 | Mac SSH (U2) | open | keep it on, keys only | Alex |
 | Mac Screen Sharing and ARD (U3) | open | keep them on, `pf` blocks the Mac-to-itself path (test first) | Alex |
 | Unknown Mac ports (U4) | open | find them with `lsof` | Alex |
 | git push to repos the Mac runs (U5) | open by design | **accepted risk** (D2) | none |
 | Browser (K3) | open | lock the relay switches, then a separate profile | den, Alex |
-| Port squatting (U7) | open | mirror only 1024-9999, code done, test on the Mac | den, then Alex runs it |
+| Port squatting (U7) | **closed** | mirror only 1024-9999, tests green on the Mac 2026-11-20 | done |
 | Vault notes (U6) | not checked | check the Mac vault plugins | Alex |
 | Rex terminal output (K4) | not checked | check clipboard access in Rex.app | Alex |
 | Mac reads VM output (K6) | not checked | audit the scripts for `eval` | den |
@@ -49,7 +49,7 @@ The VM cannot see these settings, so only you can do them.
 - [ ] **Unknown ports (U4):** run `sudo lsof -nP -iTCP -sTCP:LISTEN`. Each listener on `*` stays reachable from the VM even after the loopback fix. Turn off what you do not need.
 - [ ] **Vault (U6):** check whether Dataview JS, Templater scripts, or any other plugin runs code from note content.
 - [ ] **Rex (K4):** turn off clipboard writes from the remote (OSC 52), if Rex.app has the setting.
-- [ ] **Loopback (U1) and ports (U7), after the change is on the Mac:** run `bats tests/vm.bats`, then `den vm down && den up --only=vm`, then `den doctor`. Expect `vm: host loopback blocked`. Then run the U7 port test.
+- [x] **Loopback (U1) and ports (U7):** done 2026-11-20. `bats tests/vm.bats` 23/23 on the Mac, and `den doctor` prints `vm: host loopback blocked`. The U7 port test is the remaining manual check.
 
 ## Paths we close
 
@@ -63,7 +63,7 @@ The VM cannot see these settings, so only you can do them.
 
 We did not use a firewall in the guest, because root in the guest can delete the rule.
 
-**Test:** `den doctor` connects from the guest to the VM's own SSH port on the Mac loopback. It must fail.
+**Test:** `den doctor` connects from the guest to the VM's own SSH port on the Mac loopback. It must fail. Verified on the Mac 2026-11-20.
 
 **Limit:** this does not cover Mac services that listen on every interface. The VM still reaches those through the Mac's LAN address. That is why SSH and Screen Sharing need their own fix.
 
@@ -143,7 +143,7 @@ The vm phase sets this on a stopped VM, and warns on a running one.
 
 **Limit:** a Mac program that waits on a **fixed** port in 1024-9999 can still be caught. Which of your Mac CLIs do that is **not checked**.
 
-**Test:** `tests/vm.bats` checks the three rules and their order. On the Mac: start `python3 -m http.server 50000` in the VM; `curl localhost:50000` on the Mac must fail, and the same on port 8000 must work.
+**Test:** `tests/vm.bats` checks the three rules and their order, and passes on the Mac (2026-11-20). Still manual: on the Mac: start `python3 -m http.server 50000` in the VM; `curl localhost:50000` on the Mac must fail, and the same on port 8000 must work.
 
 ### Vault notes (U6)
 
