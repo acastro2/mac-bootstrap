@@ -41,7 +41,7 @@ flowchart LR
 | Browser (K3) | **OK** | accepted risk D5: the VM drives your logged-in Edge, on purpose | none |
 | Vault notes (U6) | **OK** | accepted risk D4: a VM note reaches the Mac, by design like git push | none |
 | Rex terminal output (K4) | **OK** | accepted risk D3: confirmed, a VM program wrote the Mac clipboard | none |
-| Lima guest agent (K7) | **not checked** | `/dev/vsock` is 666 and the agent runs as root; the protocol is Lima's | read Lima's protocol, or accept it |
+| Lima guest agent (K7) | **OK** | the Mac dials the guest; the guest can only make the Mac bind `127.0.0.1` ports 1024-9999. Residual: a guest can crash the host agent | none |
 
 No NOK: every path is closed, unreachable from the VM, or accepted with its reason written down.
 
@@ -222,11 +222,18 @@ The Mac could then paste `CLIPBOARD-FROM-VM`. So Rex honours `OSC 52` from the V
 
 vm-up and `den doctor` read what VM commands print. Checked 2026-11-20: no `eval` of guest output anywhere in `vm/`, `lib/` or `bin/`. The one `eval` is a fixed string run inside the guest. Guest values are parsed with `case` and `sed`, and the numbers are checked before use.
 
-### Lima guest agent (K7): not checked
+### Lima guest agent (K7): safe, with one residual
 
-**What:** `lima-guestagent` runs as root in the guest and speaks to the Mac's host agent over vsock. `/dev/vsock` is mode 666, so any process in the VM can open that channel, root or not.
+**What:** `lima-guestagent` runs as root in the guest and talks to the Mac's host agent over vsock. `/dev/vsock` is mode 666, so any process in the VM can open it.
 
-**Not checked:** what the host agent will do for a request. Lima uses the channel for port forwarding, SSH, time sync and user setup. Lima's model trusts the guest, so this is a path by design, but I did not read the protocol, and the binary shows no obvious file-write or exec verb. If you want this closed rather than accepted, the work is to read Lima's host agent RPC surface and list what a forged guest can ask for.
+**Checked 2026-11-20 against the Lima v2.3.0 source** (commit `800a96b`), not on a Mac:
+
+- **The Mac dials, the guest serves.** The host agent is the gRPC client and dials guest vsock port 2222 (`pkg/driver/vz/vz_driver_darwin.go`). The guest never starts a request.
+- **No file or exec path.** No message carries a path or a command. `copyToHost` is the only guest-to-host file copy, it runs over SSH, and our template has none. `ssh.forwardAgent` is false.
+- **Port events are checked on the Mac.** A forged guest can announce any port, but the host agent matches it against our three rules (`pkg/portfwd/forward.go`), and the bind address comes from the rule. So the worst case is a listener on Mac `127.0.0.1:P` for P in 1024-9999, which is U7 and already accepted. It cannot bind `0.0.0.0` or a port outside the range.
+- **Lima does not listen on vsock on the Mac,** so the guest has no other vsock service to reach. That the Apple framework refuses a guest connection when no listener exists is **not checked** on a Mac.
+
+**Residual: denial of service.** The host agent accepts gRPC messages up to 2 GiB (`pkg/guestagent/api/client/client.go`), and it opens one listener per announced port. A guest can exhaust the host agent's memory or file descriptors. That stops port forwarding and VM management, not the Mac. No Lima setting removes it.
 
 ### VS Code window (K1): accepted risk
 
