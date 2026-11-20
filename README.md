@@ -164,15 +164,16 @@ Everything secret is in one 1Password Document named `den` (file `den.json`):
 
 ## Permissions
 
-macOS does not let any script grant privacy permissions without MDM, so den checks them and walks you through the required panes once. The browser and login-item rows are only reported, with the fix. Grant them to **Rex Server**, not to the Rex app, because every shell in a Rex tab belongs to the server.
+macOS does not let any script grant privacy permissions without MDM, so den checks them and walks you through the required panes once. The login-item rows are only reported, with the fix. Grant them to **Rex Server**, not to the Rex app, because every shell in a Rex tab belongs to the server.
 
 | Grant | For |
 | --- | --- |
 | Rex Server: Full Disk Access | scribe reading Voice Memos |
-| Rex Server: Accessibility, Screen Recording | peekaboo and browser control from a Rex tab |
+| Rex Server: Accessibility, Screen Recording | peekaboo clicks, typing and screenshots from a Rex tab |
 | Hex: Microphone, Accessibility | dictation |
 | Login items: vm-up, Lima | the VM starts at login |
-| Browser: "Allow JavaScript from Apple Events" | browser control through Apple Events (View > Developer) |
+
+Browser control does not use Apple Events: it goes through the browse relay, so **Allow JavaScript from Apple Events** stays off in every browser.
 
 den never enables Developer Tools mode, never calls `tccutil`, and never edits the TCC database. The research behind this, with sources: [docs/den/macos-permissions.md](docs/den/macos-permissions.md).
 

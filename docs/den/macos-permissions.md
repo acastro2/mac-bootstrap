@@ -173,7 +173,13 @@ Two facts that change behaviour:
   answers by default, and it reported `Screen Recording: false` while the local CLI reported `true`.
   Grant to whichever host the `Source:` line names; `--no-remote` forces the local one.
 
-### 2.3 Browsers (Brave, Chrome, Edge) — Apple Events + "Allow JavaScript from Apple Events"
+### 2.3 Browsers (Brave, Chrome, Edge) — not used
+
+**Not used by `den`.** Browser control goes through the browse relay (the Mac's
+`browse serve` on `127.0.0.1:19988`, reached from a VM agent through the Rex
+tunnel), not through Apple Events. So `den` asks for no Automation grant and does
+not check "Allow JavaScript from Apple Events"; leave it off. The rows below stay
+as reference for anything that goes back to `osascript`. Facts, with sources:
 
 | Permission / setting | Why | Where | How to register | How to detect | Source |
 | --- | --- | --- | --- | --- | --- |
@@ -502,8 +508,8 @@ Every step is skippable and must never fail the run (contract rule 3).
 
 **Preflight, once, with the human at the keyboard**
 
-1. Print one page: "These four clicks need you; one prompt fires by itself. Everything else is
-   automatic." Then open the panes in this order, with `open -g` and a 2 s gap:
+1. Print one page: "These three clicks need you; everything else is automatic." Then open the
+   panes in this order, with `open -g` and a 2 s gap:
    1. `…?Privacy_AllFiles` — add **Rex Server.app**
       (`~/Library/Application Support/com.superlogical.rex/RexServer/Versions/Current/Rex Server.app`).
       Not `Rex Beta.app`.
@@ -511,8 +517,7 @@ Every step is skippable and must never fail the run (contract rule 3).
       `peekaboo permissions request accessibility` and let the prompt do it.
    3. `…?Privacy_ScreenCapture` — add **Rex Server.app**, or
       `peekaboo permissions request screen-recording`.
-   4. `…?Privacy_Automation` — triggered by the first `osascript` to Brave/Chrome; do not pre-open.
-   5. General > **Login Items & Extensions** — approve `io.mac-bootstrap.vm-up` and Lima.
+   4. General > **Login Items & Extensions** — approve `io.mac-bootstrap.vm-up` and Lima.
 2. Tell the human to **quit and reopen Rex** after the grants. TCC reads the identity at launch for some
    services, and Hex's own docs confirm the pattern ("On in System Settings, unusable until relaunch").
 3. Run the probes and print a table: `rex api call server.apple.privacy_status`,
@@ -524,22 +529,19 @@ Every step is skippable and must never fail the run (contract rule 3).
 4. `sudo-touchid`: install `pam-reattach` (brew), write `/etc/pam.d/sudo_local` with `optional`
    reattach + `sufficient pam_tid`, back up any existing file, verify with `grep`. Skip when the file
    already has `pam_tid`.
-5. `browser-js`: read `browser.allow_javascript_apple_events` per profile and **report** it. Do not
-   write it. If it is off, print the menu path ("View > Developer > Allow JavaScript from Apple Events")
-   and the profile that is off.
-6. `den doctor` additions: responsible path behind `sudo -n launchctl procinfo`, background item state
+5. `den doctor` additions: responsible path behind `sudo -n launchctl procinfo`, background item state
    via `sudo -n sfltool dumpbtm` (verbose only), and the stale-row warning for Hex
    (`com.kitlangton.hex2`, `com.kitlangton.Hex`, `anomaly.hex`).
-7. Never call `tccutil reset` from a phase. The one legitimate use is the stale-identity cleanup Hex
+6. Never call `tccutil reset` from a phase. The one legitimate use is the stale-identity cleanup Hex
    documents, and that is the app's job, not the setup's.
 
 **Do not**
 
-8. Do not grant Full Disk Access to Terminal, iTerm, VS Code or Rex Beta "just in case". FDA is
+7. Do not grant Full Disk Access to Terminal, iTerm, VS Code or Rex Beta "just in case". FDA is
    system-wide in effect: granting it to one app lets everything that app runs inherit it.
-9. Do not edit a TCC database. On macOS 26 it is not writable by a normal admin process, and the write
+8. Do not edit a TCC database. On macOS 26 it is not writable by a normal admin process, and the write
    is the thing MDM exists for.
-10. Do not promise that a grant survives a reinstall of the app. TCC keys on the code identity: a
+9. Do not promise that a grant survives a reinstall of the app. TCC keys on the code identity: a
     re-signed build, a new Cellar path, or a new bundle id is a new client
     ([peekaboo.sh](https://peekaboo.sh/permissions.html), [Hex 3.0.0 notes](https://github.com/anomalyco/hex/releases/tag/v3.0.0)).
 
@@ -551,8 +553,6 @@ Every step is skippable and must never fail the run (contract rule 3).
   TN3179's definition of a local network (broadcast-capable interface, not VPN).
 - Apple does not document which TCC class protects `~/Library/Group Containers/group.com.apple.VoiceMemos.shared`.
   Three third-party tools say Full Disk Access; it is unverified locally (no Voice Memos data on this Mac).
-- No Apple or vendor page says Edge exposes "Allow JavaScript from Apple Events"; Chromium's pref and
-  menu path are sourced, Edge and Brave parity is assumed.
 - Whether editing a browser profile's `Preferences` while the browser runs is safe. Not verified.
 - Whether `pyusb`/libusb needs any grant on macOS 26. No USB privacy class appears in Apple's lists.
 - Whether a CLI read inside `~/Library/CloudStorage/OneDrive-Personal` prompts, and where it then shows

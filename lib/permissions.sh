@@ -6,11 +6,6 @@
 DEN_PERM_PRIVACY_URL="x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension"
 DEN_PERM_LOGINITEMS_URL="x-apple.systempreferences:com.apple.LoginItems-Settings.extension"
 
-# Browser prefs: "support dir:label" rows, one per browser.
-DEN_PERM_BROWSERS="BraveSoftware/Brave-Browser:Brave
-Google/Chrome:Chrome
-Microsoft Edge:Edge"
-
 DEN_PERM_WALK_ID=()
 DEN_PERM_WALK_LABEL=()
 DEN_PERM_WALK_WHY=()
@@ -35,7 +30,6 @@ hex_microphone|Hex: Microphone|Hex dictation records your voice|hex|microphone|h
 hex_accessibility|Hex: Accessibility|Hex sees its shortcut in every app and pastes the text|hex|accessibility|hex_accessibility|1
 vmup_login|Login item: vm-up|starts the agent VM at login (io.mac-bootstrap.vm-up)|-|loginitems|launchagent_vmup|0
 lima_login|Login item: Lima autostart|Lima starts its VM at login (io.lima-vm.autostart.agent)|-|loginitems|launchagent_lima|0
-browser_js|Browsers: JavaScript from Apple Events|osascript drives tabs; without it every call fails with -1723|-|-|browser_js|0
 pam_tid|Touch ID for sudo|sudo asks for a finger, not a password|-|-|pam_tid|0
 devtools|Developer Tools|not needed; off is the recommendation|-|devtools|devtools|0
 EOF
@@ -224,48 +218,6 @@ den_permissions_agent_probe() {
   fi
 }
 
-den_permissions_browser_probe() {
-  local name label dir profile value found=0 off="" on="" profile_name
-  if ! command -v jq >/dev/null 2>&1; then
-    printf 'unknown|jq is missing, so the browser prefs cannot be read'
-    return 0
-  fi
-  while IFS=: read -r name label; do
-    if [ -z "$name" ]; then
-      continue
-    fi
-    dir="$HOME/Library/Application Support/$name"
-    for profile in "$dir"/*/Preferences; do
-      if [ ! -f "$profile" ]; then
-        continue
-      fi
-      profile_name=${profile%/Preferences}
-      profile_name=${profile_name##*/}
-      case $profile_name in
-        'System Profile'|'Guest Profile') continue ;;
-      esac
-      found=$((found + 1))
-      value=$(jq -r '.browser.allow_javascript_apple_events // empty' "$profile" 2>/dev/null) || value=""
-      if [ "$value" = true ]; then
-        on="$on $label:${profile_name}"
-      else
-        off="$off $label:${profile_name}"
-      fi
-    done
-  done <<EOF
-$DEN_PERM_BROWSERS
-EOF
-  if [ "$found" -eq 0 ]; then
-    printf 'unknown|no Brave, Chrome or Edge profile found'
-    return 0
-  fi
-  if [ -n "$off" ]; then
-    printf 'missing|off in%s; turn it on in View > Developer > Allow JavaScript from Apple Events' "$off"
-    return 0
-  fi
-  printf 'granted|on in%s' "$on"
-}
-
 den_permissions_pam_probe() {
   if [ -f /etc/pam.d/sudo_local ] &&
     grep -Eq '^[[:space:]]*auth[[:space:]].*pam_tid' /etc/pam.d/sudo_local 2>/dev/null; then
@@ -300,7 +252,6 @@ den_permissions_probe() {
     hex_accessibility) den_permissions_hex_probe accessibility ;;
     launchagent_vmup) den_permissions_agent_probe io.mac-bootstrap.vm-up ;;
     launchagent_lima) den_permissions_agent_probe io.lima-vm.autostart.agent ;;
-    browser_js) den_permissions_browser_probe ;;
     pam_tid) den_permissions_pam_probe ;;
     devtools) den_permissions_devtools_probe ;;
     *) printf 'unknown|no detector named %s' "${1:-}" ;;
