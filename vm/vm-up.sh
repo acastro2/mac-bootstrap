@@ -432,25 +432,69 @@ if ! command -v limactl >/dev/null 2>&1; then
   exit 0
 fi
 
-# A forward lives as a block in a Rex session, and a fresh guest server has
-# none ("session target default not found: no sessions"). Keep one named
-# session for the tunnel, so it never depends on a tab being open.
-TUNNEL_SESSION=den
+# A forward lives as a block in a Rex session. Agents rename sessions, so pick
+# one by ID, never by label: the remembered one, else any listed one. Create a
+# session (tab closed) only when the guest server has none.
+TUNNEL_SID=
 SESSION_TIMEOUT="${VM_UP_SESSION_TIMEOUT:-30}"
 # A Rex call that times out can leave a child holding the pipe it wrote to,
 # and the reader would then wait for that child. Capture to a file instead.
+
+# Sets TUNNEL_SID to a new den session with its zsh tab closed.
+tunnel_create_session() {
+  local made="$STATE/tunnel-session-new" wins="$STATE/tunnel-windows" wid wids
+  if ! to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm session new den --json >"$made" 2>/dev/null; then
+    log "tunnel: could not create a den session in the VM Rex server"
+    return 1
+  fi
+  TUNNEL_SID=$(jq -r '.session_id // empty' "$made" 2>/dev/null) || TUNNEL_SID=""
+  case "$TUNNEL_SID" in
+    ''|*[!A-Za-z0-9:_-]*)
+      log "tunnel: session new gave no usable session ID"
+      TUNNEL_SID=
+      return 1
+      ;;
+  esac
+  if to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm window ls -s "$TUNNEL_SID" --json >"$wins" 2>/dev/null; then
+    wids=$(jq -r '.windows[]?.window_id // empty' "$wins" 2>/dev/null) || wids=""
+    while IFS= read -r wid; do
+      [ -n "$wid" ] || continue
+      to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm window close -s "$TUNNEL_SID" "$wid" >/dev/null 2>&1 ||
+        log "tunnel: could not close window $wid of session $TUNNEL_SID"
+    done <<<"$wids"
+  else
+    log "tunnel: could not list the windows of session $TUNNEL_SID"
+  fi
+}
+
+# Sets TUNNEL_SID. Returns 1 when there is no session to forward into.
 tunnel_session() {
-  local list="$STATE/tunnel-sessions"
-  if to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm session ls >"$list" 2>/dev/null &&
-    awk 'NR > 1 { print $1 }' "$list" | grep -qx "$TUNNEL_SESSION"; then
-    return 0
+  local list="$STATE/tunnel-sessions" ids remembered why
+  if ! command -v jq >/dev/null 2>&1; then
+    log "tunnel: jq is not installed; no tunnel session chosen"
+    return 1
   fi
-  if to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm session new "$TUNNEL_SESSION" >/dev/null 2>&1; then
-    log "tunnel: created the $TUNNEL_SESSION session in the VM Rex server"
-    return 0
+  if ! to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm session ls --json >"$list" 2>/dev/null; then
+    log "tunnel: session ls failed or timed out; no forward"
+    return 1
   fi
-  log "tunnel: could not create the $TUNNEL_SESSION session in the VM Rex server"
-  return 1
+  if ! ids=$(jq -r '.sessions[]?.session_id // empty' "$list" 2>/dev/null); then
+    log "tunnel: session ls gave invalid JSON; no forward"
+    return 1
+  fi
+  remembered=$(state_get tunnel-session)
+  if [ -n "$remembered" ] && grep -qxF -- "$remembered" <<<"$ids"; then
+    TUNNEL_SID=$remembered
+    why=remembered
+  elif [ -n "$ids" ]; then
+    TUNNEL_SID=$(head -n 1 <<<"$ids")
+    why=reused
+  else
+    tunnel_create_session || return 1
+    why=created
+  fi
+  state_set tunnel-session "$TUNNEL_SID"
+  log "tunnel: using session $TUNNEL_SID ($why)"
 }
 
 # A forward block from an earlier run keeps its listener in the guest, so every
@@ -477,7 +521,7 @@ if [ -n "${VM_UP_ONCE:-}" ]; then
     ensure_relay || true
     if [ -x "$REX_CLI" ]; then
       tunnel_session && tunnel_reap &&
-        "$REX_CLI" -S vm forward new --session "$TUNNEL_SESSION" -R "127.0.0.1:$PORT:127.0.0.1:$PORT"
+        "$REX_CLI" -S vm forward new --session "$TUNNEL_SID" -R "127.0.0.1:$PORT:127.0.0.1:$PORT"
     else
       log "Rex CLI not found at $REX_CLI; the tunnel is not up"
     fi
@@ -496,7 +540,7 @@ if [ "$TUNNEL" = 1 ]; then
   fi
   log "tunnel: vm 127.0.0.1:$PORT -> Mac 127.0.0.1:$PORT"
   if tunnel_session && tunnel_reap; then
-    "$REX_CLI" -S vm forward new --session "$TUNNEL_SESSION" -R "127.0.0.1:$PORT:127.0.0.1:$PORT"
+    "$REX_CLI" -S vm forward new --session "$TUNNEL_SID" -R "127.0.0.1:$PORT:127.0.0.1:$PORT"
   fi
   log "forward exited"
 else
