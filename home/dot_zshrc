@@ -275,7 +275,8 @@ gpsup() {
 # The gh credential helper prefers GH_TOKEN over the active account, so the
 # push authenticates as acastro2 while other shells and agent sessions keep
 # the account they were on. Keeps working when a push is interrupted, which
-# a switch-and-restore flow would not.
+# a switch-and-restore flow would not. The helper is set per call (-c), because
+# the Mac git config has only osxkeychain; without it git asks for a password.
 git-push-acastro2() {
   local token
   token=$(gh auth token --user acastro2 2>/dev/null)
@@ -284,7 +285,7 @@ git-push-acastro2() {
     return 1
   fi
   print -- 'Pushing as acastro2'
-  GH_TOKEN=$token git push "$@"
+  GH_TOKEN=$token git -c credential.helper= -c 'credential.https://github.com.helper=!gh auth git-credential' push "$@"
 }
 
 # Pull as acastro2 with the same token trick: gpr (git pull --rebase) as the second
@@ -300,7 +301,7 @@ git-pull-acastro2() {
     git@* | ssh://*) print -u2 'git-pull-acastro2: SSH origin ignores GH_TOKEN' ;;
   esac
   print -- 'Pulling as acastro2'
-  GH_TOKEN=$token git pull --rebase "$@"
+  GH_TOKEN=$token git -c credential.helper= -c 'credential.https://github.com.helper=!gh auth git-credential' pull --rebase "$@"
 }
 
 git-clean() {
