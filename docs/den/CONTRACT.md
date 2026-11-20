@@ -219,6 +219,13 @@ stopping the VM, so nothing restarts it; `den vm up` turns both back on.
 
 ## Host vs VM
 
+Isolation is part of this contract. `docs/den/JAILBREAK.md` lists every path
+from the VM to the Mac, each with its evidence and its control, and the
+decision log for any risk accepted on purpose. A change that opens a new path,
+or reopens an accepted one, changes this contract: update that file in the
+same commit.
+
+
 The VM is the dev box; the Mac is the window, the keys, the browser and the VM
 host. Coding happens in the VM.
 

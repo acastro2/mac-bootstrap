@@ -22,11 +22,16 @@ throws the whole box away and builds a new one.
 | SSH keys | **Not forwarded** (`ssh.forwardAgent: false`) | The guest has its own `gh` login, so it never borrows the Mac's 1Password agent |
 | API keys | `limactl copy` of `~/.config/zsh/.api-keys.zsh`, mode 600 | `op` stays on the Mac; every key still reaches the dev box, on purpose |
 | Browse relay | `rex forward -R 127.0.0.1:19988` plus the relay token, mode 600 | VM agents drive the Mac browser; the relay port is not mirrored back (Lima `portForwards` ignores it) |
-| Editing | VS Code Remote-SSH to `lima-agent` | Edit the clones in place |
+| Editing | VS Code Remote-SSH to `lima-agent` | Edit the clones in place. **Accepted risk:** while a window is open, the VM can ask it to run a command on the Mac. Remote-SSH trusts the remote. See [../docs/den/JAILBREAK.md](../docs/den/JAILBREAK.md) |
 | Host folders | **None mounted** (`mounts: []`) | Nothing in `~/.config`, `~/.ssh` or `~/Library` is reachable |
 
-The guest can still open network connections to services on the Mac
-(`192.168.5.2`). Bind Mac services to `127.0.0.1`.
+By default, Lima's gateway (`192.168.5.2`, `host.lima.internal`) leads to
+the Mac's `127.0.0.1`, so binding a Mac service to localhost does not protect
+it. `lima-dev.yaml` sets `networkOpts.hostLoopback: false` to close that path,
+and `den doctor` checks it. Mac services that listen on every interface (SSH,
+Screen Sharing) stay reachable through the Mac's LAN address and need their
+own fix. Every path from the VM to the Mac:
+[../docs/den/JAILBREAK.md](../docs/den/JAILBREAK.md).
 
 ## Use it
 

@@ -11,7 +11,7 @@ The agents are wild animals: fast, strong, and not to be trusted with your Mac. 
 
 | In the picture | What it is in den |
 | --- | --- |
-| The den: thick walls, cage bars, no door | The Lima VM `agent`. You can see in; nothing gets out: no shared folders, no SSH agent, no way into the Mac. |
+| The den: thick walls, cage bars, no door | The Lima VM `agent`. You can see in; nothing gets out: no shared folders, no SSH agent, no way into the Mac. One exception, accepted on purpose: an open VS Code window on the VM (see [VM escape spec](docs/den/JAILBREAK.md)). |
 | The wolf, the fox, the raccoon at its crate (orange, cyan, violet eyes) | The agents and their tools: Claude Code, OpenCode, Docker containers. |
 | The server rack on the back wall | The Rex server, where your terminal tabs run. |
 | The robot T-Rex at the console | You, on the Mac. Huge, but it steers the whole den with tiny arms on one lever: `den`. |
@@ -25,7 +25,9 @@ Everything that does cross the boundary is in [The bridges](#the-bridges). The p
 
 Coding agents run with few permission prompts. On a Mac, one wrong command from an agent can break the OS install, and on a managed Mac that can mean a wipe. So the agents live in a Lima VM, and the Mac is only the window, the keys, the browser and the VM host. A bad command in the VM can only damage the VM, and `den vm rebuild` gets you a new one.
 
-The VM is a real dev box, not a jail: it gets every API key, its own GitHub login, Docker, and a synced copy of your vault. What it never gets is your Mac's files, your SSH agent, or a way to run code on the Mac. The one exception is `code .`, which can only ask the Mac to open a VS Code window on a VM folder.
+The VM is a real dev box, not a jail: it gets every API key, its own GitHub login, Docker, and a synced copy of your vault. What it never gets is your Mac's files, your SSH agent, or a way into your Mac login.
+
+There is one hole, accepted on purpose: **VS Code Remote-SSH**. When a VS Code window is open on a VM folder, VS Code trusts the VM, and a compromised VM can use that window to run a command on the Mac. This is how Remote-SSH works, not a bug in den. `docs/den/JAILBREAK.md` lists every path and the decision. The `code .` bridge itself is safe: it only asks the Mac to open a window on a path it validates.
 
 ## The bridges
 
@@ -39,18 +41,20 @@ The Mac and the VM touch in exactly these places. **The Mac opens every connecti
 | # | Bridge | Who opens it | What crosses | The guard |
 | --- | --- | --- | --- | --- |
 | 1 | Rex tabs | Rex.app, over SSH to `lima-agent` | your keystrokes and the terminal | the Rex server listens only on a Unix socket in the VM (mode 600); SSH is the only way to it |
-| 2 | VS Code | VS Code Remote-SSH | files of the folder you open | the editor runs on the Mac, the files stay in the VM |
+| 2 | VS Code | VS Code Remote-SSH | files of the folder you open, **and commands the VM runs on the Mac** | the editor runs on the Mac, the files stay in the VM. **Accepted risk:** Remote-SSH trusts the VM. While a window is open, the VM can ask the window to run a command as you. See [JAILBREAK.md](docs/den/JAILBREAK.md) |
 | 3 | API keys and the browse relay token | den and vm-up, with `limactl copy` | two files | mode 600; copied by `den up`, then by vm-up only when the content changes |
 | 4 | Browser control | vm-up runs `rex forward` from the Mac into the VM | browse commands from VM agents to your browser | VM port 19988 reaches only the relay; the tunnel lives in its own Rex session `den`. Pair the browser with `browse pair` **on the Mac**: a code made in the VM never works, because the relay reads only the Mac's codes |
 | 5 | `code .` | vm-up pulls the inbox over SSH | one folder path per line | absolute path only, 1024 characters max, no control characters, an immediate repeat of the same path within 10 s is refused, 5 opens a minute at most |
 | 6 | Lifecycle | vm-up and `den up` | start and restart, the guest heal script, a copy of this repo | one way, Mac to VM |
-| 7 | Dev servers | your Mac browser, through Lima | HTTP to `localhost:<port>` | every guest localhost port is mirrored except 19988, so a VM process can listen on a Mac loopback port: a deliberate trade for dev servers that just work |
+| 7 | Dev servers | your Mac browser, through Lima | HTTP to `localhost:<port>` | only guest ports 1024-9999 are mirrored (not 19988), so dev servers open on the Mac but the VM can never take a Mac ephemeral port (49152-65535) that a CLI login waits on. The VM cannot reach Mac loopback services (`networkOpts.hostLoopback: false`). See [JAILBREAK.md](docs/den/JAILBREAK.md) |
 | 8 | GitHub | each side on its own | code, through pushes and pulls | the VM has its own `gh` login; the Mac's SSH agent never goes in |
 | 9 | Obsidian | each side on its own | notes | config sync is off in the VM (`--configs ""`), so it can never push plugins to the Mac |
 
 The picture is code: `python3 docs/den/scenes/bridges/build.py`.
 
-**What never crosses:** your Mac's files (no shared folders), your SSH agent (no forwarding), your Mac login (the VM has no way in), and anything that runs on the Mac at the VM's request, apart from browser actions through the relay (bridge 4) and a VS Code window (bridge 5).
+**What never crosses:** your Mac's files (no shared folders), your SSH agent (no forwarding), and your Mac login (the VM has no way in).
+
+**What does cross at the VM's request:** browser actions through the relay (bridge 4), a VS Code window on a path the Mac validates (bridge 5), and — while that window is open — whatever commands the VM asks the window to run, which includes a terminal on the Mac (bridge 2). That last one breaks the isolation claim, and it is an accepted risk. Every path, with its evidence and control: [docs/den/JAILBREAK.md](docs/den/JAILBREAK.md).
 
 ## Quick start
 
@@ -208,4 +212,4 @@ Import checks every path in the archive, takes a snapshot of what it replaces, e
 
 ## Working on den
 
-Read [docs/den/CONTRACT.md](docs/den/CONTRACT.md) first: the rules every phase follows, the layout, and the hooks. Each phase is one file in `lib/phases/`. Tests: `bats tests/` (CI also runs `shellcheck` on every script and `zsh -n` on the dotfiles). The pictures are code too: the den is `node docs/den/scenes/den/build.mjs`, the bridges are `python3 docs/den/scenes/bridges/build.py`, and the terminal shots are `docs/den/scenes/term/render.py` over real saved output (the file explains how to capture them).
+Read [docs/den/CONTRACT.md](docs/den/CONTRACT.md) first: the rules every phase follows, the layout, and the hooks. Then [docs/den/JAILBREAK.md](docs/den/JAILBREAK.md): every path from the VM to the Mac, what closes it, and the risk we accepted on purpose. Each phase is one file in `lib/phases/`. Tests: `bats tests/` (CI also runs `shellcheck` on every script and `zsh -n` on the dotfiles). The pictures are code too: the den is `node docs/den/scenes/den/build.mjs`, the bridges are `python3 docs/den/scenes/bridges/build.py`, and the terminal shots are `docs/den/scenes/term/render.py` over real saved output (the file explains how to capture them).
