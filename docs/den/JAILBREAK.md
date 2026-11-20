@@ -203,6 +203,8 @@ vm-up and `den doctor` read what VM commands print. That is safe only if they tr
 
 **What we accept:** while a VS Code window is open on a VM folder, the VM can run a command as you on the Mac. Closing the window closes the path.
 
+**Proven live on 2026-11-20**, VS Code 1.147.0: a throwaway extension in `~/.vscode-server/extensions` called `workbench.action.terminal.newLocal`, then `workbench.action.terminal.sendSequence` with `echo 'vm jailbreak'`. The Mac opened a local terminal and ran it (`This shell is running on your local machine, not on the connected remote`). The same extension also reached the Mac with `env.openExternal`. The extension is removed. So this is not a theory, and this version has no block.
+
 **How it works:**
 
 ```mermaid
