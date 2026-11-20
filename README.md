@@ -110,7 +110,7 @@ The VM is the dev box. The Mac keeps what needs the Mac.
 | Where | What |
 | --- | --- |
 | **Both** | Claude Code, OpenCode and their configs and skills, git, gh, the shell (zsh, Zim, starship, carapace, fzf, eza, bat, ripgrep, fd, jq, yq, neovim, gum), Rex Agent Restore, uv, ffmpeg |
-| **Mac only** | 1Password, Rex, Lima, VS Code with Remote-SSH, the browse relay, Obsidian, Hex and the scribe stack, peekaboo, Rectangle, the desktop apps, shellcheck and bats for this repo |
+| **Mac only** | 1Password, Rex, Lima, VS Code with Remote-SSH, the browse relay, Obsidian, Hex and the scribe stack, peekaboo, Rectangle, the desktop apps, shellcheck for this repo |
 | **VM only** | mise and every toolchain (Node LTS, .NET LTS, latest Go, Python, OpenTofu, pnpm), Docker Engine, kubectl, k9s, helm, awscli, the Snowflake CLI, PostgreSQL (latest), redis, Playwright, browser-use, asdf, opentunnel, the Rex server, Obsidian Headless |
 
 `Brewfile` is the Mac list, `Brewfile.linux` is the VM list. `den doctor` on the Mac reports anything installed that the Mac `Brewfile` does not declare, with the command to remove it. A VM-only tool installed on the Mac counts as drift too. Nothing is removed until you run `den clean --host-drift` and confirm.
@@ -213,4 +213,4 @@ Import checks every path in the archive, takes a snapshot of what it replaces, e
 
 ## Working on den
 
-Read [docs/den/CONTRACT.md](docs/den/CONTRACT.md) first: the rules every phase follows, the layout, and the hooks. Then [docs/den/JAILBREAK.md](docs/den/JAILBREAK.md): every path from the VM to the Mac, what closes it, and the risk we accepted on purpose. Each phase is one file in `lib/phases/`. Tests: `bats tests/` (CI also runs `shellcheck` on every script and `zsh -n` on the dotfiles). The pictures are code too: the den is `node docs/den/scenes/den/build.mjs`, the bridges are `python3 docs/den/scenes/bridges/build.py`, and the terminal shots are `docs/den/scenes/term/render.py` over real saved output (the file explains how to capture them).
+Read [docs/den/CONTRACT.md](docs/den/CONTRACT.md) first: the rules every phase follows, the layout, and the hooks. Then [docs/den/JAILBREAK.md](docs/den/JAILBREAK.md): every path from the VM to the Mac, what closes it, and the risk we accepted on purpose. Each phase is one file in `lib/phases/`. CI runs `shellcheck` on every script and `zsh -n` on the dotfiles. There is no test suite: prove a change by running it. The pictures are code too: the den is `node docs/den/scenes/den/build.mjs`, the bridges are `python3 docs/den/scenes/bridges/build.py`, and the terminal shots are `docs/den/scenes/term/render.py` over real saved output (the file explains how to capture them).

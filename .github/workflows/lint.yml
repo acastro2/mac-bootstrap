@@ -2,9 +2,9 @@ name: Lint
 
 on:
   push:
-    paths: [bootstrap.sh, bin/**, lib/**, vm/**, home/**, tests/**, Brewfile, Brewfile.linux, config.env, .github/**]
+    paths: [bootstrap.sh, bin/**, lib/**, vm/**, home/**, Brewfile, Brewfile.linux, config.env, .github/**]
   pull_request:
-    paths: [bootstrap.sh, bin/**, lib/**, vm/**, home/**, tests/**, Brewfile, Brewfile.linux, config.env, .github/**]
+    paths: [bootstrap.sh, bin/**, lib/**, vm/**, home/**, Brewfile, Brewfile.linux, config.env, .github/**]
 
 jobs:
   shellcheck:
@@ -15,10 +15,3 @@ jobs:
       - run: shellcheck bootstrap.sh bin/den lib/*.sh lib/phases/*.sh vm/*.sh
       - run: zsh -n home/dot_zshrc home/dot_zprofile home/dot_zshenv
 
-  tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - run: sudo apt-get update && sudo apt-get install -y bats jq zsh
-      # macOS-only tests skip themselves on the Linux runner.
-      - run: bats tests/

@@ -253,7 +253,7 @@ host. Coding happens in the VM.
 | Installs on | What |
 | --- | --- |
 | **Both** | Claude Code, OpenCode, their config repos (`~/.claude`, `~/.config/opencode`), skills (`~/.agents/skills`), git, gh, chezmoi, zsh + Zim, starship, carapace, fzf, eza, bat, ripgrep, fd, jq, yq, neovim, gum, rex-agent-restore, uv, ffmpeg (Mac: for scribe only) |
-| **Mac only** | 1Password app + `op`, Rex.app, Lima, VS Code (+ Remote-SSH), browse relay, fonts, shellcheck, bats-core, desktop apps (Jumpcut, Beyond Compare, KeepingYouAwake) |
+| **Mac only** | 1Password app + `op`, Rex.app, Lima, VS Code (+ Remote-SSH), browse relay, fonts, shellcheck, desktop apps (Jumpcut, Beyond Compare, KeepingYouAwake) |
 | **VM only** | mise and every toolchain it pins (go, node, pnpm, python, dotnet, opentofu, Playwright, ctx7), Docker Engine, kubectl, k9s, helm, awscli, snowflake-cli, pgcli, crane, tflint, pre-commit, gitleaks, repomix, doggo, PostgreSQL (latest major), redis, asdf, opentunnel, cortex, tgrep, Playwright + browser-use (uv), the Rex server |
 | **Nowhere** | Zed, Ghostty, Claude desktop, Cursor CLI, pi, herdr, reverse-engineer-anything (REA) and Hopper, Copilot CLI, mas, Colima/docker/docker-compose on the Mac |
 
