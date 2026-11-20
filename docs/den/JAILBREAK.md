@@ -38,11 +38,11 @@ flowchart LR
 | `code .` and key copy (K2, K5) | **OK** | one checked path, one-way copy | none |
 | Mac reads VM output (K6) | **OK** | no `eval` of guest output | none |
 | VS Code window (K1) | **OK** | accepted risk D1, proven live | none |
-| Browser (K3) | **NOK** | the VM drives your logged-in Edge; B1-B5 are not built | lock the relay, then a separate profile |
+| Browser (K3) | **OK** | accepted risk D5: the VM drives your logged-in Edge, on purpose | none |
 | Vault notes (U6) | **OK** | accepted risk D4: a VM note reaches the Mac, by design like git push | none |
 | Rex terminal output (K4) | **OK** | accepted risk D3: confirmed, a VM program wrote the Mac clipboard | none |
 
-One NOK left: the browser.
+No NOK: every path is closed, unreachable from the VM, or accepted with its reason written down.
 
 ## Your checklist on the Mac
 
@@ -183,7 +183,9 @@ Every kept path must follow these rules:
 
 **What also happened:** a VM process can run `browse pair` and get a pairing code. I did it by accident and killed it. A person must type the code into the extension, so the risk is that someone tricks you. Whether a VM code works at all is **not checked**.
 
-**Fix, in order:**
+**Decision D5: accepted.** Driving your logged-in browser is the point: that is how an agent does real work in M365, Builder Hub and GitHub without a second set of logins. Proven 2026-11-20, including Mac localhost pages. Reopen it if the VM runs code you did not write or review, the same condition as D1 and D2.
+
+**Optional hardening, not a decision.** These trim the edges of K3 without changing who the VM is when it browses:
 
 | Step | What | Closes |
 | --- | --- | --- |
@@ -299,6 +301,7 @@ flowchart LR
 | D2 | 2026-11-19 | Keep git push from the VM on every repo, including the four the Mac runs. A dev box needs git; no branch protection. |
 | D3 | 2026-11-20 | Keep clipboard write from the VM (OSC 52 in a Rex tab). It cannot read the clipboard, and D1 and D2 are bigger. |
 | D4 | 2026-11-20 | Keep Obsidian Sync bidirectional in the VM: a VM note can reach the Mac vault. Plugins never travel (`Configs: none`). The same shape as D2, and vault text is data for Mac agents, not instructions. |
+| D5 | 2026-11-20 | Keep the browser bridge as it is: the VM drives your logged-in Edge and can reach Mac localhost pages. That is what the bridge is for. B1, B2 and B4 stay optional. |
 
 ## Sources
 
