@@ -25,20 +25,24 @@ flowchart LR
 
 ## Where we stand
 
-| Path | Today | Fix | Who |
+**OK** means closed, accepted on purpose, or the VM cannot reach it. **NOK** means open and not hardened.
+
+| Path | OK? | Why | Next |
 | --- | --- | --- | --- |
-| Mac loopback (U1) | **closed** | Lima setting, live on the Mac 2026-11-20 (`den doctor`: host loopback blocked) | done |
-| Mac SSH (U2) | not reachable from the VM | keys only, as defence in depth | Alex, low priority |
-| Mac Screen Sharing and ARD (U3) | not reachable from the VM | `pf` rule, as defence in depth | Alex, low priority |
-| Unknown Mac ports (U4) | not reachable from the VM | `lsof`, then turn off what you do not need | Alex |
-| git push to repos the Mac runs (U5) | open by design | **accepted risk** (D2) | none |
-| Browser (K3) | open | lock the relay switches, then a separate profile | den, Alex |
-| Port squatting (U7) | **closed** | mirror only 1024-9999, tests green on the Mac 2026-11-20 | done |
-| Vault notes (U6) | not checked | check the Mac vault plugins | Alex |
-| Rex terminal output (K4) | not checked | check clipboard access in Rex.app | Alex |
-| Mac reads VM output (K6) | **safe** | no `eval` of guest output; checked 2026-11-20 | done |
-| VS Code window (K1) | open | **accepted risk** (D1) | none |
-| `code .` and key copy (K2, K5) | safe | none | none |
+| Mac loopback (U1) | **OK** | Lima refuses `host.lima.internal`; six ports tested, all refused | done |
+| Mac SSH (U2) | **OK** | the VM has no route to the Mac's LAN address, and no key | keys-only, defence in depth |
+| Mac Screen Sharing and ARD (U3) | **OK** | same: no LAN route from the VM | `pf` rule, defence in depth |
+| Unknown Mac ports (U4) | **OK** | no LAN route from the VM | `lsof` to see what they are |
+| git push to repos the Mac runs (U5) | **OK** | accepted risk D2 | none |
+| Port squatting (U7) | **OK** | only 1024-9999 mirrors, and 19988 never does | run the port test on the Mac |
+| `code .` and key copy (K2, K5) | **OK** | one checked path, one-way copy | none |
+| Mac reads VM output (K6) | **OK** | no `eval` of guest output | none |
+| VS Code window (K1) | **OK** | accepted risk D1, proven live | none |
+| Browser (K3) | **NOK** | the VM drives your logged-in Edge; B1-B5 are not built | lock the relay, then a separate profile |
+| Vault notes (U6) | **NOK** | not checked: a note can steer a Mac agent or a plugin | check the Mac vault plugins |
+| Rex terminal output (K4) | **NOK** | not checked: escape codes can reach the clipboard | check Rex.app |
+
+Three NOK: the browser, the vault and Rex output.
 
 ## Your checklist on the Mac
 
