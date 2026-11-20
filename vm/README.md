@@ -22,6 +22,7 @@ throws the whole box away and builds a new one.
 | SSH keys | **Not forwarded** (`ssh.forwardAgent: false`) | The guest has its own `gh` login, so it never borrows the Mac's 1Password agent |
 | API keys | `limactl copy` of `~/.config/zsh/.api-keys.zsh`, mode 600 | `op` stays on the Mac; every key still reaches the dev box, on purpose |
 | Browse relay | `rex forward -R 127.0.0.1:19988` plus the relay token, mode 600 | VM agents drive the Mac browser; the relay port is not mirrored back (Lima `portForwards` ignores it) |
+| Superlogical MCP | The URL from the den bundle, piped on stdin by the `vm-mcp` phase into `claude mcp add` in the guest | The VM's Claude Code gets the same MCP. The URL rides argv in the guest for about a second ([contract rule 5](../docs/den/CONTRACT.md)) |
 | Editing | VS Code Remote-SSH to `lima-agent` | Edit the clones in place. **Accepted risk:** while a window is open, the VM can ask it to run a command on the Mac. Remote-SSH trusts the remote. See [../docs/den/JAILBREAK.md](../docs/den/JAILBREAK.md) |
 | Host folders | **None mounted** (`mounts: []`) | Nothing in `~/.config`, `~/.ssh` or `~/Library` is reachable |
 
@@ -43,6 +44,7 @@ den vm status                # VM, relay, tunnel, login agent
 den vm logs                  # tail ~/.local/state/rex-vm/vm-up.log
 den vm shell                 # ssh into the guest
 den vm rebuild               # typed confirm (or --yes), then delete and rebuild
+den vm obsidian-sync         # restart obsidian-sync.service in the guest
 den vm resources             # cpus=N memory=M disk=D this Mac allows
 ssh lima-agent               # ~/.ssh/config includes ~/.lima/*/ssh.config
 ```

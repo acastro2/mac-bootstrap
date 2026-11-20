@@ -95,7 +95,7 @@ Then every phase runs unattended. Each one ends **done**, **skipped** (with the 
 | `den phases` | Every phase, its toggle, what it needs, what it does. |
 | `den setup` | A short wizard that edits `config.env`. |
 | `den secrets import <file>` / `den secrets status` | Use a `den.json` file when 1Password is not reachable. Import records the file; the next run that writes the keys deletes it. |
-| `den vm up` / `down` / `shell` / `status` / `logs` / `rebuild` | The agent VM. `down` really stops it: it turns off both login agents first, so nothing starts it again. |
+| `den vm up` / `down` / `shell` / `status` / `logs` / `rebuild` / `obsidian-sync` | The agent VM. `down` really stops it: it turns off both login agents first, so nothing starts it again. `obsidian-sync` restarts the guest sync service. |
 | `den permissions` / `den permissions fix` | The macOS privacy grants: check them, or walk the Settings panes. |
 | `den clean [--dry-run] [--host-drift] [--yes]` | Remove only what den installed. `--host-drift` lists undeclared Homebrew leaves. It shows the plan and asks you to type `clean`. `--yes` skips that for den's own installs, never with `--host-drift`. |
 | `den sessions export` / `import <file>` | Move agent chats to a new Mac. Import takes a snapshot first and never leaves you half-restored. |

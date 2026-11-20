@@ -96,7 +96,7 @@ Usage:
   den clean [--dry-run] [--host-drift] [--yes]
                             remove only what den declares; snapshot first
   den registry list | check  managed install registry (lib/registry.sh)
-  den vm up|down|shell|status|logs|rebuild
+  den vm up|down|shell|status|logs|rebuild|obsidian-sync
                             the Lima agent VM (lib/vm.sh)
   den update                git pull --ff-only, then den up
   den help [cmd]            this help, or help for one command
@@ -203,7 +203,7 @@ EOF
       ;;
     vm)
       cat <<'EOF'
-den vm up|down|shell|status|logs|rebuild
+den vm up|down|shell|status|logs|rebuild|obsidian-sync
 
 Manages the Lima agent VM and the vm-up login agent (lib/vm.sh). `down` stops
 the login agent and Lima autostart before the VM, so nothing restarts it.

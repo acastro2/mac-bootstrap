@@ -3,9 +3,9 @@ $ den phases
 PHASE                  TOGGLE             NEEDS                  OS     ABOUT
 packages               -                  brew net               any    Homebrew bundle: the Mac package list, or the VM list on Linux
 appdir                 -                  brew                   macos  Move every managed app out of /Applications so self-updates need no admin
-app-clis               -                  -                      macos  Link the VS Code CLI into ~/.local/bin
+app-clis               -                  net                    macos  The browse CLI and the VS Code CLI, in ~/.local/bin
 macos-defaults         DEN_MACOS_DEFAULTS -                      macos  Key repeat, Finder, Dock, screenshots and dark mode
-sudo-touchid           DEN_TOUCHID_SUDO   sudo brew              macos  pam_tid plus pam_reattach, so a finger works inside tmux and ssh
+sudo-touchid           DEN_TOUCHID_SUDO   brew                   macos  pam_tid plus pam_reattach, so a finger works inside tmux and ssh
 shell                  -                  brew                   any    zsh, Zim, the login shell, and the chezmoi dotfiles
 git                    -                  -                      any    Global git defaults: branch, rebase, rerere, and your identity
 ssh                    -                  -                      any    Trust github.com once and use the 1Password SSH agent
@@ -18,3 +18,4 @@ opencode-web           DEN_OPENCODE_WEB   secrets                macos  the Open
 rex                    DEN_REX            secrets net            macos  the Rex app, its skill and the superlogical MCP in Claude Code
 rex-restore            DEN_REX            -                      any    resume Claude Code chats after a Rex restart
 vm                     DEN_VM             brew                   macos  The Linux dev box: Docker, every key, Obsidian sync, the Rex server
+vm-mcp                 DEN_VM             secrets                macos  the superlogical MCP in the VM's Claude Code, URL from the den bundle

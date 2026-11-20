@@ -275,7 +275,8 @@ den_cmd_vm() {
     status) den_vm_show "$@" ;;
     logs) den_vm_logs "$@" ;;
     rebuild) den_vm_rebuild "$@" ;;
-    *) den_die "usage: den vm resources|up|down|shell|status|logs|rebuild" ;;
+    obsidian-sync) den_vm_obsidian_sync "$@" ;;
+    *) den_die "usage: den vm resources|up|down|shell|status|logs|rebuild|obsidian-sync" ;;
   esac
 }
 
@@ -472,8 +473,31 @@ den_vm_rebuild() {
     den_vm_stop "$vm" || true
     den_vm_to 120 limactl delete "$vm" --force --tty=false >/dev/null 2>&1 || true
   fi
-  ui_step "rebuilding $vm with the vm phase"
-  "${DEN_ROOT}/bin/den" up --only=vm
+  ui_step "rebuilding $vm with the vm and vm-mcp phases"
+  "${DEN_ROOT}/bin/den" up --only=vm,vm-mcp
+}
+
+# den vm obsidian-sync: restart the guest's obsidian-sync user service.
+den_vm_obsidian_sync() {
+  local vm=${AGENT_VM:-} s=""
+  if [ $# -gt 0 ]; then
+    den_die "den vm obsidian-sync takes no arguments"
+  fi
+  if [ -z "$vm" ]; then
+    den_die "AGENT_VM is empty in config.env"
+  fi
+  if ! command -v limactl >/dev/null 2>&1; then
+    den_die "limactl is not installed (brew install lima)"
+  fi
+  s=$(den_vm_status "$vm") || s=""
+  if [ "$s" != Running ]; then
+    den_die "$vm is not Running; run: den vm up"
+  fi
+  if den_vm_to 60 limactl shell "$vm" -- systemctl --user restart obsidian-sync.service </dev/null; then
+    ui_ok "obsidian-sync.service restarted in $vm"
+  else
+    den_die "could not restart obsidian-sync.service in $vm; check it with: den vm shell, then systemctl --user status obsidian-sync.service"
+  fi
 }
 
 # ── Doctor ───────────────────────────────────────────────────────────
@@ -516,6 +540,9 @@ docker info >/dev/null 2>&1 && echo docker=ok || echo docker=down
 docker compose version >/dev/null 2>&1 && echo compose=ok || echo compose=down
 rex server status >/dev/null 2>&1 && echo rex=ok || echo rex=down
 systemctl --user is-active --quiet obsidian-sync.service && echo obsidian=ok || echo obsidian=down
+c="$HOME/.local/bin/claude"; [ -x "$c" ] || c=$(command -v claude 2>/dev/null || true)
+if [ -z "$c" ]; then echo mcp=noclaude
+elif "$c" mcp get superlogical >/dev/null 2>&1; then echo mcp=ok; else echo mcp=missing; fi
 b=$(command -v browse 2>/dev/null || true)
 if [ -n "$b" ] && [ -x "$b" ]; then echo browse=ok; else echo browse=down; fi
 u=$(df -Pk / | sed -n "2s/.* \([0-9]*\)% .*/\1/p")
@@ -539,6 +566,15 @@ PROBE
       rex=*) printf 'vm: rex server down (fix: den up --only=vm)\n' ;;
       obsidian=ok) printf 'vm: obsidian-sync OK\n' ;;
       obsidian=*) printf 'vm: obsidian-sync inactive (fix: limactl shell %s -- systemctl --user start obsidian-sync)\n' "$vm" ;;
+      mcp=ok) printf 'vm: superlogical MCP OK\n' ;;
+      # den fix cannot help here: vm-mcp would only skip. Point at the vm phase.
+      mcp=noclaude) printf 'vm: Claude Code missing in the guest (fix: den up --only=vm)\n' ;;
+      mcp=*)
+        if den_toggle_on DEN_VM; then
+          printf 'vm: superlogical MCP missing in the guest (fix: den fix)\n'
+          den_fix_wants vm-mcp
+        fi
+        ;;
       browse=ok) printf 'vm: browse CLI OK\n' ;;
       browse=*) printf 'vm: browse CLI missing (fix: den up --only=vm)\n' ;;
       hostloop=unknown) printf 'vm: host loopback not checked (no Lima SSH port)\n' ;;

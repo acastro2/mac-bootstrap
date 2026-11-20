@@ -22,7 +22,10 @@ purpose, in one commit with the code that needs the change.
    rides argv and is exposed in the local process list (`ps`) for about a
    second: `opencode service set password`
    (`lib/phases/50-opencode-web.sh`) and the gated MCP URL passed to
-   `claude mcp add` (`lib/phases/52-rex.sh`). Nothing else may take this path.
+   `claude mcp add` (`lib/phases/52-rex.sh` on the Mac; the `vm-mcp` phase,
+   `lib/phases/72-vm-mcp.sh`, sends it to the guest on stdin and
+   `vm/mcp-register.sh` runs `claude mcp add` there). Nothing else may take
+   this path.
 6. **Self-contained phases.** Each phase runs in a subshell. It cannot rely on a
    variable another phase set; it derives what it needs (helpers in core).
 
@@ -83,7 +86,7 @@ Toggles (all default as shown in `config.env`):
 | `DEN_AGENTS="opencode claude cortex"` | which agent CLIs install |
 | `DEN_REX=1` | rex, rex-restore |
 | `DEN_OPENCODE_WEB=1` | opencode-web |
-| `DEN_VM=1` | vm (and the vm-up login agent) |
+| `DEN_VM=1` | vm, vm-mcp (and the vm-up login agent) |
 | `DEN_BROWSE_TUNNEL=1` | browse relay + tunnel in vm-up |
 
 ### Phase registry
@@ -207,7 +210,7 @@ den doctor [--strict]   read-only health, incl. VM, relay, tunnel, vm-up agent
 den phases              list phases: name, toggle, needs, about
 den setup               wizard: writes config.env values, then offers den up
 den secrets import <path> | status
-den vm up|down|shell|status|logs|rebuild
+den vm up|down|shell|status|logs|rebuild|obsidian-sync
 den clean [--dry-run] [--host-drift] [--yes]   safe: only registry/Brewfile items, snapshot, typed confirm (--host-drift never takes --yes)
 den sessions export|import <file>   safe import: snapshot, temp extract, verify, swap
 den update              git pull --ff-only, then den up
