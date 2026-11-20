@@ -479,7 +479,7 @@ den_vm_rebuild() {
 # ── Doctor ───────────────────────────────────────────────────────────
 # Returns 1 when the VM is expected (DEN_VM on) and is not Running.
 den_doctor_vm() {
-  local vm s out line disk
+  local vm s out line disk port leak=0
   den_config_load
   vm=${AGENT_VM:-}
   if [ "$(den_os)" != macos ]; then
@@ -507,7 +507,11 @@ den_doctor_vm() {
   else
     printf 'vm: browse relay down (vm-up starts it within a minute)\n'
   fi
-  out=$(den_vm_to 60 limactl shell "$vm" -- bash -s 2>/dev/null <<'PROBE'
+  # The probe target: the instance's own SSH forward, which always listens on
+  # the Mac's 127.0.0.1 while the VM runs. den_vm_field does not read it.
+  port=$(den_vm_json "$vm" | sed -n 's/.*"sshLocalPort"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p') || port=""
+  case $port in *[!0-9]*) port="" ;; esac
+  out=$(den_vm_to 60 limactl shell "$vm" -- bash -s -- "$port" 2>/dev/null <<'PROBE'
 docker info >/dev/null 2>&1 && echo docker=ok || echo docker=down
 docker compose version >/dev/null 2>&1 && echo compose=ok || echo compose=down
 rex server status >/dev/null 2>&1 && echo rex=ok || echo rex=down
@@ -516,6 +520,9 @@ b=$(command -v browse 2>/dev/null || true)
 if [ -n "$b" ] && [ -x "$b" ]; then echo browse=ok; else echo browse=down; fi
 u=$(df -Pk / | sed -n "2s/.* \([0-9]*\)% .*/\1/p")
 echo "disk=${u:-?}"
+if [ -z "$1" ]; then echo hostloop=unknown
+elif timeout 3 bash -c 'exec 3<>/dev/tcp/host.lima.internal/$1' _ "$1" >/dev/null 2>&1; then echo hostloop=open
+else echo hostloop=closed; fi
 PROBE
   ) || out=""
   if [ -z "$out" ]; then
@@ -534,6 +541,12 @@ PROBE
       obsidian=*) printf 'vm: obsidian-sync inactive (fix: limactl shell %s -- systemctl --user start obsidian-sync)\n' "$vm" ;;
       browse=ok) printf 'vm: browse CLI OK\n' ;;
       browse=*) printf 'vm: browse CLI missing (fix: den up --only=vm)\n' ;;
+      hostloop=unknown) printf 'vm: host loopback not checked (no Lima SSH port)\n' ;;
+      hostloop=closed) printf 'vm: host loopback blocked\n' ;;
+      hostloop=open)
+        printf 'vm: host loopback reachable from the guest (escape U1; fix: limactl stop %s && den up --only=vm)\n' "$vm"
+        leak=1
+        ;;
       disk=*)
         disk=${line#disk=}
         disk=${disk%\%}
@@ -551,6 +564,8 @@ PROBE
     esac
   done <<<"$out"
   printf 'vm: Rex.app host is ssh://lima-%s (once: Cmd-Shift-P > Add Remote Host..., then Switch Host)\n' "$vm"
+  [ "$leak" = 0 ] || return 1
+  return 0
 }
 
 # ── Preflight hook ───────────────────────────────────────────────────

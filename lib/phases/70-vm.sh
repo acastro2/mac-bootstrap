@@ -132,6 +132,32 @@ vm_create_or_resize() {
     ui_warn "$vm disk is ${disk_gib} GiB, below the ${VM_DISK_GB:-40} GiB target; disks never shrink, so it stays"
   fi
 
+  # Escape path U1 (docs/den/JAILBREAK.md): an instance made before the
+  # template set networkOpts.hostLoopback: false still reaches the Mac loopback.
+  if ! grep -Eq '^[[:space:]]+hostLoopback:[[:space:]]*false' "$HOME/.lima/$vm/lima.yaml" 2>/dev/null; then
+    if [ "$status" = Running ]; then
+      ui_warn "$vm can reach the Mac loopback; run: limactl stop $vm && den up --only=vm"
+    else
+      ui_step "blocking the Mac loopback for $vm (networkOpts.hostLoopback: false)"
+      if ! den_vm_to 120 limactl edit "$vm" --set '.networkOpts.hostLoopback = false' --tty=false; then
+        den_fail "could not edit $vm" "limactl edit $vm --set '.networkOpts.hostLoopback = false'"
+      fi
+    fi
+  fi
+
+  # Escape path U7: without a guestPortRange rule, Lima mirrors every guest
+  # port, so the VM could take a Mac port a CLI login waits on.
+  if ! grep -q 'guestPortRange' "$HOME/.lima/$vm/lima.yaml" 2>/dev/null; then
+    if [ "$status" = Running ]; then
+      ui_warn "$vm mirrors every port to the Mac; run: limactl stop $vm && den up --only=vm"
+    else
+      ui_step "limiting the port mirror for $vm to 1024-9999"
+      if ! den_vm_to 120 limactl edit "$vm" --set '.portForwards = [{"guestPort":19988,"ignore":true},{"guestPortRange":[1024,9999]},{"guestIP":"0.0.0.0","guestIPMustBeZero":false,"proto":"any","ignore":true}]' --tty=false; then
+        den_fail "could not edit $vm" "limactl stop $vm && den up --only=vm"
+      fi
+    fi
+  fi
+
   if [ "$need" = 1 ]; then
     if [ "$status" = Running ]; then
       ui_warn "$vm is smaller than this Mac allows; run: limactl stop $vm && den up --only=vm"

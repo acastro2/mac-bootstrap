@@ -34,15 +34,29 @@ images:
   - location: "https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-arm64.img"
     arch: "aarch64"
 
-# Decision: Lima mirrors every guest localhost port onto the Mac's 127.0.0.1
-# on purpose, so a dev server started in the VM opens in the Mac browser with
-# no extra flag. The cost, accepted: a VM process can listen on a Mac loopback
-# port. 19988 is the browse relay and is ignored because the Mac owns it:
-# `rex forward -R` brings it INTO the guest, and mirroring it back makes a
+# Decision: Lima mirrors guest localhost ports 1024-9999 onto the Mac's
+# 127.0.0.1 on purpose, so a dev server started in the VM opens in the Mac
+# browser with no extra flag. Everything else is ignored (escape path U7 in
+# docs/den/JAILBREAK.md): Lima's built-in fallback mirrors 1-65535, so a VM
+# process could squat a Mac ephemeral port (49152-65535) that a Mac CLI login
+# waits on. Order matters: the first matching rule wins, so the ignore-all rule
+# must be last. 19988 is the browse relay and is ignored because the Mac owns
+# it: `rex forward -R` brings it INTO the guest, and mirroring it back makes a
 # loop that grabs the port before the Mac relay can bind it.
 portForwards:
   - guestPort: 19988
     ignore: true
+  - guestPortRange: [1024, 9999]
+  - guestIP: 0.0.0.0
+    guestIPMustBeZero: false
+    proto: any
+    ignore: true
+
+# The guest runs untrusted agents. host.lima.internal maps to the Mac's
+# 127.0.0.1, so without this they reach every Mac loopback service. Needs
+# Lima >= 2.3 and vmType: vz. Escape path U1 in docs/den/JAILBREAK.md.
+networkOpts:
+  hostLoopback: false
 
 # The guest signs in to GitHub itself; the Mac's 1Password agent stays home.
 ssh:

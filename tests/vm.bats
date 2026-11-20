@@ -3,6 +3,9 @@
 # limactl to do. Nothing touches the real machine: HOME is a temp dir, host
 # facts come from HOST_* overrides, and limactl and rex are stubs that log.
 
+# Found before setup() narrows PATH.
+YQ_BIN=$(command -v yq || true)
+
 setup() {
   REPO="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
   TMP="$(mktemp -d)"
@@ -27,6 +30,9 @@ setup() {
 printf '%s\n' "$*" >> "$LIMA_LOG"
 if [ "$1" = "list" ]; then
   [ -n "$LIMA_LIST" ] && printf '%s\n' "$LIMA_LIST"
+fi
+if [ "$1" = "shell" ] && [ -n "$LIMA_SHELL_OUT" ]; then
+  printf '%s\n' "$LIMA_SHELL_OUT"
 fi
 exit 0
 STUB
@@ -113,6 +119,95 @@ macos_only() {
   [ "$status" -eq 0 ]
   ! grep -E -- "^edit" "$LIMA_LOG"
   [[ "$output" == *"limactl stop agent"* ]]
+}
+
+# Escape path U1 (docs/den/JAILBREAK.md): the guest must not reach the Mac's
+# loopback through host.lima.internal.
+@test "vm template blocks the guest from the Mac loopback" {
+  grep -qE '^networkOpts:' "$REPO/vm/lima-dev.yaml"
+  grep -qE '^  hostLoopback: false' "$REPO/vm/lima-dev.yaml"
+}
+
+# Escape path U7: Lima mirrors guest ports onto the Mac's localhost. Only
+# dev-server ports (1024-9999) may be mirrored, so the VM can never take an
+# ephemeral port (49152-65535) that a Mac CLI login waits on. Rules are
+# first-match, so the order is the contract.
+@test "vm template mirrors only 1024-9999, never the relay, nothing else" {
+  [ -n "$YQ_BIN" ] || skip "yq missing"
+  run "$YQ_BIN" -o json -I0 '.portForwards' "$REPO/vm/lima-dev.yaml"
+  [ "$status" -eq 0 ]
+  [ "$output" = '[{"guestPort":19988,"ignore":true},{"guestPortRange":[1024,9999]},{"guestIP":"0.0.0.0","guestIPMustBeZero":false,"proto":"any","ignore":true}]' ]
+}
+
+@test "vm phase limits the port mirror on a stopped instance that mirrors everything" {
+  macos_only
+  export LIMA_LIST='{"name":"agent","status":"Stopped","cpus":10,"memory":21474836480,"disk":107374182400}'
+  mkdir -p "$HOME/.lima/agent"
+  printf 'vmType: vz\nnetworkOpts:\n  hostLoopback: false\nportForwards:\n  - guestPort: 19988\n    ignore: true\n' > "$HOME/.lima/agent/lima.yaml"
+  run "$REPO/bin/den" up --only=vm
+  [ "$status" -eq 0 ]
+  grep -E -- "^edit agent .*--set \.portForwards ?= ?" "$LIMA_LOG"
+  grep -F -- '1024' "$LIMA_LOG"
+}
+
+@test "vm phase never edits a running instance for the port mirror, and says how" {
+  macos_only
+  export LIMA_LIST='{"name":"agent","status":"Running","cpus":10,"memory":21474836480,"disk":107374182400}'
+  mkdir -p "$HOME/.lima/agent"
+  printf 'vmType: vz\nnetworkOpts:\n  hostLoopback: false\nportForwards:\n  - guestPort: 19988\n    ignore: true\n' > "$HOME/.lima/agent/lima.yaml"
+  run "$REPO/bin/den" up --only=vm
+  [ "$status" -eq 0 ]
+  ! grep -E -- "^edit" "$LIMA_LOG"
+  [[ "$output" == *"mirrors every port"* ]]
+  [[ "$output" == *"limactl stop agent"* ]]
+}
+
+@test "vm phase blocks the Mac loopback on a stopped instance that allows it" {
+  macos_only
+  export LIMA_LIST='{"name":"agent","status":"Stopped","cpus":10,"memory":21474836480,"disk":107374182400}'
+  mkdir -p "$HOME/.lima/agent"
+  printf 'vmType: vz\n' > "$HOME/.lima/agent/lima.yaml"
+  run "$REPO/bin/den" up --only=vm
+  [ "$status" -eq 0 ]
+  grep -E -- "^edit agent .*--set \.networkOpts\.hostLoopback ?= ?false" "$LIMA_LOG"
+}
+
+@test "vm phase leaves a stopped instance alone when the loopback is already blocked" {
+  macos_only
+  export LIMA_LIST='{"name":"agent","status":"Stopped","cpus":10,"memory":21474836480,"disk":107374182400}'
+  mkdir -p "$HOME/.lima/agent"
+  printf 'vmType: vz\nnetworkOpts:\n  hostLoopback: false\n' > "$HOME/.lima/agent/lima.yaml"
+  run "$REPO/bin/den" up --only=vm
+  [ "$status" -eq 0 ]
+  ! grep -E -- "^edit agent .*hostLoopback" "$LIMA_LOG"
+}
+
+@test "vm phase never edits a running instance for the loopback, and says how" {
+  macos_only
+  export LIMA_LIST='{"name":"agent","status":"Running","cpus":10,"memory":21474836480,"disk":107374182400}'
+  mkdir -p "$HOME/.lima/agent"
+  printf 'vmType: vz\n' > "$HOME/.lima/agent/lima.yaml"
+  run "$REPO/bin/den" up --only=vm
+  [ "$status" -eq 0 ]
+  ! grep -E -- "^edit" "$LIMA_LOG"
+  [[ "$output" == *"limactl stop agent"* ]]
+}
+
+@test "doctor fails when the guest can reach the Mac loopback" {
+  macos_only
+  export LIMA_LIST='{"name":"agent","status":"Running","cpus":10,"memory":21474836480,"disk":107374182400}'
+  export LIMA_SHELL_OUT='hostloop=open'
+  run "$REPO/bin/den" doctor --strict
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"host loopback"* ]]
+}
+
+@test "doctor passes the loopback check when the guest is blocked" {
+  macos_only
+  export LIMA_LIST='{"name":"agent","status":"Running","cpus":10,"memory":21474836480,"disk":107374182400}'
+  export LIMA_SHELL_OUT='hostloop=closed'
+  run "$REPO/bin/den" doctor
+  [[ "$output" == *"host loopback blocked"* ]]
 }
 
 @test "vm phase adds the Lima ssh include once and backs up the config" {
