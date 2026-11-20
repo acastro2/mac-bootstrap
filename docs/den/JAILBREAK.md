@@ -40,9 +40,9 @@ flowchart LR
 | VS Code window (K1) | **OK** | accepted risk D1, proven live | none |
 | Browser (K3) | **NOK** | the VM drives your logged-in Edge; B1-B5 are not built | lock the relay, then a separate profile |
 | Vault notes (U6) | **NOK** | not checked: a note can steer a Mac agent or a plugin | check the Mac vault plugins |
-| Rex terminal output (K4) | **NOK** | **confirmed**: a VM program wrote the Mac clipboard, silently | find Rex's clipboard switch, or accept it |
+| Rex terminal output (K4) | **OK** | accepted risk D3: confirmed, a VM program wrote the Mac clipboard | none |
 
-Three NOK: the browser, the vault and Rex output.
+Two NOK: the browser and the vault.
 
 ## Your checklist on the Mac
 
@@ -207,7 +207,7 @@ The Mac could then paste `CLIPBOARD-FROM-VM`. So Rex honours `OSC 52` from the V
 
 **Why it matters:** a VM agent can replace what you are about to paste. If you paste it into `sudo`, or into a shell that echoes it, the agent gets a password or a token. The link and title sequences enable phishing, which is smaller.
 
-**Fix:** find Rex's clipboard switch. If Rex exposes one, turn it off and `den doctor` can check it. If it does not, this stays an accepted risk, and D3 records it.
+**Decision D3: accepted.** The channel needs a Rex tab you already have open, and it cannot read the clipboard, only write it. Its cost is a swapped paste. Set against D1 (a shell on the Mac) and D2 (code in every repo the Mac runs), it adds little, and a fix in the VM would be fragile: an agent can print from any process. Reopen it if a real paste-substitution incident happens, or if Rex ships a clipboard switch, which is worth turning off on principle.
 
 **Test after the fix:** the same `printf`, then paste. Expect the old clipboard, not `CLIPBOARD-FROM-VM`.
 
@@ -293,6 +293,7 @@ flowchart LR
 | --- | --- | --- |
 | D1 | 2026-11-19 | Keep VS Code Remote-SSH. The VS Code path stays open while a window is open on the VM. |
 | D2 | 2026-11-19 | Keep git push from the VM on every repo, including the four the Mac runs. A dev box needs git; no branch protection. |
+| D3 | 2026-11-20 | Keep clipboard write from the VM (OSC 52 in a Rex tab). It cannot read the clipboard, and D1 and D2 are bigger. |
 
 ## Sources
 
