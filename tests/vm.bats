@@ -29,7 +29,10 @@ setup() {
 #!/bin/sh
 printf '%s\n' "$*" >> "$LIMA_LOG"
 if [ "$1" = "list" ]; then
-  [ -n "$LIMA_LIST" ] && printf '%s\n' "$LIMA_LIST"
+  case "$*" in
+    *'{{.Status}}'*) printf '%s\n' "${LIMA_STATUS:-Running}" ;;
+    *json*) [ -n "$LIMA_LIST" ] && printf '%s\n' "$LIMA_LIST" ;;
+  esac
 fi
 if [ "$1" = "shell" ] && [ -n "$LIMA_SHELL_OUT" ]; then
   printf '%s\n' "$LIMA_SHELL_OUT"
@@ -199,7 +202,7 @@ macos_only() {
   export LIMA_SHELL_OUT='hostloop=open'
   run "$REPO/bin/den" doctor --strict
   [ "$status" -eq 1 ]
-  [[ "$output" == *"host loopback"* ]]
+  [[ "$output" == *"host loopback reachable"* ]]
 }
 
 @test "doctor passes the loopback check when the guest is blocked" {
