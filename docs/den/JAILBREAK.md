@@ -39,10 +39,10 @@ flowchart LR
 | Mac reads VM output (K6) | **OK** | no `eval` of guest output | none |
 | VS Code window (K1) | **OK** | accepted risk D1, proven live | none |
 | Browser (K3) | **NOK** | the VM drives your logged-in Edge; B1-B5 are not built | lock the relay, then a separate profile |
-| Vault notes (U6) | **NOK** | not checked: a note can steer a Mac agent or a plugin | check the Mac vault plugins |
+| Vault notes (U6) | **OK** | accepted risk D4: a VM note reaches the Mac, by design like git push | none |
 | Rex terminal output (K4) | **OK** | accepted risk D3: confirmed, a VM program wrote the Mac clipboard | none |
 
-Two NOK: the browser and the vault.
+One NOK left: the browser.
 
 ## Your checklist on the Mac
 
@@ -149,9 +149,13 @@ The vm phase sets this on a stopped VM, and warns on a running one.
 
 ### Vault notes (U6)
 
-**What:** Obsidian Sync carries notes from the VM to the Mac vault. Plugins do not travel (`--configs ""`). Two risks remain: Mac agents that read the vault can be steered by a note, and a Mac plugin that runs code from notes would run VM code. **Not checked.**
+**What:** Obsidian Sync runs in the VM on the vault `Alex`, bidirectional, so a note written in the VM reaches the Mac vault, and a note written on the Mac reaches the VM. Confirmed 2026-11-20: the VM holds 6,571 notes and received a Mac edit the same day (`Todo.md`).
 
-**Fix:** turn off code-from-notes plugins (checklist). Mac agent skills treat VM notes as untrusted input.
+**What cannot travel:** settings and plugins. `ob sync-config` here reports `Configs: none`, and the guest's `.obsidian` is empty, so the VM can never install a plugin on the Mac. That takes code execution off the table. What is left is note content.
+
+**Why it matters:** Mac agents read the vault (bard, archeologist, the morning brief), so a note is input to them. A note can steer what an agent does, and the vault also holds the writing voice exemplars, which shape how Mac agents write. That is prompt injection, not a shell.
+
+**Decision D4: accepted.** It is the same shape as D2: the VM is a dev box with its own access to shared state, and notes are that shared state, by design. The cost is that Mac agents must treat vault text as data, not instructions. Reopen it if a Mac agent acts on a note in a way you did not ask for; the fix then is `ob sync-config --mode pull-only` in the VM, which drops local changes and leaves the Mac as the only writer.
 
 ## Paths we keep
 
@@ -294,6 +298,7 @@ flowchart LR
 | D1 | 2026-11-19 | Keep VS Code Remote-SSH. The VS Code path stays open while a window is open on the VM. |
 | D2 | 2026-11-19 | Keep git push from the VM on every repo, including the four the Mac runs. A dev box needs git; no branch protection. |
 | D3 | 2026-11-20 | Keep clipboard write from the VM (OSC 52 in a Rex tab). It cannot read the clipboard, and D1 and D2 are bigger. |
+| D4 | 2026-11-20 | Keep Obsidian Sync bidirectional in the VM: a VM note can reach the Mac vault. Plugins never travel (`Configs: none`). The same shape as D2, and vault text is data for Mac agents, not instructions. |
 
 ## Sources
 
