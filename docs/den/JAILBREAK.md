@@ -40,7 +40,7 @@ flowchart LR
 | VS Code window (K1) | **OK** | accepted risk D1, proven live | none |
 | Browser (K3) | **NOK** | the VM drives your logged-in Edge; B1-B5 are not built | lock the relay, then a separate profile |
 | Vault notes (U6) | **NOK** | not checked: a note can steer a Mac agent or a plugin | check the Mac vault plugins |
-| Rex terminal output (K4) | **NOK** | not checked: escape codes can reach the clipboard | check Rex.app |
+| Rex terminal output (K4) | **NOK** | **confirmed**: a VM program wrote the Mac clipboard, silently | find Rex's clipboard switch, or accept it |
 
 Three NOK: the browser, the vault and Rex output.
 
@@ -193,9 +193,23 @@ Every kept path must follow these rules:
 
 **Test:** a VM browse call to `file:`, a custom URL scheme, or `127.0.0.1` is refused.
 
-### Rex terminal output (K4): not checked
+### Rex terminal output (K4): confirmed, clipboard write
 
-Text that a VM program prints can carry escape codes that write your clipboard (OSC 52) or make fake links. Check what Rex.app accepts (checklist).
+**What:** a program in the VM prints bytes, and Rex.app acts on some of them. `OSC 52` writes the Mac clipboard, `OSC 8` makes a link with any target, `OSC 0`/`2` rename the tab, `OSC 9`/`777` send a notification. Nothing appears on screen, so a tab you already have open is enough.
+
+**Confirmed 2026-11-20.** In a Rex tab on the `vm` host:
+
+```sh
+printf '\033]52;c;%s\a' "$(printf 'CLIPBOARD-FROM-VM' | base64)"
+```
+
+The Mac could then paste `CLIPBOARD-FROM-VM`. So Rex honours `OSC 52` from the VM.
+
+**Why it matters:** a VM agent can replace what you are about to paste. If you paste it into `sudo`, or into a shell that echoes it, the agent gets a password or a token. The link and title sequences enable phishing, which is smaller.
+
+**Fix:** find Rex's clipboard switch. If Rex exposes one, turn it off and `den doctor` can check it. If it does not, this stays an accepted risk, and D3 records it.
+
+**Test after the fix:** the same `printf`, then paste. Expect the old clipboard, not `CLIPBOARD-FROM-VM`.
 
 ### Mac reads VM output (K6): safe
 
