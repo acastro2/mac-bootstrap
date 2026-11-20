@@ -453,6 +453,21 @@ tunnel_session() {
   return 1
 }
 
+# A forward block from an earlier run keeps its listener in the guest, so every
+# new `forward new` collides on the port, exits at once, and the relay looks
+# down. Close the blocks no client owns before asking for a new one.
+tunnel_reap() {
+  local list="$STATE/tunnel-forwards"
+  if to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm forward ls >"$list" 2>/dev/null &&
+    awk '$1 == "orphaned"' "$list" | grep -q .; then
+    if to_run "$SESSION_TIMEOUT" "$REX_CLI" -S vm forward close --orphaned >/dev/null 2>&1; then
+      log "tunnel: closed an orphaned forward block from an earlier run"
+    else
+      log "tunnel: could not close the orphaned forward block"
+    fi
+  fi
+}
+
 ensure_vm
 if [ -n "${VM_UP_ONCE:-}" ]; then
   if [ "$(vm_status)" != Running ]; then
@@ -461,7 +476,8 @@ if [ -n "${VM_UP_ONCE:-}" ]; then
   if [ "$TUNNEL" = 1 ]; then
     ensure_relay || true
     if [ -x "$REX_CLI" ]; then
-      tunnel_session && "$REX_CLI" -S vm forward new --session "$TUNNEL_SESSION" -R "127.0.0.1:$PORT:127.0.0.1:$PORT"
+      tunnel_session && tunnel_reap &&
+        "$REX_CLI" -S vm forward new --session "$TUNNEL_SESSION" -R "127.0.0.1:$PORT:127.0.0.1:$PORT"
     else
       log "Rex CLI not found at $REX_CLI; the tunnel is not up"
     fi
@@ -479,7 +495,7 @@ if [ "$TUNNEL" = 1 ]; then
     exit 1
   fi
   log "tunnel: vm 127.0.0.1:$PORT -> Mac 127.0.0.1:$PORT"
-  if tunnel_session; then
+  if tunnel_session && tunnel_reap; then
     "$REX_CLI" -S vm forward new --session "$TUNNEL_SESSION" -R "127.0.0.1:$PORT:127.0.0.1:$PORT"
   fi
   log "forward exited"

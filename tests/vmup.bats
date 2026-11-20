@@ -142,3 +142,23 @@ vm_status() {
   [ $(( $(date +%s) - start )) -lt 30 ]
   ! grep -F "forward new" "$CALLS"
 }
+
+@test "tunnel: an orphaned forward block is closed before the new one" {
+  vm_status Running
+  printf '#!/bin/sh\nprintf "rex %%s\\n" "$*" >> "$CALLS"\ncase "$*" in *"forward ls"*) printf "STATE ID DIRECTION CLIENT LISTEN CONNECT CONNS\\norphaned 830696 server -> client - 127.0.0.1:19988 127.0.0.1:19988 0\\n" ;; esac\nexit 0\n' > "$TMP/bin/rex"
+  chmod +x "$TMP/bin/rex"
+  run "$REPO/vm/vm-up.sh"
+  [ "$status" -eq 0 ]
+  grep -F "forward close --orphaned" "$CALLS"
+  [ "$(grep -n -F 'forward close --orphaned' "$CALLS" | cut -d: -f1)" -lt "$(grep -n -F 'forward new' "$CALLS" | cut -d: -f1)" ]
+  [[ "$output" == *"closed an orphaned forward block"* ]]
+}
+
+@test "tunnel: a healthy forward list is left alone" {
+  vm_status Running
+  printf '#!/bin/sh\nprintf "rex %%s\\n" "$*" >> "$CALLS"\ncase "$*" in *"forward ls"*) printf "STATE ID DIRECTION CLIENT LISTEN CONNECT CONNS\\nopen 1 client -> server 4f2a 127.0.0.1:19988 127.0.0.1:19988 1\\n" ;; esac\nexit 0\n' > "$TMP/bin/rex"
+  chmod +x "$TMP/bin/rex"
+  run "$REPO/vm/vm-up.sh"
+  [ "$status" -eq 0 ]
+  ! grep -F "forward close" "$CALLS"
+}
