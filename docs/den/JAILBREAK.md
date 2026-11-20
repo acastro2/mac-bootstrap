@@ -17,7 +17,7 @@ flowchart LR
   VM -->|close| L[Mac loopback services]
   VM -->|close, services stay on| S[Mac SSH and Screen Sharing]
   VM -->|close| P[port squatting]
-  VM -->|keep, make safe| B[your browser]
+  VM -->|keep, accepted risk D5| B[your browser]
   VM -->|keep, accepted risk D1| V[VS Code window]
   VM -->|keep, accepted risk D2| G[git push to repos the Mac runs]
   VM -->|keep, safe today| C[code . and key copy]
@@ -41,19 +41,20 @@ flowchart LR
 | Browser (K3) | **OK** | accepted risk D5: the VM drives your logged-in Edge, on purpose | none |
 | Vault notes (U6) | **OK** | accepted risk D4: a VM note reaches the Mac, by design like git push | none |
 | Rex terminal output (K4) | **OK** | accepted risk D3: confirmed, a VM program wrote the Mac clipboard | none |
+| Lima guest agent (K7) | **not checked** | `/dev/vsock` is 666 and the agent runs as root; the protocol is Lima's | read Lima's protocol, or accept it |
 
 No NOK: every path is closed, unreachable from the VM, or accepted with its reason written down.
 
-## Your checklist on the Mac
+## Optional checks on the Mac
 
-The VM cannot see these settings, so only you can do them.
+Nothing here is required: the accepted paths are decisions (D3, D4, D5), not open work. Each line below is defence in depth, and only matters if you change one of those decisions.
 
-- [ ] **SSH (U2):** add the keys-only file, then `sudo launchctl kickstart -k system/com.openssh.sshd`, then run the SSH test from the VM.
-- [ ] **Screen Sharing (U3):** load the `pf` rule and run the four-step test. Tell me the result of step 3.
-- [ ] **Unknown ports (U4):** run `sudo lsof -nP -iTCP -sTCP:LISTEN`. Each listener on `*` stays reachable from the VM even after the loopback fix. Turn off what you do not need.
-- [ ] **Vault (U6):** check whether Dataview JS, Templater scripts, or any other plugin runs code from note content.
-- [ ] **Rex (K4):** turn off clipboard writes from the remote (OSC 52), if Rex.app has the setting.
-- [x] **Loopback (U1) and ports (U7):** done 2026-11-20. `bats tests/vm.bats` 23/23 on the Mac, and `den doctor` prints `vm: host loopback blocked`. The U7 port test is the remaining manual check.
+- **SSH (U2):** keys only. In `/etc/ssh/sshd_config.d/100-den.conf`, set `PasswordAuthentication no` and `KbdInteractiveAuthentication no`, then `sudo launchctl kickstart -k system/com.openssh.sshd`. Test from another machine: `publickey` only.
+- **Screen Sharing (U3):** the `pf` rule below blocks the Mac-to-itself path. It is **not verified**: a Lima issue reports "macOS pf skips lo0".
+- **Unknown ports (U4):** `sudo lsof -nP -iTCP -sTCP:LISTEN` names them. The VM cannot reach them today, by network.
+- **Vault (U6):** D4 accepts VM notes reaching the Mac. The one thing that would make it code execution is a Mac plugin that runs code from note content (Dataview JS, Templater scripts). Check that only if you add one.
+- **Rex (K4):** D3 accepts clipboard write. If Rex.app ever ships a switch for it, turn it off.
+- **Ports (U7):** the config is in place and tested. Still manual: in the VM, `python3 -m http.server 50000`, then on the Mac `curl localhost:50000` must fail, and the same on 8000 must work.
 
 ## Paths we close
 
@@ -220,6 +221,12 @@ The Mac could then paste `CLIPBOARD-FROM-VM`. So Rex honours `OSC 52` from the V
 ### Mac reads VM output (K6): safe
 
 vm-up and `den doctor` read what VM commands print. Checked 2026-11-20: no `eval` of guest output anywhere in `vm/`, `lib/` or `bin/`. The one `eval` is a fixed string run inside the guest. Guest values are parsed with `case` and `sed`, and the numbers are checked before use.
+
+### Lima guest agent (K7): not checked
+
+**What:** `lima-guestagent` runs as root in the guest and speaks to the Mac's host agent over vsock. `/dev/vsock` is mode 666, so any process in the VM can open that channel, root or not.
+
+**Not checked:** what the host agent will do for a request. Lima uses the channel for port forwarding, SSH, time sync and user setup. Lima's model trusts the guest, so this is a path by design, but I did not read the protocol, and the binary shows no obvious file-write or exec verb. If you want this closed rather than accepted, the work is to read Lima's host agent RPC surface and list what a forged guest can ask for.
 
 ### VS Code window (K1): accepted risk
 
