@@ -14,7 +14,7 @@ from html import escape
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "img")
 
-W, H = 1262, 676
+W, H = 1262, 700
 GUTTER = 150
 X0, STEP, BOX_W = 222, 118, 106
 MAC_Y, BOX_H = (96, 70)
@@ -33,12 +33,12 @@ THEMES = {
 # or a service name for the two that go through the internet.
 BRIDGES = [
     (1, ["Rex.app"], ["Rex server"], "SSH", "down"),
-    (2, ["VS Code"], ["your code"], "Remote-SSH", "down"),
+    (2, ["VS Code"], ["your code"], "Remote-SSH ⇄", "both"),
     (3, ["API keys", "relay token"], ["same files", "mode 600"], "copy", "down"),
     (4, ["browse relay", ":19988"], ["agents call", ":19988"], "tunnel", "up"),
     (5, ["VS Code", "window"], ["code .", "inbox"], "pulled", "pulled"),
     (6, ["vm-up", "den up"], ["start · heal", "den copy"], "control", "down"),
-    (7, ["Mac browser"], ["dev servers", "localhost"], "port mirror", "up"),
+    (7, ["Mac browser"], ["dev servers", "1024-9999"], "port mirror", "up"),
     (8, ["git"], ["own gh login"], "GitHub", "net"),
     (9, ["Obsidian"], ["~/Developer/obsidian", "notes only"], "Obsidian Sync", "net"),
 ]
@@ -103,13 +103,14 @@ def build(theme):
                          stroke=t["grey"]))
             badge_y = mid_y - 2
         else:
-            colour = "amber" if kind in ("up", "pulled") else "blue"
+            colour = "amber" if kind in ("up", "pulled", "both") else "blue"
             dash = ' stroke-dasharray="6 5"' if kind == "pulled" else ""
             if kind == "down":
                 a, b = y1 + 2, y2 - 4
             else:
                 a, b = y2 - 2, y1 + 4
-            o.append(f'<line x1="{cx}" y1="{a}" x2="{cx}" y2="{b}" stroke="{t[colour]}" stroke-width="2.6"{dash} '
+            start = f' marker-start="url(#a-{colour})"' if kind == "both" else ""
+            o.append(f'<line x1="{cx}" y1="{a}" x2="{cx}" y2="{b}" stroke="{t[colour]}" stroke-width="2.6"{dash}{start} '
                      f'marker-end="url(#a-{colour})"/>')
             # The label sits on a plate across the line, under the number.
             lw = 16 + 8.2 * len(label)
@@ -117,7 +118,7 @@ def build(theme):
                      f'stroke="{t[colour]}" stroke-width="1"/>')
             o.append(text(cx, LINE + 37.5, label, 13, t[colour], "600"))
             badge_y = LINE
-        colour = {"down": "blue", "up": "amber", "pulled": "amber", "net": "grey"}[kind]
+        colour = {"down": "blue", "up": "amber", "pulled": "amber", "both": "amber", "net": "grey"}[kind]
         o.append(f'<circle cx="{cx}" cy="{badge_y}" r="14" fill="{t[colour]}"/>')
         o.append(text(cx, badge_y + 5, str(n), 14.5, t["bg"], "700"))
         o.append(box(cx, MAC_Y, mac, t))
@@ -125,7 +126,7 @@ def build(theme):
 
     # Legend.
     rows = [[("blue", "the Mac sends into the VM"),
-             ("amber", "VM traffic that reaches the Mac, only through a door the Mac opened")],
+             ("amber", "reaches the Mac, only through a door the Mac opened")],
             [("grey", "no direct link: each side uses the service on its own")]]
     for r, items in enumerate(rows):
         ly = H - 84 + r * 28
@@ -135,8 +136,10 @@ def build(theme):
                      f'marker-end="url(#a-{colour})"/>')
             o.append(text(x + 44, ly + 5, words, 14, t["text"], anchor="start"))
             x += 44 + 7.4 * len(words) + 40
+    o.append(text(36, H - 48, "Doors the VM can use: 2 a command through the open VS Code window · 4 the browser · "
+                  "8 a push that lands at the Mac's next pull · 9 a note that lands at its next sync", 14, t["muted"], anchor="start"))
     o.append(text(36, H - 20, "Never crosses: your Mac's files (no shared folders) · your SSH agent (no forwarding) · "
-                  "a login to the Mac (the VM has no way in)", 14, t["muted"], anchor="start"))
+                  "a login to the Mac (the VM has no account there)", 14, t["muted"], anchor="start"))
     o.append("</svg>")
     return "".join(o)
 

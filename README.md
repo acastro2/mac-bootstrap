@@ -47,7 +47,7 @@ The Mac and the VM touch in exactly these places. **The Mac opens every connecti
 | 5 | `code .` | vm-up pulls the inbox over SSH | one folder path per line | absolute path only, 1024 characters max, no control characters, an immediate repeat of the same path within 10 s is refused, 5 opens a minute at most |
 | 6 | Lifecycle | vm-up and `den up` | start and restart, the guest heal script, a copy of this repo | one way, Mac to VM |
 | 7 | Dev servers | your Mac browser, through Lima | HTTP to `localhost:<port>` | only guest ports 1024-9999 are mirrored (not 19988), so dev servers open on the Mac but the VM can never take a Mac ephemeral port (49152-65535) that a CLI login waits on. The VM cannot reach Mac loopback services (`networkOpts.hostLoopback: false`). See [JAILBREAK.md](docs/den/JAILBREAK.md) |
-| 8 | GitHub | each side on its own | code, through pushes and pulls | the VM has its own `gh` login; the Mac's SSH agent never goes in |
+| 8 | GitHub | each side on its own | code, through pushes and pulls | the VM has its own `gh` login; the Mac's SSH agent never goes in. **Accepted risk D2:** a VM push reaches the Mac at its next pull |
 | 9 | Obsidian | each side on its own | notes | config sync is off in the VM (`--configs ""`), so it can never push plugins to the Mac |
 
 The picture is code: `python3 docs/den/scenes/bridges/build.py`.
