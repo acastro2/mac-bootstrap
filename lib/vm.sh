@@ -240,6 +240,28 @@ den_vm_up_agent() {
   fi
 }
 
+# ── vm-backup ────────────────────────────────────────────────────────
+# The repo: VM_BACKUP_REPO, else den-vm-backup in the first OneDrive folder.
+# Empty when neither exists.
+den_vm_backup_repo() {
+  local d
+  if [ -n "${VM_BACKUP_REPO:-}" ]; then
+    printf '%s' "$VM_BACKUP_REPO"
+    return 0
+  fi
+  for d in "$HOME"/Library/CloudStorage/OneDrive-*; do
+    if [ -d "$d" ]; then
+      printf '%s/den-vm-backup' "$d"
+      return 0
+    fi
+  done
+  return 0
+}
+
+den_vm_backup_state() {
+  printf '%s' "${VM_BACKUP_STATE:-$HOME/.local/state/den/vm-backup}"
+}
+
 den_vm_rex_cli() {
   local cand
   if [ -n "${REX_CLI:-}" ] && [ -x "${REX_CLI}" ]; then
@@ -276,7 +298,9 @@ den_cmd_vm() {
     logs) den_vm_logs "$@" ;;
     rebuild) den_vm_rebuild "$@" ;;
     obsidian-sync) den_vm_obsidian_sync "$@" ;;
-    *) den_die "usage: den vm resources|up|down|shell|status|logs|rebuild|obsidian-sync" ;;
+    backup) den_vm_backup "$@" ;;
+    restore) den_vm_restore "$@" ;;
+    *) den_die "usage: den vm resources|up|down|shell|status|logs|rebuild|obsidian-sync|backup|restore" ;;
   esac
 }
 
@@ -434,6 +458,9 @@ den_vm_show() {
     agent="not loaded"
   fi
   printf 'agent: %s\n' "$agent"
+  if [ -n "${s:-}" ]; then
+    den_vm_backup_line
+  fi
 }
 
 den_vm_logs() {
@@ -500,6 +527,60 @@ den_vm_obsidian_sync() {
   fi
 }
 
+# den vm backup | restore: run vm/vm-backup.sh in the foreground. The restic
+# password is vm.backup_password in the den bundle, loaded the way den up loads
+# it (recorded file, ~/den.json, or a 1Password prompt) and gone when the run
+# ends.
+den_vm_backup_run() { # den_vm_backup_run [--restore]
+  local own=0 rc=0
+  if [ -z "${AGENT_VM:-}" ]; then
+    den_die "AGENT_VM is empty in config.env"
+  fi
+  if [ -z "${DEN_SECRETS_FILE:-}" ] || [ ! -r "${DEN_SECRETS_FILE:-}" ]; then
+    if [ -z "${DEN_RUNTIME:-}" ]; then
+      den_runtime_init
+      own=1
+    fi
+    den_secrets_load
+  fi
+  AGENT_VM="$AGENT_VM" VM_BACKUP_REPO="${VM_BACKUP_REPO:-}" "${DEN_ROOT}/vm/vm-backup.sh" "$@" || rc=$?
+  if [ "$own" = 1 ]; then
+    den_runtime_cleanup
+  fi
+  return "$rc"
+}
+
+den_vm_backup() {
+  if [ $# -gt 0 ]; then
+    den_die "den vm backup takes no arguments"
+  fi
+  den_vm_backup_run
+}
+
+den_vm_restore() {
+  if [ $# -gt 0 ]; then
+    den_die "den vm restore takes no arguments"
+  fi
+  den_vm_backup_run --restore
+}
+
+# One status line for the last finished backup. A warning when none finished
+# or the last one is over 14 days old.
+den_vm_backup_line() {
+  local f last
+  f="$(den_vm_backup_state)/last-ok"
+  if [ ! -s "$f" ]; then
+    printf 'vm: backup has not finished yet (fix: den vm backup)\n'
+    return 0
+  fi
+  last=$(cut -c1-10 "$f" 2>/dev/null || true)
+  if find "$f" -mmin +20160 2>/dev/null | grep -q .; then
+    printf 'vm: backup is old, last %s (fix: den vm backup)\n' "$last"
+    return 0
+  fi
+  printf 'vm: backup OK (last %s)\n' "$last"
+}
+
 # ── Doctor ───────────────────────────────────────────────────────────
 # Returns 1 when the VM is expected (DEN_VM on) and is not Running.
 den_doctor_vm() {
@@ -519,6 +600,9 @@ den_doctor_vm() {
   fi
   s=$(den_vm_status "$vm") || s=""
   printf 'vm: %s\n' "${s:-missing}"
+  if [ -n "${s:-}" ]; then
+    den_vm_backup_line
+  fi
   if [ "${s:-}" != Running ]; then
     if den_toggle_on DEN_VM; then
       printf 'vm: the VM is expected but not Running (fix: den vm up)\n'

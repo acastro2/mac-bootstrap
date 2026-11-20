@@ -23,6 +23,7 @@ brew "ffmpeg"          # scribe audio
 
 # ── Mac: the VM host and the shell/text tools ─────────────────────────
 brew "lima"            # VM for coding agents; sized by the vm phase from this Mac
+brew "restic"          # encrypted copy of the VM (den vm backup)
 brew "shellcheck"
 brew "bats-core"
 tap "openclaw/tap"

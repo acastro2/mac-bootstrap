@@ -103,6 +103,40 @@ so a healthy Mac stays quiet.
    installs the VS Code Remote-SSH extension when missing, runs one heal
    pass, and installs/loads the vm-up login agent.
 
+## Backup and restore
+
+`den vm backup` makes one full, encrypted copy of the VM. It is manual: no
+schedule, no login agent. Run it when you want a safe point.
+
+- **What is copied:** `disk`, `vz-efi`, `vz-identifier` and `lima.yaml` from
+  `~/.lima/agent`, so the VM can start again on any Mac.
+- **How:** while the VM runs, the guest root filesystem is frozen
+  (`fsfreeze`) for about 0.1 s. The Mac clones the files (APFS clone, no extra
+  disk) and thaws the guest. The VM does not stop. If the Mac side dies, the
+  guest thaws itself after 10 s. A stopped VM is cloned with no freeze.
+- **Where:** a restic repo in your OneDrive folder
+  (`~/Library/CloudStorage/OneDrive-*/den-vm-backup`), or `VM_BACKUP_REPO`
+  from `config.env`. The password is `vm.backup_password` from the den
+  document. `den vm backup` loads it like `den up` does, so each run may show
+  a 1Password approval prompt.
+- **How many:** one copy. Each run replaces it, and only after the new copy
+  succeeded, so a failed run never deletes the old one.
+- **Check:** `den vm status` and `den doctor` show `vm: backup OK (last
+  <date>)`, and warn when the last backup is over 14 days old.
+
+First setup: add `vm.backup_password` to the den document
+(`openssl rand -base64 32`), then `den up --only=vm-backup` creates the repo.
+
+In Finder, set the `den-vm-backup` folder to **Always Keep on This Device**,
+so OneDrive does not turn the repo into online-only files.
+
+On a new Mac:
+
+1. `bootstrap.sh` (installs den and runs `den up`)
+2. `den up --only=vm-backup` (checks the repo opens with the den password)
+3. `den vm restore` (refuses if `~/.lima/agent` already exists)
+4. `limactl start agent`
+
 ## Self-healing (nothing to remember)
 
 `vm/vm-up.sh` runs the VM, the relay, the tunnel and the guest repairs:

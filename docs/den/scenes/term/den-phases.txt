@@ -19,3 +19,4 @@ rex                    DEN_REX            secrets net            macos  the Rex 
 rex-restore            DEN_REX            -                      any    resume Claude Code chats after a Rex restart
 vm                     DEN_VM             brew                   macos  The Linux dev box: Docker, every key, Obsidian sync, the Rex server
 vm-mcp                 DEN_VM             secrets                macos  the superlogical MCP in the VM's Claude Code, URL from the den bundle
+vm-backup              DEN_VM             secrets                macos  encrypted copy of the VM into OneDrive, run by hand: restic repo

@@ -86,7 +86,7 @@ Toggles (all default as shown in `config.env`):
 | `DEN_AGENTS="opencode claude cortex"` | which agent CLIs install |
 | `DEN_REX=1` | rex, rex-restore |
 | `DEN_OPENCODE_WEB=1` | opencode-web |
-| `DEN_VM=1` | vm, vm-mcp (and the vm-up login agent) |
+| `DEN_VM=1` | vm, vm-mcp, vm-backup (and the vm-up login agent) |
 | `DEN_BROWSE_TUNNEL=1` | browse relay + tunnel in vm-up |
 
 ### Phase registry
@@ -211,6 +211,7 @@ den phases              list phases: name, toggle, needs, about
 den setup               wizard: writes config.env values, then offers den up
 den secrets import <path> | status
 den vm up|down|shell|status|logs|rebuild|obsidian-sync
+den vm backup|restore  one encrypted copy of the VM in a restic repo (OneDrive); manual, no schedule
 den clean [--dry-run] [--host-drift] [--yes]   safe: only registry/Brewfile items, snapshot, typed confirm (--host-drift never takes --yes)
 den sessions export|import <file>   safe import: snapshot, temp extract, verify, swap
 den update              git pull --ff-only, then den up
@@ -219,6 +220,23 @@ den help [cmd] / den --version
 
 `den vm down` stops the vm-up login agent and Lima autostart **before**
 stopping the VM, so nothing restarts it; `den vm up` turns both back on.
+
+`den vm backup` runs `vm/vm-backup.sh` in the foreground; `den vm restore`
+runs it with `--restore`. Nothing schedules it: there is no launchd job. The
+restic password is `vm.backup_password` in the den bundle only: both commands
+load the bundle like `den up` does, so each run may show a 1Password approval
+prompt, and the script reads the password through
+`RESTIC_PASSWORD_COMMAND` (`jq` on `DEN_SECRETS_FILE`), never argv. The
+`vm-backup` phase (`lib/phases/74-vm-backup.sh`, toggle `DEN_VM`, needs
+`secrets`) skips when the bundle has no `vm.backup_password` and runs
+`restic init` on the repo when it has no `config` file. The repo is
+`VM_BACKUP_REPO`, else `den-vm-backup` in the first
+`~/Library/CloudStorage/OneDrive-*` folder. The backup freezes the
+guest root filesystem (`fsfreeze`) for about 0.1 s while it clones `disk`,
+`vz-efi`, `vz-identifier` and `lima.yaml`, so the VM never stops. The repo
+keeps one copy: each run replaces it, and only after the new snapshot
+succeeded. `den vm status` and `den doctor` print `vm: backup OK (last <date>)`
+and warn when no backup finished or the last one is over 14 days old.
 
 ## Host vs VM
 
