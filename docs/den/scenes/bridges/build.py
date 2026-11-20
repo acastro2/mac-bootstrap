@@ -125,14 +125,15 @@ def build(theme):
         o.append(box(cx, VM_Y, vm, t))
 
     # Legend.
-    rows = [[("blue", "the Mac sends into the VM"),
-             ("amber", "reaches the Mac, only through a door the Mac opened")],
-            [("grey", "no direct link: each side uses the service on its own")]]
+    rows = [[("blue", "", "the Mac dials the VM"),
+             ("amber", "", "the VM dials a listener the Mac made")],
+            [("amber", ' stroke-dasharray="6 5"', "the Mac pulls from the VM"),
+             ("grey", "", "no direct link: each side uses the service on its own")]]
     for r, items in enumerate(rows):
         ly = H - 84 + r * 28
         x = 36
-        for colour, words in items:
-            o.append(f'<line x1="{x}" y1="{ly}" x2="{x + 34}" y2="{ly}" stroke="{t[colour]}" stroke-width="3" '
+        for colour, dash, words in items:
+            o.append(f'<line x1="{x}" y1="{ly}" x2="{x + 34}" y2="{ly}" stroke="{t[colour]}" stroke-width="3"{dash} '
                      f'marker-end="url(#a-{colour})"/>')
             o.append(text(x + 44, ly + 5, words, 14, t["text"], anchor="start"))
             x += 44 + 7.4 * len(words) + 40
