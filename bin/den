@@ -302,6 +302,10 @@ den_link_self() {
     ln -sfn "$DEN_ROOT/bin/den" "$link" 2>/dev/null &&
       ui_info "linked $link -> $DEN_ROOT/bin/den (open a new tab to get it on PATH)"
   fi
+  # The link can be right while this shell never picked it up: a tab opened
+  # before the link existed keeps its old PATH. Say the fix, do not hope.
+  command -v den >/dev/null 2>&1 ||
+    ui_warn "den is not on PATH in this shell; run: export PATH=\"\$HOME/.local/bin:\$PATH\""
   return 0
 }
 

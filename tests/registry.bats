@@ -186,3 +186,24 @@ install_registry_targets() {
   run "$REPO/bin/den" fix
   [[ "$output" == *"doctor: agents needs a rerun"* ]]
 }
+
+# den must be reachable as `den`, not only as bin/den from the checkout: a
+# global skill and every new tab call it bare.
+@test "doctor says how to fix den when the link is missing" {
+  run "$REPO/bin/den" doctor
+  [[ "$output" == *"~/.local/bin/den is missing"* ]]
+}
+
+@test "doctor says how to fix den when the link is right but PATH lost it" {
+  ln -sfn "$REPO/bin/den" "$HOME/.local/bin/den"
+  export PATH="$TMP/bin:/usr/bin:/bin"
+  run "$REPO/bin/den" doctor
+  [[ "$output" == *"not on PATH in this shell"* ]]
+}
+
+@test "doctor is quiet about den when the link is on PATH" {
+  ln -sfn "$REPO/bin/den" "$HOME/.local/bin/den"
+  run "$REPO/bin/den" doctor
+  [[ "$output" == *"-> $REPO/bin/den"* ]]
+  [[ "$output" != *"not on PATH"* ]]
+}

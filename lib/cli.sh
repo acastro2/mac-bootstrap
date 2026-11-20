@@ -40,6 +40,24 @@ den_snapshot_paths() {
 
 # ── doctor ────────────────────────────────────────────────────────────
 
+# Is den itself installed where a shell finds it? The link is what every run
+# creates, so this catches a link that was never made and a PATH that lost it.
+den_doctor_self() {
+  local link="$HOME/.local/bin/den" found
+  found=$(command -v den 2>/dev/null) || found=""
+  if [ "$(readlink "$link" 2>/dev/null)" != "${DEN_ROOT:-}/bin/den" ]; then
+    printf 'den: ~/.local/bin/den is missing or points elsewhere (fix: den up --only=shell)\n'
+    return 1
+  fi
+  printf 'den: ~/.local/bin/den -> %s\n' "$(readlink "$link")"
+  if [ "$found" != "$link" ] && [ "$found" != "${DEN_ROOT:-}/bin/den" ]; then
+    # shellcheck disable=SC2016  # the text is the command the user pastes
+    printf 'den: not on PATH in this shell (fix: export PATH="$HOME/.local/bin:$PATH", or open a new tab)\n'
+    return 1
+  fi
+  return 0
+}
+
 den_cmd_doctor() {
   local strict=0 fn name rc total=0 broken=0
   while [ $# -gt 0 ]; do
