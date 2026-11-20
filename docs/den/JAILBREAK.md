@@ -28,15 +28,15 @@ flowchart LR
 | Path | Today | Fix | Who |
 | --- | --- | --- | --- |
 | Mac loopback (U1) | **closed** | Lima setting, live on the Mac 2026-11-20 (`den doctor`: host loopback blocked) | done |
-| Mac SSH (U2) | open | keep it on, keys only | Alex |
-| Mac Screen Sharing and ARD (U3) | open | keep them on, `pf` blocks the Mac-to-itself path (test first) | Alex |
-| Unknown Mac ports (U4) | open | find them with `lsof` | Alex |
+| Mac SSH (U2) | not reachable from the VM | keys only, as defence in depth | Alex, low priority |
+| Mac Screen Sharing and ARD (U3) | not reachable from the VM | `pf` rule, as defence in depth | Alex, low priority |
+| Unknown Mac ports (U4) | not reachable from the VM | `lsof`, then turn off what you do not need | Alex |
 | git push to repos the Mac runs (U5) | open by design | **accepted risk** (D2) | none |
 | Browser (K3) | open | lock the relay switches, then a separate profile | den, Alex |
 | Port squatting (U7) | **closed** | mirror only 1024-9999, tests green on the Mac 2026-11-20 | done |
 | Vault notes (U6) | not checked | check the Mac vault plugins | Alex |
 | Rex terminal output (K4) | not checked | check clipboard access in Rex.app | Alex |
-| Mac reads VM output (K6) | not checked | audit the scripts for `eval` | den |
+| Mac reads VM output (K6) | **safe** | no `eval` of guest output; checked 2026-11-20 | done |
 | VS Code window (K1) | open | **accepted risk** (D1) | none |
 | `code .` and key copy (K2, K5) | safe | none | none |
 
@@ -65,13 +65,13 @@ We did not use a firewall in the guest, because root in the guest can delete the
 
 **Test:** `den doctor` connects from the guest to the VM's own SSH port on the Mac loopback. It must fail. Verified on the Mac 2026-11-20.
 
-**Limit:** this does not cover Mac services that listen on every interface. The VM still reaches those through the Mac's LAN address. That is why SSH and Screen Sharing need their own fix.
+**Limit, corrected 2026-11-20:** I expected the VM to reach Mac services that listen on every interface through the Mac's LAN address. It cannot: from the VM, the Mac's LAN address refuses every port (tested 22, 5900, 3283 and 445 on the Mac, and 80 and 443 on the LAN gateway), while internet egress works. Lima's user-mode network does not route the guest to the host's LAN. So U2, U3 and U4 are not reachable from the VM today, but that is the network, not a control we own. A change of network mode would reopen them.
 
 ### Mac SSH and Screen Sharing (U2, U3)
 
 **What:** Remote Login is on, with password login allowed. Screen Sharing (5900) and Remote Desktop (3283) answer too. An agent can guess your password, and with Screen Sharing it gets your whole screen.
 
-**Proof:** a port scan from the VM. Port 22 lists `password` as a login method, and port 5900 answers with a VNC banner.
+**Proof (2026-11-19, before the loopback fix):** a port scan from the VM. Port 22 listed `password` as a login method, and port 5900 answered with a VNC banner. Those ports were reached through the Mac's loopback, which U1 now refuses. Over the Mac's LAN address the VM gets no answer at all (tested 2026-11-20), so the only path the VM had is closed.
 
 **Why a Mac firewall cannot just block "the VM":** Lima's network is not a real network. A Lima process on the Mac opens each connection for the VM. So the Mac sees the connection come from itself, not from a VM address. A guest firewall does not count, because root in the guest deletes it.
 
@@ -82,7 +82,7 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 ```
 
-**SSH test:** from the VM, `ssh -o BatchMode=yes -o PreferredAuthentications=none <mac-lan-ip>` lists `publickey` only.
+**SSH test:** from another machine on the LAN, `ssh -o BatchMode=yes -o PreferredAuthentications=none <mac-lan-ip>` lists `publickey` only. The VM cannot run this test: it has no route to the LAN.
 
 **Screen Sharing fix: keep it on, block the Mac-to-itself path with `pf`. Not verified yet.** A real remote viewer connects through Wi-Fi or Ethernet. The VM's connection is the Mac connecting to itself, so it goes through the loopback interface (`lo0`). A `pf` rule on `lo0` blocks only that path. Two unknowns: a Lima issue reports "macOS pf skips lo0", and Jamf may manage `pf`. The test below settles the first one.
 
@@ -104,12 +104,12 @@ sudo pfctl -a com.apple/250.den -s rules        # shows the rule
 
 Undo: `sudo pfctl -a com.apple/250.den -F all`.
 
-**Screen Sharing test:**
+**Screen Sharing test:** the VM cannot run it, because it cannot reach the LAN. Use a second machine, or the Mac itself with `nc -z 127.0.0.1 5900` (that is the address the VM would use if the path existed).
 
-1. Before: from the VM, `nc -z -w 2 <mac-lan-ip> 5900 && echo open`. Expect `open`.
-2. Load the rule.
-3. From the VM again. Expect nothing (refused). If it still says `open`, `pf` does not see this traffic, and the rule fails. Then the options are `vzNAT` or turning Screen Sharing off.
-4. From another machine, connect to Screen Sharing. It must still work.
+1. Load the rule.
+2. From a second machine on the LAN, Screen Sharing still works.
+3. On the Mac, `nc -z -w 2 127.0.0.1 5900` now fails, and so does the same on 3283.
+4. The rule does nothing if `pfctl -s rules` shows no `lo0` block. Send me that output.
 
 **Not done yet:** the rule does not survive a reboot. If the test passes, add a LaunchDaemon that loads it at boot, and a `den doctor` check.
 
@@ -117,15 +117,13 @@ Undo: `sudo pfctl -a com.apple/250.den -F all`.
 
 **What:** 10 more open ports: 88, 44087, 49223, 49225, 49227, 49236, 49267, 49374, 53137 and 55127. Two of them answer HTTP. I do not know what they are.
 
-**Fix:** the loopback fix closes the ones on localhost. `lsof` on the Mac finds the rest (checklist).
+**Fix:** the loopback fix closes the ones on localhost, and the VM has no route to the Mac's LAN address, so it cannot reach the others either (tested 2026-11-20). `lsof` still tells you what they are, and whether any is worth turning off for other reasons.
 
 ### git push to repos the Mac runs (U5)
 
 **What:** the Mac pulls and runs four repos: this one (`den update`), `.claude`, `opencode_config`, and `alex-skills` (skills hold scripts and hooks). If the VM can push to them, its code runs on the Mac at the next pull. This is the easiest escape, because it needs no bug.
 
-**Proof:** in the VM, `gh api repos/<repo> --jq .permissions` shows that the active login has `pull` only on `mac-bootstrap` and `alex-skills`, and cannot see `.claude` or `opencode_config`. The VM also stores an `acastro2` login, but its token is dead (HTTP 401).
-
-**So:** closed today only because a token expired. If anyone logs `acastro2` in on the VM again, the VM gets owner write on all four.
+**Proof:** on 2026-11-19 the active login had `pull` only on `mac-bootstrap` and `alex-skills`, and could not see `.claude` or `opencode_config`. On 2026-11-20 the owner signed the VM in to `acastro2` again (to push this work), so the VM can push to all four today.
 
 **Decision D2: accepted.** The VM is a dev box and keeps git push on every repo, these four included. A push to them can run on the Mac at the next pull, the same as the VS Code path. Reopen it if the VM runs code you did not write or review.
 
@@ -195,9 +193,9 @@ Every kept path must follow these rules:
 
 Text that a VM program prints can carry escape codes that write your clipboard (OSC 52) or make fake links. Check what Rex.app accepts (checklist).
 
-### Mac reads VM output (K6): not checked
+### Mac reads VM output (K6): safe
 
-vm-up and `den doctor` read what VM commands print. That is safe only if they treat it as data and never run it with `eval`. The `code .` inbox already does this. Audit the rest.
+vm-up and `den doctor` read what VM commands print. Checked 2026-11-20: no `eval` of guest output anywhere in `vm/`, `lib/` or `bin/`. The one `eval` is a fixed string run inside the guest. Guest values are parsed with `case` and `sed`, and the numbers are checked before use.
 
 ### VS Code window (K1): accepted risk
 
