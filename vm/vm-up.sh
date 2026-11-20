@@ -100,9 +100,9 @@ vm_status() {
   printf '%s' "${s:-}"
 }
 
-relay_up() { to_run 10 curl -fsS -m 3 "http://127.0.0.1:$PORT/version" >/dev/null 2>&1; }
+relay_up() { to_run 10 curl --noproxy '*' -fsS -m 3 "http://127.0.0.1:$PORT/version" >/dev/null 2>&1; }
 guest_relay_up() {
-  to_run 20 limactl shell "$VM" -- curl -fsS -m 3 "http://127.0.0.1:$PORT/version" >/dev/null 2>&1
+  to_run 20 limactl shell "$VM" -- curl --noproxy '*' -fsS -m 3 "http://127.0.0.1:$PORT/version" >/dev/null 2>&1
 }
 
 next_backoff() {

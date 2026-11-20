@@ -412,7 +412,7 @@ den_vm_show() {
   fi
   s=$(den_vm_status "$vm") || s=""
   printf 'vm: %s\n' "${s:-missing}"
-  if curl -fsS -m 3 "http://127.0.0.1:$DEN_VM_PORT/version" >/dev/null 2>&1; then
+  if curl --noproxy '*' -fsS -m 3 "http://127.0.0.1:$DEN_VM_PORT/version" >/dev/null 2>&1; then
     relay=up
   else
     relay=down
@@ -420,7 +420,7 @@ den_vm_show() {
   printf 'relay: %s\n' "$relay"
   tunnel=n/a
   if [ "${s:-}" = Running ]; then
-    if den_vm_to 15 limactl shell "$vm" -- curl -fsS -m 3 "http://127.0.0.1:$DEN_VM_PORT/version" >/dev/null 2>&1; then
+    if den_vm_to 15 limactl shell "$vm" -- curl --noproxy '*' -fsS -m 3 "http://127.0.0.1:$DEN_VM_PORT/version" >/dev/null 2>&1; then
       tunnel=up
     else
       tunnel=down
@@ -502,7 +502,7 @@ den_doctor_vm() {
     fi
     return 0
   fi
-  if curl -fsS -m 3 "http://127.0.0.1:$DEN_VM_PORT/version" >/dev/null 2>&1; then
+  if curl --noproxy '*' -fsS -m 3 "http://127.0.0.1:$DEN_VM_PORT/version" >/dev/null 2>&1; then
     printf 'vm: browse relay OK\n'
   else
     printf 'vm: browse relay down (vm-up starts it within a minute)\n'

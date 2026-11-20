@@ -162,3 +162,14 @@ vm_status() {
   [ "$status" -eq 0 ]
   ! grep -F "forward close" "$CALLS"
 }
+
+# A corporate proxy env must never send the loopback probe to the proxy: the
+# relay is healthy while curl reports it down, and vm-up then restarts it
+# every minute.
+@test "relay probe never goes through a proxy" {
+  vm_status Running
+  run "$REPO/vm/vm-up.sh"
+  [ "$status" -eq 0 ]
+  # The stub logs the argv, so the quotes are gone: match on the flag.
+  grep -E -- "curl --noproxy (\*|\x27\*\x27) " "$CALLS" || grep -F -- "curl --noproxy *" "$CALLS"
+}
