@@ -272,7 +272,7 @@ $ echo 'vm jailbreak'
 vm jailbreak
 ```
 
-The extension was removed after the test, and `extensions.json` is empty again. To repeat it, do the four steps above; it takes about two minutes.
+The extension was removed after the test, and `extensions.json` was reset. The file must stay a JSON array: empty is `[]`. A JSON object such as `{"version":1,"extensions":[]}` makes the server reject the file, and the remote extension host then loads no extensions, Git included (seen 2026-11-23). To repeat it, do the four steps above; it takes about two minutes.
 
 **What this proves:** anything that can write to `~/.vscode-server/extensions` in the VM owns a shell on the Mac while that window is open. Two of the four D1 rows are confirmed (`executeCommand` of a client command, and `openExternal`). The clipboard and `workspace.fs` rows are not tested.
 
