@@ -26,7 +26,7 @@ den_vm_to() { # den_vm_to SECONDS CMD...
 # RAM minus 12 GiB, never above RAM minus 8 GiB, because Apple Virtualization
 # never gives RAM the guest touched back to macOS (no free page reporting;
 # measured: a guest drop_caches did not shrink the VM process). Half the free
-# disk, capped at 100 GiB. HOST_NCPU, HOST_MEM_BYTES and HOST_FREE_BYTES override
+# disk, capped at 200 GiB. HOST_NCPU, HOST_MEM_BYTES and HOST_FREE_BYTES override
 # the facts; tests use them so sizing never reads the test machine.
 den_vm_resources() {
   local ncpu mem_bytes free_bytes mem_gib free_gib
@@ -53,8 +53,8 @@ den_vm_resources() {
     VM_MEM_GB=4
   fi
   VM_DISK_GB=$((free_gib / 2))
-  if [ "$VM_DISK_GB" -gt 100 ]; then
-    VM_DISK_GB=100
+  if [ "$VM_DISK_GB" -gt 200 ]; then
+    VM_DISK_GB=200
   fi
   if [ "$VM_DISK_GB" -lt 40 ]; then
     VM_DISK_GB=40

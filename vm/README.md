@@ -78,7 +78,7 @@ so a healthy Mac stays quiet.
 
 1. Sizes the VM from the Mac: every core, the larger of half the RAM and RAM − 12 GiB
    (macOS keeps at least 8 GiB; the VM never gives touched RAM back until it restarts),
-   half the free disk, at least 40 GiB and at most 100 GiB. Creates it, or resizes a **stopped**
+   half the free disk, at least 40 GiB and at most 200 GiB. Creates it, or resizes a **stopped**
    VM that is too small; a running VM is left alone with the fix command. A
    disk below target is reported, never shrunk.
 2. Registers it for autostart and puts the Lima ssh include first in
