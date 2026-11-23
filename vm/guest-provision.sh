@@ -106,7 +106,25 @@ if [ -x "$REPO_DIR/bin/den" ]; then
   hash -r
 fi
 
-# ── 4. Obsidian Headless ──────────────────────────────────────────────
+# ── 4. Shared OpenTofu provider cache ─────────────────────────────────
+# Each `tofu init` symlinks into one cache instead of copying the 766 MB AWS
+# provider per checkout (agents clone repos often; it filled the disk once).
+# A CLI config file, not an env var: environment.d does not reach shells.
+# OpenTofu reads ~/.terraformrc when ~/.tofurc is absent, and since 1.10 it
+# locks the cache, so parallel inits are safe.
+tf_cache="$HOME/.terraform.d/plugin-cache"
+if grep -qs '^[[:space:]]*plugin_cache_dir' "$HOME/.terraformrc" "$HOME/.tofurc"; then
+  : # already set; leave the user's file alone
+elif [ -e "$HOME/.tofurc" ]; then
+  say "$HOME/.tofurc exists without plugin_cache_dir; provider cache not set"
+elif mkdir -p "$tf_cache"; then
+  printf 'plugin_cache_dir = "%s"\n' "$tf_cache" >>"$HOME/.terraformrc" ||
+    say "could not write ~/.terraformrc"
+else
+  say "could not create $tf_cache; provider cache not set"
+fi
+
+# ── 5. Obsidian Headless ──────────────────────────────────────────────
 # Always installed, so the Mac's preflight can run `ob login` and the first
 # `ob sync-setup` interactively (an E2EE vault asks for its password). Here,
 # unattended: configure a set-up vault safely and keep it syncing.

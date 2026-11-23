@@ -90,7 +90,9 @@ so a healthy Mac stays quiet.
    (`docker-ce`, `containerd.io`, `docker-buildx-plugin`,
    `docker-compose-plugin`), joins the `docker` group, a validated
    `/etc/sudoers.d/<user>` (checked with `visudo -cf`, mode 0440), the repo,
-   and `bin/den up` for the Linux phases.
+   and `bin/den up` for the Linux phases. It also points OpenTofu at one
+   shared provider cache (`plugin_cache_dir` in `~/.terraformrc`), so each
+   checkout's `tofu init` links the providers instead of copying them.
 5. Installs Obsidian Headless with the guest's mise node, always. Sync is set
    up only once a vault name is known (`obsidian.vault` in the bundle or
    `OBSIDIAN_SYNC_VAULT`): `ob sync-setup`, then
