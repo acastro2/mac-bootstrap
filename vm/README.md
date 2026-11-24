@@ -68,6 +68,7 @@ prompt, and then stops every Docker container.
   them STOP, TERM or KILL, so state locks release cleanly.
 - `bash vm/burn.test.sh` checks the classifier against a fixture process tree.
 - `burn -n` is a dry run: it lists the kill set and touches nothing.
+- `burn -n` (and `burn`) print the kill list as a table with CPU now (1 s sample), RSS and age, sorted by RSS. The last column is the command to kill that one row by hand (`kill -INT` for tofu).
 - Agents may start their jobs again. Find the agent that loops and stop it.
 
 ### Connect Rex for Mac (once per Mac, by hand)
