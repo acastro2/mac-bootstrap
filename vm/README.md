@@ -92,7 +92,11 @@ so a healthy Mac stays quiet.
    `/etc/sudoers.d/<user>` (checked with `visudo -cf`, mode 0440), the repo,
    and `bin/den up` for the Linux phases. It also points OpenTofu at one
    shared provider cache (`plugin_cache_dir` in `~/.terraformrc`), so each
-   checkout's `tofu init` links the providers instead of copying them.
+   checkout's `tofu init` links the providers instead of copying them. It also
+   sets up zram swap (half of RAM, zstd) with `systemd-zram-generator`, installing
+   `linux-modules-extra` for the running kernel because the cloud image kernel lacks
+   the zram module, and the `linux-image-generic` meta so each kernel upgrade
+   brings its `-extra` (the image's `linux-image-virtual` meta does not).
 5. Installs Obsidian Headless with the guest's mise node, always. Sync is set
    up only once a vault name is known (`obsidian.vault` in the bundle or
    `OBSIDIAN_SYNC_VAULT`): `ob sync-setup`, then

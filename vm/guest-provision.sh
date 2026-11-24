@@ -83,7 +83,54 @@ else
 fi
 rm -f "$sudoers_tmp"
 
-# ── 3. The repo, then the Linux phases ────────────────────────────────
+# ── 3. zram swap, compressed, in RAM ──────────────────────────────────
+# Agents fill the guest RAM. With no swap, the kernel can only evict code
+# pages, so kswapd thrashes. zram keeps idle anonymous memory in RAM, in
+# compressed form, with no disk I/O.
+# The cloud image kernel has no zram module. The module ships in
+# linux-modules-extra-<kernel>. The image tracks kernels with the
+# linux-image-virtual meta, which never pulls -extra, so a kernel upgrade would
+# boot without zram. The linux-image-generic meta pulls -extra with every
+# kernel (same -generic image here), so install it too.
+zram_on() { swapon --show=NAME --noheadings 2>/dev/null | grep -q '^/dev/zram'; }
+if zram_on && dpkg -s linux-image-generic >/dev/null 2>&1; then
+  : # zram swap on and -extra tracks the kernel; nothing to do
+else
+  export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+  if ! {
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq linux-image-generic "linux-modules-extra-$(uname -r)" systemd-zram-generator
+  }; then
+    say "zram: could not install linux-image-generic, linux-modules-extra-$(uname -r) or systemd-zram-generator; zram swap not set"
+  elif zram_on; then
+    # Never restart a live zram swap: swapoff pulls every page back into RAM.
+    say "zram swap already on; linux-image-generic now keeps -extra in step with the kernel"
+  elif ! sudo modprobe zram >/dev/null 2>&1; then
+    say "zram module missing for kernel $(uname -r); zram swap not set"
+  else
+    zram_tmp=$(mktemp)
+    printf '[zram0]\nzram-size = ram / 2\ncompression-algorithm = zstd\n' >"$zram_tmp"
+    { sudo install -m 0644 -o root -g root "$zram_tmp" /etc/systemd/zram-generator.conf &&
+      sudo systemctl daemon-reload; } || say "zram: could not write /etc/systemd/zram-generator.conf"
+    rm -f "$zram_tmp"
+    # restart, not start: the package install may already have brought zram0
+    # up with the default size; restart applies the config above.
+    sudo systemctl restart systemd-zram-setup@zram0.service >/dev/null 2>&1 || true
+    # The swap turns on a moment after the restart returns (seen live: swapon
+    # empty, free a second later showed it). Wait up to 10 s before judging.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      zram_on && break
+      sleep 1
+    done
+    if zram_on; then
+      say "zram swap on (/dev/zram0, half of RAM, zstd)"
+    else
+      say "zram swap did not start; see: systemctl status systemd-zram-setup@zram0.service"
+    fi
+  fi
+fi
+
+# ── 4. The repo, then the Linux phases ────────────────────────────────
 REPO_DIR=${DEN_GUEST_DIR:-$HOME/Developer/github/acastro2/mac-bootstrap}
 case $REPO_DIR in /*) ;; *) REPO_DIR=$HOME/$REPO_DIR ;; esac
 REPO_URL=${DEN_REPO_URL:-https://github.com/acastro2/mac-bootstrap.git}
@@ -106,7 +153,7 @@ if [ -x "$REPO_DIR/bin/den" ]; then
   hash -r
 fi
 
-# ── 4. Shared OpenTofu provider cache ─────────────────────────────────
+# ── 5. Shared OpenTofu provider cache ─────────────────────────────────
 # Each `tofu init` symlinks into one cache instead of copying the 766 MB AWS
 # provider per checkout (agents clone repos often; it filled the disk once).
 # A CLI config file, not an env var: environment.d does not reach shells.
@@ -124,7 +171,7 @@ else
   say "could not create $tf_cache; provider cache not set"
 fi
 
-# ── 5. Obsidian Headless ──────────────────────────────────────────────
+# ── 6. Obsidian Headless ──────────────────────────────────────────────
 # Always installed, so the Mac's preflight can run `ob login` and the first
 # `ob sync-setup` interactively (an E2EE vault asks for its password). Here,
 # unattended: configure a set-up vault safely and keep it syncing.
