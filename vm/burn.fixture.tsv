@@ -1,0 +1,35 @@
+1	0	root	systemd	/sbin/init
+916	1	me	systemd	/usr/lib/systemd/systemd --user
+917	916	me	(sd-pam)	(sd-pam)
+1976	916	me	rex	/home/linuxbrew/.linuxbrew/bin/rex server
+2009	1976	me	zsh	-zsh
+19947	1976	me	claude	claude
+13507	2009	me	2.1.331	/home/me/.local/share/claude/versions/2.1.331
+12939	13507	me	2.1.331	/home/me/.local/share/claude/versions/2.1.331 --subagent
+5001	13507	me	node	node /home/me/.npm/_npx/abc/node_modules/.bin/some-mcp-server
+5002	5001	me	node	node /home/me/.npm/_npx/abc/helper.js
+1908515	13507	me	zsh	/home/linuxbrew/.linuxbrew/bin/zsh -c source /home/me/.claude/shell-snapshots/snapshot-zsh-1.sh && eval './all2.sh'
+1908535	1908515	me	bash	/bin/bash ./all2.sh
+1959917	1908535	me	bash	/bin/bash ./all2.sh
+1959918	1959917	me	tofu	tofu test -test-directory=tftest -no-color
+1960313	1959918	me	terraform-provi	.terraform/providers/registry.opentofu.org/hashicorp/aws/6.68.0/linux_arm64/terraform-provider-aws
+7982	2009	me	opencode	/home/me/.opencode/bin/opencode
+7990	7982	me	bash	/bin/bash -c npm test
+7991	7990	me	node-MainThread	/home/me/.local/share/mise/installs/node/24.22.3/bin/node /home/me/Developer/x/node_modules/.bin/vitest
+1884027	916	me	MainThread	/home/me/.local/share/mise/installs/node/24.22.3/bin/node /home/me/Developer/ChamberlainGroup/x/worker.js
+1927405	2009	me	python	python train.py
+3000	2009	me	nvim	nvim notes.md
+4000	916	me	node	/home/me/.vscode-server/cli/servers/Stable-x/server/node /home/me/.vscode-server/cli/servers/Stable-x/server/out/server-main.js
+4001	4000	me	MainThread	/home/me/.vscode-server/cli/servers/Stable-x/server/node --type=extensionHost
+4002	4001	me	copilot-runtime	copilot-runtime
+6000	916	me	node	/home/me/.local/share/mise/installs/node/24.22.3/bin/node /home/me/.local/share/mise/installs/node/24.22.3/bin/ob sync --continuous --path /home/me/Developer/obsidian
+3720	1	root	sshd	sshd: me [priv]
+3721	3720	me	sshd	sshd: me@pts/1
+3722	3721	me	zsh	-zsh
+8000	3722	me	bash	bash /home/me/.local/share/den/vm/burn.sh --plan
+9000	916	me	dbus-daemon	/usr/bin/dbus-daemon --session
+9100	1	root	dockerd	/usr/bin/dockerd -H fd://
+9200	916	me	ssh-agent	ssh-agent -D
+7100	13507	me	bwrap	bwrap --ro-bind / / --dev /dev -- /home/linuxbrew/.linuxbrew/bin/zsh -c npm test
+7101	7100	me	zsh	/home/linuxbrew/.linuxbrew/bin/zsh -c npm test
+7102	7101	me	node-MainThread	/home/me/.local/share/mise/installs/node/24.22.3/bin/node /home/me/Developer/x/node_modules/.bin/vitest

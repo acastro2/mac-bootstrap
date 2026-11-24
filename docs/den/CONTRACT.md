@@ -41,7 +41,7 @@ lib/core.sh           config, phase registry, runner, needs, state (see "Core").
 lib/secrets.sh        den.json load/render/purge (see "Secrets").
 lib/registry.sh       managed install registry (moved as is from bootstrap.sh).
 lib/phases/<NN>-<name>.sh   one file per phase; NN sets run order.
-vm/                   lima-dev.yaml, vm-up.sh, guest-heal.sh, guest-provision.sh, README.md (VM lane).
+vm/                   lima-dev.yaml, vm-up.sh, guest-heal.sh, guest-provision.sh, burn.sh, burn.test.sh, README.md (VM lane).
 config.env            public config (committed). Toggles live here.
 ```
 

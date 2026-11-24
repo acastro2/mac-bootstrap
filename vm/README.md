@@ -52,6 +52,24 @@ ssh lima-agent               # ~/.ssh/config includes ~/.lima/*/ssh.config
 `den vm down` is how the RAM comes back. Do not use `limactl stop agent`
 alone: the login agent brings the VM back within a minute.
 
+### burn: free the guest fast
+
+Run `burn` inside the guest when it is starved. It kills at once, with no
+prompt, and then stops every Docker container.
+
+- **Keeps:** agents (`claude`, `opencode`) and their MCP servers, pane shells
+  (Rex, SSH, tmux), the VS Code server, Obsidian sync, editors and viewers
+  (vim, nvim, less, htop and so on), and infrastructure (systemd, dbus, sshd,
+  ssh-agent, gpg-agent).
+- **Kills:** what an agent ran through a shell (test runs, looping scripts),
+  orphans under `systemd --user`, and any other job you started.
+- **tofu and terraform** (and their providers) only get SIGINT. burn leaves
+  them to finish, up to 60 s, then reports any still running. It never sends
+  them STOP, TERM or KILL, so state locks release cleanly.
+- `bash vm/burn.test.sh` checks the classifier against a fixture process tree.
+- `burn -n` is a dry run: it lists the kill set and touches nothing.
+- Agents may start their jobs again. Find the agent that loops and stop it.
+
 ### Connect Rex for Mac (once per Mac, by hand)
 
 1. Press ⌘⇧P and run **Add Remote Host…**.

@@ -223,3 +223,12 @@ UNIT
 else
   say "obsidian: not signed in yet; den up on the Mac runs ob login in preflight"
 fi
+
+# ── 7. burn on PATH ───────────────────────────────────────────────────
+# `burn` frees a starved guest in one command; a link keeps it on the repo copy.
+if [ -x "$REPO_DIR/vm/burn.sh" ]; then
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$REPO_DIR/vm/burn.sh" "$HOME/.local/bin/burn" || say "could not link ~/.local/bin/burn"
+else
+  say "burn: $REPO_DIR/vm/burn.sh not found; not linked"
+fi
