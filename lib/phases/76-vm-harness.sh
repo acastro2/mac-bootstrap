@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # lib/phases/76-vm-harness.sh — one CA and one passkey for the harness page on
-# the Mac and in the VM. The Mac trusts the mkcert CA (mkcert -install, which
-# may ask for Touch ID), the CA files are copied into the guest on stdin, the
+# the Mac and in the VM. The Mac trusts the mkcert CA in the login keychain
+# (no admin needed; macOS asks for the user's password), the CA files are copied into the guest on stdin, the
 # guest issues its cert from them, and passkey.json (public half only) is
 # copied to whichever side lacks it. Secrets ride stdin only: the CA key is
 # never in argv, den state or logs. A re-run with nothing new copies and
@@ -92,15 +92,28 @@ phase_vm_harness() {
     den_skip "$vm is not Running" "den vm up"
   fi
 
-  # Mac side: trust the CA (idempotent; may prompt for Touch ID).
-  if ! mkcert -install >/dev/null 2>&1; then
-    den_fail "mkcert -install failed" "mkcert -install"
-  fi
+  # Mac side: make the CA and trust it in the LOGIN keychain. `mkcert -install`
+  # writes the System keychain, which needs an admin; a user trust setting
+  # needs only the user's own password (a macOS dialog), and Edge honours it.
   caroot=$(mkcert -CAROOT)
   if [ ! -f "$caroot/rootCA.pem" ] || [ ! -f "$caroot/rootCA-key.pem" ]; then
-    den_fail "no mkcert CA in $caroot" "mkcert -install"
+    # Any mkcert run creates the CA; the throwaway cert goes to a temp dir.
+    local ct=""
+    ct=$(mktemp -d) || den_fail "mktemp failed" "den up --only=vm-harness"
+    (cd "$ct" && mkcert localhost >/dev/null 2>&1) || true
+    rm -rf "$ct"
   fi
-  ui_ok "mkcert CA trusted on this Mac"
+  if [ ! -f "$caroot/rootCA.pem" ] || [ ! -f "$caroot/rootCA-key.pem" ]; then
+    den_fail "mkcert could not create a CA in $caroot" "mkcert localhost"
+  fi
+  if security verify-cert -c "$caroot/rootCA.pem" >/dev/null 2>&1; then
+    ui_info "mkcert CA already trusted on this Mac"
+  elif security add-trusted-cert -r trustRoot -k "$HOME/Library/Keychains/login.keychain-db" "$caroot/rootCA.pem" >/dev/null 2>&1; then
+    ui_ok "mkcert CA trusted in the login keychain"
+  else
+    den_fail "could not trust the mkcert CA (cancelled, or the keychain is locked)" \
+      "security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db \"\$(mkcert -CAROOT)/rootCA.pem\""
+  fi
 
   h=$(den_vm_harness_guest hashes </dev/null) || h=""
   while read -r name val; do
