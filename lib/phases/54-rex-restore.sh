@@ -1,18 +1,18 @@
 # shellcheck shell=bash
-# lib/phases/54-rex-restore.sh — Rex Agent Restore: resume Claude Code and
-# Cursor chats after a Rex restart.
+# lib/phases/54-rex-restore.sh — Rex Agent Restore: resume Claude Code,
+# OpenCode and Cursor chats after a Rex restart.
 # Its installer only wires agents whose config dirs exist, so this runs after
 # the config repos. The zsh part belongs to chezmoi, hence --no-shell.
 # Contract: docs/den/CONTRACT.md ("Host vs VM").
 
 den_phase rex-restore \
   --title "Rex Agent Restore" \
-  --about "resume Claude Code chats after a Rex restart" \
+  --about "resume Claude Code and OpenCode chats after a Rex restart" \
   --os any \
   --toggle DEN_REX
 
 phase_rex_restore() {
-  local agents=${REX_RESTORE_AGENTS:-claude} out=""
+  local agents=${REX_RESTORE_AGENTS:-claude,opencode} out=""
 
   if ! command -v rex-agent-restore >/dev/null 2>&1; then
     den_skip "rex-agent-restore not installed" "brew install rex-agent-restore, then run den fix"

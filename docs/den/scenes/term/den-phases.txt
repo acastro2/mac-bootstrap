@@ -16,7 +16,7 @@ secrets                -                  secrets                any    render t
 config-repos           -                  gh net                 any    OpenCode, Claude Code and agent skills checked out where the tools read them
 opencode-web           DEN_OPENCODE_WEB   secrets                macos  the OpenCode web UI on the tailnet, password from the den bundle
 rex                    DEN_REX            secrets net            macos  the Rex app, its skill and the superlogical MCP in Claude Code
-rex-restore            DEN_REX            -                      any    resume Claude Code chats after a Rex restart
+rex-restore            DEN_REX            -                      any    resume Claude Code and OpenCode chats after a Rex restart
 vm                     DEN_VM             brew                   macos  The Linux dev box: Docker, every key, Obsidian sync, the Rex server
 vm-mcp                 DEN_VM             secrets                macos  the superlogical MCP in the VM's Claude Code, URL from the den bundle
 vm-backup              DEN_VM             secrets                macos  encrypted copy of the VM into OneDrive, run by hand: restic repo
