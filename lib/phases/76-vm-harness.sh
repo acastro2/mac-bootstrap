@@ -51,8 +51,7 @@ case $mode in
 $out
 " in
           *"
-issued
-"*)
+issued"*)
             XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)} systemctl --user restart harness-serve >/dev/null 2>&1 || true
             echo issued ;;
           *) echo current ;;

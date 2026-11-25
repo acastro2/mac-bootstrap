@@ -47,7 +47,7 @@ phase_harness() {
     if [ -n "$caroot" ] && [ -f "$caroot/rootCA.pem" ]; then
       if tls=$("$root/bin/harness-tls" 2>&1); then
         case $'\n'$tls$'\n' in
-          *$'\n'issued$'\n'*) issued=1 ;;
+          *$'\n'issued*) issued=1 ;; # harness-tls prints "issued: <path>"
         esac
         ui_ok "harness tls: ${tls##*$'\n'}"
       else
