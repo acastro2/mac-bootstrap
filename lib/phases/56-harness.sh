@@ -20,8 +20,18 @@ phase_harness() {
     bun=$(mise which bun 2>/dev/null || true) || bun=""
   fi
   [ -n "$bun" ] || bun=$(command -v bun 2>/dev/null || true) || bun=""
+  # The mise phase is Linux-only (the VM toolchains), so on the Mac this phase installs the pinned Bun itself.
+  if [ -z "$bun" ] && command -v mise >/dev/null 2>&1; then
+    if mise use -g bun@1.4.5 >/dev/null 2>&1; then
+      bun=$(mise which bun 2>/dev/null || true) || bun=""
+      [ -n "$bun" ] && ui_ok "installed Bun 1.4.5 with mise"
+    fi
+  fi
   if [ -z "$bun" ]; then
-    den_skip "Bun is not installed" "den up --only=mise"
+    if command -v mise >/dev/null 2>&1; then
+      den_fail "mise could not install Bun 1.4.5" "mise use -g bun@1.4.5"
+    fi
+    den_skip "Bun and mise are not installed" "brew install mise, then den up --only=harness"
   fi
 
   if [ ! -d "$root/node_modules" ]; then
