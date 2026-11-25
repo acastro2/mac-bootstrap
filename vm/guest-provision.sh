@@ -249,10 +249,13 @@ else
     sudo install -m 0644 -o root -g root "$aa_src" "$aa_dst" || say "rex guard: could not write $aa_dst"
   fi
   if sudo apparmor_parser -r -W "$aa_dst" >/dev/null 2>&1; then
-    rex_pid=$(systemctl --user show -p MainPID --value rex.service 2>/dev/null || true)
+    # a `bash -s` over limactl shell may lack XDG_RUNTIME_DIR (see guest-heal.sh)
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    rex_pid=$(systemctl --user show -p MainPID --value rex.service 2>/dev/null) ||
+      { say "rex guard: user bus unreachable; guard state unknown"; rex_pid=""; }
     if [ -n "$rex_pid" ] && [ "$rex_pid" != 0 ] &&
-      ! grep -q '^rex-server ' "/proc/$rex_pid/attr/current" 2>/dev/null; then
-      say "rex guard loaded; the running Rex server is unguarded until: systemctl --user restart rex (ends every session)"
+      ! grep -q '^rex-server (enforce)' "/proc/$rex_pid/attr/current" 2>/dev/null; then
+      say "rex guard loaded but inert: the Rex server predates it, so no terminal is confined. Run in limactl shell, not a Rex terminal: systemctl --user restart rex (ends every session)"
     fi
   else
     say "rex guard: apparmor_parser could not load $aa_dst"

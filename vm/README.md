@@ -82,7 +82,10 @@ every session.
 - A `kill` from a terminal to the server gets `Permission denied`, `kill -9`
   too. The kernel log shows `apparmor="DENIED" operation="signal"`.
 - `rex server stop` from a terminal is blocked too: it sends SIGTERM. Restart
-  with `systemctl --user restart rex`; systemd sends that signal.
+  with `systemctl --user restart rex`, run in `limactl shell agent`, never in a
+  Rex terminal: it ends every session.
+- Not covered: `systemctl --user stop|restart|kill rex` from a terminal still
+  works, because systemd (not confined) sends the signal.
 - Terminals, even under sudo, cannot unload the profile or edit
   `/etc/apparmor.d`. Change it from `limactl shell agent`, which is not confined.
 - It stops accidents, not intent: a `limactl shell` session can still kill Rex.
