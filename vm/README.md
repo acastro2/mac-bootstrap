@@ -71,6 +71,23 @@ prompt, and then stops every Docker container.
 - `burn -n` (and `burn`) print the kill list as a table with CPU now (1 s sample), RSS and age, sorted by RSS. The last column is the command to kill that one row by hand (`kill -INT` for tofu).
 - Agents may start their jobs again. Find the agent that loops and stop it.
 
+### Rex server guard
+
+An AppArmor profile (`vm/rex-server.apparmor`, installed as
+`/etc/apparmor.d/rex-server`) stops every process started from a Rex terminal
+from signalling the Rex server. Why: `lsof -ti :PORT | xargs kill -9` also
+matches the server when it holds a Mac forward to that port, and that ends
+every session.
+
+- A `kill` from a terminal to the server gets `Permission denied`, `kill -9`
+  too. The kernel log shows `apparmor="DENIED" operation="signal"`.
+- `rex server stop` from a terminal is blocked too: it sends SIGTERM. Restart
+  with `systemctl --user restart rex`; systemd sends that signal.
+- Terminals, even under sudo, cannot unload the profile or edit
+  `/etc/apparmor.d`. Change it from `limactl shell agent`, which is not confined.
+- It stops accidents, not intent: a `limactl shell` session can still kill Rex.
+- `ps -eo pid,label,comm | grep rex-server` shows what is confined.
+
 ### Connect Rex for Mac (once per Mac, by hand)
 
 1. Press ⌘⇧P and run **Add Remote Host…**.

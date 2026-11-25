@@ -1,0 +1,40 @@
+# Rex server guard (mac-bootstrap). Nothing started from a Rex terminal may
+# signal the Rex server, so a stray `kill -9` or `lsof -ti :PORT | xargs kill`
+# cannot end every session. Restart Rex with `systemctl --user restart rex`.
+# guest-provision.sh installs this as /etc/apparmor.d/rex-server.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile rex-server @{HOME}/.local/bin/rex flags=(attach_disconnected) {
+  # `all,` would carry an exec mode that conflicts with the cx rule below,
+  # so the server's rules are listed one class at a time.
+  capability,
+  network,
+  signal,
+  ptrace,
+  unix,
+  dbus,
+  mount,
+  umount,
+  remount,
+  pivot_root,
+  userns,
+  io_uring,
+  mqueue,
+  change_profile,
+  /** rwlkm,
+  # every program the server starts runs in the terminal child profile
+  /** cx -> terminal,
+
+  profile terminal flags=(attach_disconnected) {
+    all,
+    # AppArmor 4.0: all, alone denied zsh and getent their Unix stream sockets
+    network,
+    unix,
+    # the guard: no signal from a terminal reaches the server
+    audit deny signal (send) peer=rex-server,
+    # and nothing in a terminal, even under sudo, can remove the guard
+    audit deny capability mac_admin,
+    audit deny /etc/apparmor.d/** wl,
+  }
+}

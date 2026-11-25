@@ -232,3 +232,29 @@ if [ -x "$REPO_DIR/vm/burn.sh" ]; then
 else
   say "burn: $REPO_DIR/vm/burn.sh not found; not linked"
 fi
+
+# ── 8. Rex server guard (AppArmor) ────────────────────────────────────
+# A script in a Rex terminal ran `lsof -ti :3000 | xargs kill -9`. The Rex
+# server held a client socket on 3000 (a Mac forward), so every session died.
+# This profile stops any terminal process from signalling the server.
+# Never restart Rex here: a restart ends every session.
+aa_src="$REPO_DIR/vm/rex-server.apparmor"
+aa_dst=/etc/apparmor.d/rex-server
+if [ ! -f "$aa_src" ]; then
+  say "rex guard: $aa_src not found; not installed"
+elif ! command -v apparmor_parser >/dev/null 2>&1; then
+  say "rex guard: no apparmor_parser; not installed"
+else
+  if ! sudo cmp -s "$aa_src" "$aa_dst"; then
+    sudo install -m 0644 -o root -g root "$aa_src" "$aa_dst" || say "rex guard: could not write $aa_dst"
+  fi
+  if sudo apparmor_parser -r -W "$aa_dst" >/dev/null 2>&1; then
+    rex_pid=$(systemctl --user show -p MainPID --value rex.service 2>/dev/null || true)
+    if [ -n "$rex_pid" ] && [ "$rex_pid" != 0 ] &&
+      ! grep -q '^rex-server ' "/proc/$rex_pid/attr/current" 2>/dev/null; then
+      say "rex guard loaded; the running Rex server is unguarded until: systemctl --user restart rex (ends every session)"
+    fi
+  else
+    say "rex guard: apparmor_parser could not load $aa_dst"
+  fi
+fi
