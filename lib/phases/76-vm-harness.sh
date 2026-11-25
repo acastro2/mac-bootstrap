@@ -32,6 +32,42 @@ case $mode in
     echo "passkey $(sum "$pk")"
     command -v mkcert >/dev/null 2>&1 && echo "mkcert yes" || echo "mkcert no" ;;
   getpasskey) base64 <"$pk" | tr -d "\n" ;;
+  bwrap)
+    # Ubuntu 24.04 blocks unprivileged user namespaces (apparmor_restrict_unprivileged_userns=1),
+    # so bwrap needs an AppArmor profile. Prints one word: ok, failed, nosudo, nobwrap
+    # (and "dry" when DEN_BWRAP_DRY=1 and a write would be needed; nothing runs then).
+    if ! command -v bwrap >/dev/null 2>&1; then echo nobwrap; exit 0; fi
+    bw_test() { bwrap --ro-bind / / --dev /dev --proc /proc true >/dev/null 2>&1; }
+    prof=/etc/apparmor.d/bwrap
+    if bw_test; then echo ok; exit 0; fi
+    if [ ! -e "$prof" ]; then
+      if [ "${DEN_BWRAP_DRY:-}" = 1 ]; then
+        echo "would run: sudo -n tee $prof, with this profile:" >&2
+        cat >&2 <<"PROFILE"
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+PROFILE
+        echo "would run: sudo -n apparmor_parser -r $prof" >&2
+        echo dry; exit 0
+      fi
+      if ! sudo -n true >/dev/null 2>&1; then echo nosudo; exit 0; fi
+      sudo -n tee "$prof" >/dev/null <<"PROFILE"
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+PROFILE
+      sudo -n apparmor_parser -r "$prof" >/dev/null 2>&1 || true
+    fi
+    if bw_test; then echo ok; else echo failed; fi ;;
   put)
     umask 077
     mkdir -p "$caroot" "$(dirname "$pk")"
@@ -169,5 +205,18 @@ EOF
     current) ui_ok "$vm harness cert is current" ;;
     notls) den_skip "$vm has no harness-tls yet" "den up --only=config-repos, then den up --only=vm-harness" ;;
     *) den_fail "harness-tls failed in $vm (${word:-no answer})" "den vm shell, then ~/.agents/skills/harness/bin/harness-tls" ;;
+  esac
+  den_vm_harness_bwrap "$vm"
+}
+
+# den_vm_harness_bwrap VM: let bwrap make user namespaces in the guest.
+den_vm_harness_bwrap() {
+  local vm=$1 word=""
+  word=$(den_vm_harness_guest bwrap </dev/null | tail -n 1) || word=""
+  case $word in
+    ok) ui_ok "bwrap ok in $vm" ;;
+    nobwrap) ui_info "bwrap is not installed in $vm; skipped" ;;
+    nosudo) ui_warn "bwrap is blocked in $vm and sudo -n is not available; run in the VM: printf 'abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile bwrap /usr/bin/bwrap flags=(unconfined) {\n  userns,\n  include if exists <local/bwrap>\n}\n' | sudo tee /etc/apparmor.d/bwrap && sudo apparmor_parser -r /etc/apparmor.d/bwrap" ;;
+    *) ui_warn "bwrap failed in $vm (${word:-no answer}); check /etc/apparmor.d/bwrap and run: sudo apparmor_parser -r /etc/apparmor.d/bwrap" ;;
   esac
 }
