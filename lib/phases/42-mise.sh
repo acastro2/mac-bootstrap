@@ -30,6 +30,7 @@ pnpm       = "latest"
 python     = "latest"
 dotnet     = "lts"
 opentofu   = "latest"
+bun        = "1.4.5"    # pinned: the harness runtime (alex-skills docs/specs/harness-evolution.md D11)
 "npm:@playwright/test" = "latest"   # Node CLI for codegen, trace viewer, ad-hoc
 "npm:@playwright/mcp"  = "latest"   # Microsoft's official Playwright MCP server
 "npm:ctx7"             = "latest"   # Context7 documentation CLI
