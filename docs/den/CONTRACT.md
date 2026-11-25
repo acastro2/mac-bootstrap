@@ -86,7 +86,7 @@ Toggles (all default as shown in `config.env`):
 | `DEN_AGENTS="opencode claude cortex"` | which agent CLIs install |
 | `DEN_REX=1` | rex, rex-restore |
 | `DEN_OPENCODE_WEB=1` | opencode-web |
-| `DEN_VM=1` | vm, vm-mcp, vm-backup (and the vm-up login agent) |
+| `DEN_VM=1` | vm, vm-mcp, vm-harness, vm-backup (and the vm-up login agent) |
 | `DEN_BROWSE_TUNNEL=1` | browse relay + tunnel in vm-up |
 
 ### Phase registry

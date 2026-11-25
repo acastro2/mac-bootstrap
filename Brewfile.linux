@@ -23,6 +23,7 @@ brew "gum"
 brew "uv"              # Playwright and browser-use run as uv tools here
 brew "ffmpeg"
 brew "asdf"
+brew "mkcert"           # harness page cert, from the CA the Mac copies in
 
 # ── Toolchains and platform ────────────────────────────────────────────
 brew "mise"            # toolchain manager (Go, Node, Python, tflint, ...)

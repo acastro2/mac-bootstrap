@@ -25,6 +25,7 @@ brew "ffmpeg"          # scribe audio
 brew "lima"            # VM for coding agents; sized by the vm phase from this Mac
 brew "restic"          # encrypted copy of the VM (den vm backup)
 brew "shellcheck"
+brew "mkcert"           # one local CA for the harness page (https://localhost:4317)
 tap "openclaw/tap"
 brew "peekaboo"        # screenshots and screen inspection
 brew "pam-reattach"    # Touch ID for sudo inside tmux and ssh
