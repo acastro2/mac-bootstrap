@@ -96,8 +96,10 @@ Usage:
   den clean [--dry-run] [--host-drift] [--yes]
                             remove only what den declares; snapshot first
   den registry list | check  managed install registry (lib/registry.sh)
-  den vm up|down|shell|status|logs|rebuild|obsidian-sync
+  den vm up|down|shell|status|logs|rebuild|obsidian-sync|pair
                             the Lima agent VM (lib/vm.sh)
+  den pair [--stop|--status]
+                            phone pair link for the VM's OpenCode (Wi-Fi, on demand)
   den update                git pull --ff-only, then den up
   den help [cmd]            this help, or help for one command
   den --version             version
@@ -203,10 +205,21 @@ EOF
       ;;
     vm)
       cat <<'EOF'
-den vm up|down|shell|status|logs|rebuild|obsidian-sync
+den vm up|down|shell|status|logs|rebuild|obsidian-sync|pair
 
 Manages the Lima agent VM and the vm-up login agent (lib/vm.sh). `down` stops
 the login agent and Lima autostart before the VM, so nothing restarts it.
+EOF
+      ;;
+    pair)
+      cat <<'EOF'
+den pair             open a temporary forward from the Mac's Wi-Fi IP to the VM's
+                     OpenCode server, then print the pair link and QR code
+den pair --status    one line: running (PID, URL) or not running
+den pair --stop      close the forward
+
+Plain HTTP on the home Wi-Fi only, guarded by the OpenCode password. Nothing
+runs between calls. Alias: den vm pair. Port: VM_PAIR_PORT in config.env.
 EOF
       ;;
     permissions)
@@ -463,6 +476,7 @@ main() {
     '') den_cmd_dashboard ;;
     help|-h|--help) den_help "$@" ;;
     --version|-V|version) printf 'den %s\n' "$DEN_VERSION" ;;
+    pair) den_cmd_vm pair "$@" ;;
     *)
       case $cmd in *[!a-z0-9-]*) den_die "unknown command: $cmd (try den help)" ;; esac
       if declare -F "den_cmd_${cmd//-/_}" >/dev/null; then

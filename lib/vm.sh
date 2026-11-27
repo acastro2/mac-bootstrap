@@ -300,7 +300,8 @@ den_cmd_vm() {
     obsidian-sync) den_vm_obsidian_sync "$@" ;;
     backup) den_vm_backup "$@" ;;
     restore) den_vm_restore "$@" ;;
-    *) den_die "usage: den vm resources|up|down|shell|status|logs|rebuild|obsidian-sync|backup|restore" ;;
+    pair) den_vm_pair "$@" ;;
+    *) den_die "usage: den vm resources|up|down|shell|status|logs|rebuild|obsidian-sync|backup|restore|pair" ;;
   esac
 }
 
@@ -579,6 +580,234 @@ den_vm_backup_line() {
     return 0
   fi
   printf 'vm: backup OK (last %s)\n' "$last"
+}
+
+# ── den pair ─────────────────────────────────────────────────────────
+# On demand LAN path from a phone to the VM's OpenCode server. Lima mirrors
+# only guest ports 1024-9999, so the guest's OpenCode port (49374) is not
+# reachable from the Mac or the LAN. A rex forward binds the Mac's Wi-Fi IP and
+# leads to the guest's 127.0.0.1. Nothing runs between two `den pair` calls
+# except this one forward, and `den pair --stop` ends it.
+den_pair_state_file() {
+  printf '%s/pair.state' "$DEN_STATE_DIR"
+}
+
+# Sets PAIR_PID, PAIR_IP and PAIR_PORT from the state file. Returns 1 when
+# nothing valid is recorded. The file is parsed, never sourced.
+den_pair_load() {
+  local f
+  f=$(den_pair_state_file)
+  PAIR_PID=""
+  PAIR_IP=""
+  PAIR_PORT=""
+  [ -s "$f" ] || return 1
+  PAIR_PID=$(sed -n 's/^pid=\([0-9][0-9]*\)$/\1/p' "$f" | head -n 1)
+  PAIR_IP=$(sed -n 's/^ip=\([0-9][0-9.]*\)$/\1/p' "$f" | head -n 1)
+  PAIR_PORT=$(sed -n 's/^port=\([0-9][0-9]*\)$/\1/p' "$f" | head -n 1)
+  [ -n "$PAIR_PID" ] && [ -n "$PAIR_IP" ] && [ -n "$PAIR_PORT" ]
+}
+
+den_pair_alive() { # den_pair_alive PID: running, and not a zombie
+  local st
+  st=$(ps -o stat= -p "$1" 2>/dev/null | tr -d ' ') || st=""
+  [ -n "$st" ] && [ "${st#Z}" = "$st" ]
+}
+
+# Only a rex `forward new -L` process is ours to kill. The browse relay is
+# `forward new -R`, so it never matches.
+den_pair_is_forward() { # den_pair_is_forward PID
+  local cmd
+  cmd=$(ps -o command= -p "$1" 2>/dev/null) || cmd=""
+  case $cmd in
+    *" -S vm forward new "*)
+      case $cmd in
+        *" -L "*) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
+den_pair_listeners() { # den_pair_listeners PORT: "PID ADDRESS:PORT" lines
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR > 1 {print $2, $9}' | sort -u || true
+}
+
+den_pair_on() { # den_pair_on IP PORT: something listens on exactly IP:PORT
+  local l
+  l=$(den_pair_listeners "$2")
+  case $l in
+    *" $1:$2"*) return 0 ;;
+  esac
+  return 1
+}
+
+# The IP of the Wi-Fi hardware port. The default route is the corporate VPN,
+# so never read the route.
+den_pair_wifi_ip() {
+  local dev
+  dev=$(networksetup -listallhardwareports 2>/dev/null |
+    awk '/^Hardware Port: Wi-Fi$/ {f = 1; next} f && /^Device:/ {print $2; exit}') || dev=""
+  [ -n "$dev" ] || return 0
+  ipconfig getifaddr "$dev" 2>/dev/null || true
+}
+
+# The port OpenCode listens on in the guest, from `opencode service status`.
+den_pair_guest_port() { # den_pair_guest_port VM
+  local out port
+  out=$(den_vm_to 20 limactl shell "$1" -- bash -lc "${DEN_GUEST_ENV}opencode service status" </dev/null 2>/dev/null) || out=""
+  port=$(printf '%s\n' "$out" | sed -n 's#.*http://[^[:space:]:]*:\([0-9][0-9]*\).*#\1#p' | head -n 1)
+  printf '%s' "${port:-${OPENCODE_WEB_PORT:-49374}}"
+}
+
+# den_pair_stop_forward REX: stop the recorded forward and close leftovers.
+# Returns 1 when a listener is still on the port.
+den_pair_stop_forward() {
+  local rex=$1 left port=""
+  if den_pair_load; then
+    port=$PAIR_PORT
+    if den_pair_alive "$PAIR_PID"; then
+      if den_pair_is_forward "$PAIR_PID"; then
+        kill "$PAIR_PID" 2>/dev/null || true
+        for _ in 1 2 3 4 5 6; do
+          den_pair_alive "$PAIR_PID" || break
+          sleep 0.5
+        done
+        wait "$PAIR_PID" 2>/dev/null || true
+        if den_pair_alive "$PAIR_PID"; then
+          ui_warn "forward PID $PAIR_PID did not stop; run: kill -9 $PAIR_PID"
+        fi
+      else
+        ui_warn "PID $PAIR_PID is not a rex forward; left alone"
+      fi
+    fi
+  fi
+  den_vm_to 20 "$rex" -S vm forward close --orphaned >/dev/null 2>&1 || true
+  rm -f "$(den_pair_state_file)"
+  [ -n "$port" ] || return 0
+  left=$(den_pair_listeners "$port")
+  if [ -n "$left" ]; then
+    ui_warn "port $port still has a listener (PID/address: $(printf '%s' "$left" | tr '\n' ';'))"
+    return 1
+  fi
+  return 0
+}
+
+den_vm_pair() {
+  local mode=run vm=${AGENT_VM:-} rex ip port gport s pid="" listening=0 recorded=0 base
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --stop) mode=stop ;;
+      --status) mode=status ;;
+      *) den_die "usage: den pair [--stop|--status]" ;;
+    esac
+    shift
+  done
+  if [ "$(den_os)" != macos ]; then
+    den_die "den pair runs on the Mac"
+  fi
+  mkdir -p "$DEN_STATE_DIR" 2>/dev/null || true
+  chmod 700 "$DEN_STATE_DIR" 2>/dev/null || true
+
+  if [ "$mode" = status ]; then
+    if den_pair_load && den_pair_alive "$PAIR_PID" && den_pair_is_forward "$PAIR_PID"; then
+      printf 'pair: running (PID %s, http://%s:%s)\n' "$PAIR_PID" "$PAIR_IP" "$PAIR_PORT"
+    else
+      printf 'pair: not running\n'
+    fi
+    return 0
+  fi
+
+  rex=$(den_vm_rex_cli) || den_die "Rex CLI not found; install Rex.app or set REX_CLI"
+
+  if [ "$mode" = stop ]; then
+    if ! den_pair_load; then
+      ui_info "no den pair forward is running"
+      return 0
+    fi
+    port=$PAIR_PORT
+    if den_pair_stop_forward "$rex"; then
+      ui_ok "den pair forward stopped; nothing listens on port $port"
+    else
+      ui_warn "den pair forward stopped, but port $port is still in use; see the line above"
+    fi
+    return 0
+  fi
+
+  if [ -z "$vm" ]; then
+    den_die "AGENT_VM is empty in config.env"
+  fi
+  if ! command -v limactl >/dev/null 2>&1; then
+    den_die "limactl is not installed (brew install lima)"
+  fi
+  s=$(den_vm_status "$vm") || s=""
+  if [ "$s" != Running ]; then
+    den_die "$vm is not Running; run: den vm up"
+  fi
+  ip=$(den_pair_wifi_ip)
+  case $ip in
+    ''|*[!0-9.]*) den_die "Wi-Fi has no IPv4 address; join your home Wi-Fi" ;;
+  esac
+  port=${VM_PAIR_PORT:-49375}
+  case $port in
+    ''|*[!0-9]*) den_die "VM_PAIR_PORT must be a number (config.env)" ;;
+  esac
+  gport=$(den_pair_guest_port "$vm")
+  case $gport in
+    ''|*[!0-9]*) den_die "could not read the OpenCode port in $vm" ;;
+  esac
+
+  if den_pair_load; then
+    recorded=1
+    if den_pair_alive "$PAIR_PID" && den_pair_is_forward "$PAIR_PID"; then
+      if [ "$PAIR_IP" = "$ip" ] && [ "$PAIR_PORT" = "$port" ] &&
+        den_pair_on "$ip" "$port"; then
+        pid=$PAIR_PID
+        ui_ok "den pair forward already running (PID $pid)"
+      else
+        ui_info "the Wi-Fi address or port changed; restarting the forward"
+        den_pair_stop_forward "$rex" || true
+      fi
+    fi
+  fi
+
+  if [ -z "$pid" ]; then
+    if [ "$recorded" = 1 ] || [ -n "$(den_pair_listeners "$port")" ]; then
+      # A dead forward can leave its block, and the block can hold the port.
+      den_pair_stop_forward "$rex" || true
+    fi
+    if [ -n "$(den_pair_listeners "$port")" ]; then
+      den_die "port $port is in use by another process; set VM_PAIR_PORT in ~/.config/den/local.env"
+    fi
+    ui_step "opening a forward $ip:$port to the guest's OpenCode port $gport"
+    nohup "$rex" -S vm forward new -L "$ip:$port:127.0.0.1:$gport" \
+      >"$DEN_STATE_DIR/pair.log" 2>&1 </dev/null &
+    pid=$!
+    printf 'pid=%s\nip=%s\nport=%s\n' "$pid" "$ip" "$port" >"$(den_pair_state_file)"
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
+      if den_pair_on "$ip" "$port"; then
+        listening=1
+        break
+      fi
+      den_pair_alive "$pid" || break
+      sleep 0.5
+    done
+    if [ "$listening" != 1 ]; then
+      den_pair_stop_forward "$rex" || true
+      den_die "the forward did not start listening on $ip:$port: $(tail -n 5 "$DEN_STATE_DIR/pair.log" 2>/dev/null | tr '\n' ' ')"
+    fi
+    ui_ok "forward listening on $ip:$port (PID $pid)"
+  fi
+
+  base="http://$ip:$port"
+  # The guest prints one-time links and a QR code: straight to the terminal,
+  # never to a file or a log.
+  if ! den_vm_to 60 limactl shell "$vm" -- bash -lc "${DEN_GUEST_ENV}opencode pair --url '$base'" </dev/null; then
+    ui_warn "opencode pair failed in $vm; the forward is still open (stop it: den pair --stop)"
+    return 1
+  fi
+  ui_info "forward PID $pid, $base"
+  ui_info "home Wi-Fi only, plain HTTP, guarded by the OpenCode password"
+  ui_info "stop it: den pair --stop"
 }
 
 # ── Doctor ───────────────────────────────────────────────────────────

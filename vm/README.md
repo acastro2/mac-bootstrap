@@ -46,6 +46,8 @@ den vm shell                 # ssh into the guest
 den vm rebuild               # typed confirm (or --yes), then delete and rebuild
 den vm obsidian-sync         # restart obsidian-sync.service in the guest
 den vm resources             # cpus=N memory=M disk=D this Mac allows
+den pair                     # phone pair link + QR for the VM's OpenCode (home Wi-Fi, on demand)
+den pair --stop              # close that forward (also: --status)
 ssh lima-agent               # ~/.ssh/config includes ~/.lima/*/ssh.config
 ```
 

@@ -307,6 +307,14 @@ flowchart LR
 
 **Reopen this decision if** the VM runs code you did not write or review (an unknown repo, a borrowed dev container). The alternatives then are a browser editor in the VM (`code-server`), VSCodium with `commands.filters`, or VS Code as a separate macOS user.
 
+### `den pair`: LAN path into the VM's OpenCode (D6)
+
+**What:** `den pair` opens a temporary rex forward from the Mac's Wi-Fi IP (default port 49375) to the VM's OpenCode server, so a phone on the same Wi-Fi can open the pair link. It is plain HTTP. The OpenCode password and the one-time link guard it. The forward binds the Wi-Fi IP only, read from the Wi-Fi hardware port, so it is not on the VPN interface (utun0, the default route) and not on `0.0.0.0`.
+
+**Why we accept it (D6):** it is on demand: no login agent, no process between calls. The VM already runs OpenCode with a password, and the phone is the point of the feature. The exposure is a LAN neighbour who can reach one port while the forward is open and who still needs the password.
+
+**Undo:** `den pair --stop` kills the forward and closes its block. `den pair --status` shows whether it runs.
+
 ## Decisions
 
 | ID | Date | Decision |
@@ -316,6 +324,7 @@ flowchart LR
 | D3 | 2026-11-20 | Keep clipboard write from the VM (OSC 52 in a Rex tab). It cannot read the clipboard, and D1 and D2 are bigger. |
 | D4 | 2026-11-20 | Keep Obsidian Sync bidirectional in the VM: a VM note can reach the Mac vault. Plugins never travel (`Configs: none`). The same shape as D2, and vault text is data for Mac agents, not instructions. |
 | D5 | 2026-11-20 | Keep the browser bridge as it is: the VM drives your logged-in Edge and can reach Mac localhost pages. That is what the bridge is for. B1, B2 and B4 stay optional. |
+| D6 | 2026-11-27 | Keep `den pair`: an on-demand, plain HTTP forward from the Mac's Wi-Fi IP to the VM's OpenCode, for the phone. The OpenCode password and a one-time link guard it; `den pair --stop` ends it. |
 
 ## Sources
 
