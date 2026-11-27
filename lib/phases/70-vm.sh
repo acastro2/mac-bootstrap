@@ -136,7 +136,7 @@ vm_create_or_resize() {
   # template set networkOpts.hostLoopback: false still reaches the Mac loopback.
   if ! grep -Eq '^[[:space:]]+hostLoopback:[[:space:]]*false' "$HOME/.lima/$vm/lima.yaml" 2>/dev/null; then
     if [ "$status" = Running ]; then
-      ui_warn "$vm can reach the Mac loopback; run: limactl stop $vm && den up --only=vm"
+      ui_warn "$vm can reach the Mac loopback; run: den vm down && den up --only=vm"
     else
       ui_step "blocking the Mac loopback for $vm (networkOpts.hostLoopback: false)"
       if ! den_vm_to 120 limactl edit "$vm" --set '.networkOpts.hostLoopback = false' --tty=false; then
@@ -149,18 +149,18 @@ vm_create_or_resize() {
   # port, so the VM could take a Mac port a CLI login waits on.
   if ! grep -q 'guestPortRange' "$HOME/.lima/$vm/lima.yaml" 2>/dev/null; then
     if [ "$status" = Running ]; then
-      ui_warn "$vm mirrors every port to the Mac; run: limactl stop $vm && den up --only=vm"
+      ui_warn "$vm mirrors every port to the Mac; run: den vm down && den up --only=vm"
     else
       ui_step "limiting the port mirror for $vm to 1024-9999"
       if ! den_vm_to 120 limactl edit "$vm" --set '.portForwards = [{"guestPort":19988,"ignore":true},{"guestPortRange":[1024,9999]},{"guestIP":"0.0.0.0","guestIPMustBeZero":false,"proto":"any","ignore":true}]' --tty=false; then
-        den_fail "could not edit $vm" "limactl stop $vm && den up --only=vm"
+        den_fail "could not edit $vm" "den vm down && den up --only=vm"
       fi
     fi
   fi
 
   if [ "$need" = 1 ]; then
     if [ "$status" = Running ]; then
-      ui_warn "$vm is smaller than this Mac allows; run: limactl stop $vm && den up --only=vm"
+      ui_warn "$vm is smaller than this Mac allows; run: den vm down && den up --only=vm"
       return 0
     fi
     ui_step "resizing $vm: ${VM_CPUS:-8} CPUs, ${VM_MEM_GB:-16} GiB RAM (disk untouched)"

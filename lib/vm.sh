@@ -664,7 +664,7 @@ PROBE
       hostloop=unknown) printf 'vm: host loopback not checked (no Lima SSH port)\n' ;;
       hostloop=closed) printf 'vm: host loopback blocked\n' ;;
       hostloop=open)
-        printf 'vm: host loopback reachable from the guest (escape U1; fix: limactl stop %s && den up --only=vm)\n' "$vm"
+        printf 'vm: host loopback reachable from the guest (escape U1; fix: den vm down && den up --only=vm)\n'
         leak=1
         ;;
       disk=*)
